@@ -44,6 +44,7 @@ class BDFModel:
     mkaeros: list = field(default_factory=list)
     aestats: Dict[int, Any] = field(default_factory=dict)
     aesurfs: Dict[int, Any] = field(default_factory=dict)
+    aelists: Dict[int, Any] = field(default_factory=dict)
 
     def cross_reference(self) -> None:
         for eid, elem in self.elements.items():

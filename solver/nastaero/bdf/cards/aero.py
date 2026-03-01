@@ -7,6 +7,37 @@ from ..field_parser import nastran_int, nastran_float, nastran_string
 
 
 @dataclass
+class AELIST:
+    """Aerodynamic element (box) ID list for control surfaces.
+    AELIST  SID  E1  E2  E3  E4  E5  E6  E7
+            E8   E9  ...  or THRU notation
+    """
+    sid: int = 0
+    elements: List[int] = field(default_factory=list)
+
+    @classmethod
+    def from_fields(cls, fields: List[str]) -> AELIST:
+        a = cls()
+        a.sid = nastran_int(fields[1])
+        raw = [f.strip() for f in fields[2:] if f.strip()]
+        i = 0
+        while i < len(raw):
+            token = raw[i].upper()
+            if token == "THRU" and i >= 1 and i + 1 < len(raw):
+                start = a.elements[-1]
+                end = int(raw[i + 1])
+                a.elements.extend(range(start + 1, end + 1))
+                i += 2
+            else:
+                try:
+                    a.elements.append(int(token))
+                except ValueError:
+                    pass
+                i += 1
+        return a
+
+
+@dataclass
 class AERO:
     """Aerodynamic physical data for dynamic aeroelastic analysis.
     AERO  ACSID  VELOCITY  REFC  RHOREF  SYMXZ  SYMXY

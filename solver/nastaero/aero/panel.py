@@ -18,7 +18,7 @@ class AeroBox:
     box_id: int = 0
 
 
-def generate_panel_mesh(caero1, start_id: int = 0) -> List[AeroBox]:
+def generate_panel_mesh(caero1, start_id: int = 0, use_nastran_eid: bool = False) -> List[AeroBox]:
     """Generate DLM boxes from a CAERO1 card.
 
     The CAERO1 defines a trapezoidal panel via:
@@ -29,6 +29,16 @@ def generate_panel_mesh(caero1, start_id: int = 0) -> List[AeroBox]:
     DLM convention:
     - Doublet line at 1/4 chord of each box
     - Control point (downwash point) at 3/4 chord midspan
+
+    Parameters
+    ----------
+    caero1 : CAERO1
+        The CAERO1 card definition.
+    start_id : int
+        Sequential box index (used for matrix indexing).
+    use_nastran_eid : bool
+        If True, box_id uses Nastran convention: CAERO1.eid + sequential offset.
+        If False, box_id = start_id + sequential offset.
     """
     nspan = max(caero1.nspan, 1)
     nchord = max(caero1.nchord, 1)
@@ -38,6 +48,7 @@ def generate_panel_mesh(caero1, start_id: int = 0) -> List[AeroBox]:
 
     boxes = []
     box_id = start_id
+    nastran_eid = getattr(caero1, 'eid', start_id)
 
     for j in range(nspan):
         # Spanwise interpolation
@@ -94,6 +105,11 @@ def generate_panel_mesh(caero1, start_id: int = 0) -> List[AeroBox]:
 
             area = 0.5 * norm_mag
 
+            # box_id for matrix indexing is sequential (start_id based)
+            # nastran_box_id follows Nastran convention: CAERO1 EID + offset
+            seq_offset = box_id - start_id
+            actual_box_id = (nastran_eid + seq_offset) if use_nastran_eid else box_id
+
             box = AeroBox(
                 corners=corners,
                 control_point=control_pt,
@@ -102,7 +118,7 @@ def generate_panel_mesh(caero1, start_id: int = 0) -> List[AeroBox]:
                 area=area,
                 chord=box_chord,
                 span=box_span,
-                box_id=box_id,
+                box_id=actual_box_id,
             )
             boxes.append(box)
             box_id += 1
@@ -110,13 +126,43 @@ def generate_panel_mesh(caero1, start_id: int = 0) -> List[AeroBox]:
     return boxes
 
 
-def generate_all_panels(bdf_model) -> List[AeroBox]:
-    """Generate all DLM boxes from all CAERO1 cards in the model."""
+def generate_all_panels(bdf_model, use_nastran_eid: bool = True) -> List[AeroBox]:
+    """Generate all DLM boxes from all CAERO1 cards in the model.
+
+    Parameters
+    ----------
+    bdf_model : BDFModel
+        The BDF model containing CAERO1 cards.
+    use_nastran_eid : bool
+        If True, box_id uses Nastran convention (CAERO1 EID + offset).
+
+    Returns
+    -------
+    all_boxes : list of AeroBox
+        All generated aerodynamic boxes, in order.
+    """
     all_boxes = []
     box_id = 0
     for eid in sorted(bdf_model.caero_panels.keys()):
         caero = bdf_model.caero_panels[eid]
-        boxes = generate_panel_mesh(caero, start_id=box_id)
+        boxes = generate_panel_mesh(caero, start_id=box_id,
+                                     use_nastran_eid=use_nastran_eid)
         all_boxes.extend(boxes)
         box_id += len(boxes)
     return all_boxes
+
+
+def get_box_index_map(boxes: List[AeroBox]) -> dict:
+    """Build mapping from Nastran box_id to sequential index.
+
+    Parameters
+    ----------
+    boxes : list of AeroBox
+        All aerodynamic boxes.
+
+    Returns
+    -------
+    box_id_to_index : dict
+        Mapping from box_id (Nastran EID) to sequential index in the boxes list.
+    """
+    return {box.box_id: i for i, box in enumerate(boxes)}
