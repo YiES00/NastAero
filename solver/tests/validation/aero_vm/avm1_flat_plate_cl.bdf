@@ -1,0 +1,70 @@
+$ NastAero AVM1: Flat Plate Wing CL_alpha Validation
+$ Rectangular wing, AR=6, c=1.0m, b=6.0m (half-span 3.0m each side)
+$ VLM should give CL_alpha close to lifting-line theory:
+$   CL_alpha = 2*pi*AR/(AR+2) = 2*pi*6/8 = 4.712 (per rad)
+$
+$ Structural model: 6 CBAR elements along span (y-axis)
+$ Very stiff to minimize deformation (pure trim test)
+$
+SOL 144
+CEND
+TITLE = AVM1 - FLAT PLATE CL_ALPHA VALIDATION (AR=6)
+SPC = 1
+TRIM = 1
+DISPLACEMENT = ALL
+BEGIN BULK
+$
+$ Reference aero data (half-model with symmetry would be better but
+$ we use full span for simplicity)
+$ AEROS ACSID RCSID REFC  REFB  REFS
+AEROS,  0,    0,    1.0,  6.0,  6.0
+$
+$ AERO  ACSID VELOCITY REFC RHOREF
+AERO,   0,    100.0,   1.0, 1.225
+$
+$ -------- STRUCTURAL MODEL --------
+$ 7 nodes along elastic axis (50% chord, x=0.5)
+GRID,  1, , 0.5, 0.0, 0.0
+GRID,  2, , 0.5, 1.0, 0.0
+GRID,  3, , 0.5, 2.0, 0.0
+GRID,  4, , 0.5, 3.0, 0.0
+GRID,  5, , 0.5, 4.0, 0.0
+GRID,  6, , 0.5, 5.0, 0.0
+GRID,  7, , 0.5, 6.0, 0.0
+$
+$ Very stiff beam (to isolate aero from structure)
+CBAR,  1, 1, 1, 2, 0.0, 0.0, 1.0
+CBAR,  2, 1, 2, 3, 0.0, 0.0, 1.0
+CBAR,  3, 1, 3, 4, 0.0, 0.0, 1.0
+CBAR,  4, 1, 4, 5, 0.0, 0.0, 1.0
+CBAR,  5, 1, 5, 6, 0.0, 0.0, 1.0
+CBAR,  6, 1, 6, 7, 0.0, 0.0, 1.0
+$
+$ Very stiff properties (EI >> q*S*c to minimize aeroelastic effects)
+PBAR, 1, 1, 1.0, 1.0, 1.0, 2.0
+MAT1, 1, 2.0E12,,0.3, 100.0
+$
+$ Root constraint
+SPC1, 1, 123456, 1
+$
+$ -------- AERODYNAMIC MODEL --------
+$ CAERO1: full-span rectangular wing
+$ 12 spanwise x 4 chordwise panels
+CAERO1,1001,1001,0,12,4,0,0,1,+CA1
++CA1,  0.0, 0.0, 0.0, 1.0, 0.0, 6.0, 0.0, 1.0
+$
+PAERO1, 1001
+$
+$ -------- SPLINE --------
+SPLINE1, 100, 1001, 0, 47, 10, 0.0
+SET1, 10, 1, 2, 3, 4, 5, 6, 7
+$
+$ -------- TRIM --------
+AESTAT, 501, ANGLEA
+AESTAT, 502, URDD3
+$
+$ Trim: level flight, solve for alpha
+$ q = 0.5 * 1.225 * 100^2 = 6125 Pa
+TRIM, 1, 0.0, 6125.0, URDD3, 0.0
+$
+ENDDATA

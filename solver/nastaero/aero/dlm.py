@@ -95,10 +95,17 @@ def _horseshoe_normalwash(xc: np.ndarray, a: np.ndarray, b: np.ndarray,
                            normal: np.ndarray) -> float:
     """Compute normalwash at xc due to a unit horseshoe vortex.
 
-    The horseshoe consists of:
-    - Bound segment from a to b (finite vortex)
-    - Semi-infinite trailing leg from a to x=+inf (parallel to x-axis)
-    - Semi-infinite trailing leg from b to x=+inf (parallel to x-axis)
+    The horseshoe vortex loop (following Bertin & Cummings convention):
+    - Trailing leg from a extending downstream to x=+inf (inboard leg)
+    - Bound segment from a to b (finite vortex, positive lift)
+    - Trailing leg from b extending downstream to x=+inf (outboard leg)
+
+    The circulation sense: going around the loop from downstream-a → a →
+    b → downstream-b, the inboard trailing leg has opposite sense to the
+    outboard trailing leg relative to the bound vortex.
+
+    For positive lift (downwash at control point), the correct combination is:
+      v_total = v_bound(a→b) - v_trail(a,+x) + v_trail(b,+x)
 
     Uses Biot-Savart law with unit circulation Gamma=1.
 
@@ -111,11 +118,11 @@ def _horseshoe_normalwash(xc: np.ndarray, a: np.ndarray, b: np.ndarray,
     v_trail_a = _semi_infinite_vortex(xc, a, np.array([1.0, 0.0, 0.0]))
 
     # 3. Trailing leg from b to +infinity (semi-infinite, direction +x)
-    # Note: trailing vortex from b has opposite sense
     v_trail_b = _semi_infinite_vortex(xc, b, np.array([1.0, 0.0, 0.0]))
 
-    # Total induced velocity (note sign convention for horseshoe)
-    v_total = v_bound + v_trail_a - v_trail_b
+    # Total: bound + outboard_trail - inboard_trail
+    # The inboard trailing leg (from a) has opposite sense in the vortex loop
+    v_total = v_bound - v_trail_a + v_trail_b
 
     # Return normalwash component
     return np.dot(v_total, normal)
@@ -179,13 +186,13 @@ def _semi_infinite_vortex(xc: np.ndarray, origin: np.ndarray,
 
 def compute_aero_forces(boxes: List[AeroBox], delta_cp: np.ndarray,
                         q: float) -> np.ndarray:
-    """Compute aerodynamic forces from pressure coefficients.
+    """Compute aerodynamic forces from pressure difference coefficients.
 
     Parameters
     ----------
     boxes : list of AeroBox
     delta_cp : ndarray (n,)
-        Pressure difference coefficient for each box.
+        Pressure difference coefficient (delta_Cp) for each box.
     q : float
         Dynamic pressure (0.5 * rho * V^2).
 
@@ -197,6 +204,41 @@ def compute_aero_forces(boxes: List[AeroBox], delta_cp: np.ndarray,
     n = len(boxes)
     forces = np.zeros((n, 3))
     for i in range(n):
-        # Force = q * delta_cp * area, directed along panel normal
+        # Force = q * delta_Cp * area, directed along panel normal
         forces[i] = q * delta_cp[i] * boxes[i].area * boxes[i].normal
     return forces
+
+
+def circulation_to_delta_cp(boxes: List[AeroBox], gamma: np.ndarray) -> np.ndarray:
+    """Convert VLM normalized circulation to pressure difference coefficient.
+
+    In VLM, the AIC relates normalwash ratio to normalized circulation:
+        {w/V} = [D]{gamma}
+    where gamma = Gamma/V (normalized by freestream velocity).
+
+    The pressure coefficient for each box is:
+        delta_Cp_j = 2 * gamma_j / chord_j
+
+    This follows from Kutta-Joukowski:
+        L_j = rho * V * Gamma_j * span_j = rho * V^2 * gamma_j * span_j
+        delta_Cp_j = L_j / (q * area_j)
+                   = (rho * V^2 * gamma_j * span_j) / (0.5*rho*V^2 * chord_j*span_j)
+                   = 2 * gamma_j / chord_j
+
+    Parameters
+    ----------
+    boxes : list of AeroBox
+    gamma : ndarray (n,)
+        Normalized circulation (Gamma/V) from solving D @ gamma = w/V.
+
+    Returns
+    -------
+    delta_cp : ndarray (n,)
+        Pressure difference coefficient for each box.
+    """
+    n = len(boxes)
+    delta_cp = np.zeros(n)
+    for i in range(n):
+        if boxes[i].chord > 1e-12:
+            delta_cp[i] = 2.0 * gamma[i] / boxes[i].chord
+    return delta_cp
