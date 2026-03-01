@@ -109,6 +109,10 @@ class BDFParser:
         return groups
 
     def _transform_grid_coordinates(self, model: BDFModel) -> None:
+        # Resolve chained coordinate systems (rid != 0) before transforming nodes
+        from .cards.coord import resolve_all
+        resolve_all(model.coords)
+
         for nid, grid in model.nodes.items():
             if grid.cp != 0 and grid.cp in model.coords:
                 grid.xyz_global = model.coords[grid.cp].to_global(grid.xyz)

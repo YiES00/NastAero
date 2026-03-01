@@ -7,6 +7,30 @@ from ..field_parser import nastran_int, nastran_float, nastran_string
 
 
 @dataclass
+class AEFACT:
+    """Non-uniform division factors for CAERO1 panels.
+
+    AEFACT SID  D1 D2 D3 D4 D5 D6 D7
+           D8   D9 ...
+    """
+    sid: int = 0
+    factors: List[float] = field(default_factory=list)
+
+    @classmethod
+    def from_fields(cls, fields: List[str]) -> AEFACT:
+        a = cls()
+        a.sid = nastran_int(fields[1])
+        for f in fields[2:]:
+            s = f.strip()
+            if s:
+                try:
+                    a.factors.append(nastran_float(s))
+                except (ValueError, TypeError):
+                    pass
+        return a
+
+
+@dataclass
 class AELIST:
     """Aerodynamic element (box) ID list for control surfaces.
     AELIST  SID  E1  E2  E3  E4  E5  E6  E7

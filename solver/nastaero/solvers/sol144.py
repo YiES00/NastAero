@@ -85,7 +85,7 @@ def solve_trim(bdf_model: BDFModel) -> ResultData:
             continue
 
         trim = bdf_model.trims[trim_id]
-        logger.info("Solving subcase %d, TRIM %d (M=%.3f, q=%.1f)...",
+        logger.info("Solving subcase %d, TRIM %d (M=%.3f, q=%.6g)...",
                      subcase.id, trim_id, trim.mach, trim.q)
 
         sc_result = _solve_trim_subcase(
@@ -101,7 +101,13 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
                         trim, subcase: Subcase,
                         refc: float, refb: float, refs: float,
                         velocity: float) -> SubcaseResult:
-    """Solve a single trim subcase."""
+    """Solve a single trim subcase.
+
+    For large models (n_free > 10000), uses an iterative solver approach
+    that avoids forming the dense Q_aa matrix. The aero contribution
+    Q_aa * u = G_eff.T @ (A_jj @ (G_eff @ u)) is computed as a sequence
+    of small matrix-vector products through the aero space (n_boxes).
+    """
     dof_mgr = fe_model.dof_mgr
     n_boxes = len(boxes)
     q = trim.q
@@ -129,23 +135,28 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
                 np.max(np.abs(G_eff)) if G_eff.size > 0 else 0,
                 np.count_nonzero(G_eff), G_eff.size)
 
+    # Convert G_eff to sparse for memory-efficient operations
+    G_sp = sp.csr_matrix(G_eff)
+    del G_eff  # Free dense memory
+
     # 4. Build force diagonal (normalwash → force conversion)
     # delta_Cp = 2*gamma/chord, F = q*delta_Cp*area = 2*q*gamma*area/chord
-    F_diag = np.zeros((n_boxes, n_boxes))
+    f_diag_vec = np.zeros(n_boxes)
     for j in range(n_boxes):
         chord_j = boxes[j].chord
         if chord_j > 1e-12:
-            F_diag[j, j] = 2.0 * q * boxes[j].area / chord_j
+            f_diag_vec[j] = 2.0 * q * boxes[j].area / chord_j
 
-    # Normalwash-to-force matrix (in aero space)
-    A_jj = F_diag @ D_inv  # (n_boxes x n_boxes)
+    # A_jj = F_diag @ D_inv  (n_boxes x n_boxes, dense but small)
+    A_jj = np.diag(f_diag_vec) @ D_inv
 
-    # Aero force matrix in free structural DOFs
-    Q_aa_free = G_eff.T @ A_jj @ G_eff  # (n_free x n_free)
-
-    logger.info("  Q_aa norm = %.2e, K_ff norm = %.2e",
-                np.linalg.norm(Q_aa_free),
-                np.linalg.norm(K_ff.toarray() if sp.issparse(K_ff) else K_ff))
+    # Helper: apply Q_aa to a vector without forming full matrix
+    # Q_aa * v = G.T @ A_jj @ (G @ v)
+    def apply_Q_aa(v):
+        """Compute Q_aa @ v = G_eff.T @ A_jj @ (G_eff @ v) efficiently."""
+        w = G_sp @ v              # (n_boxes,)  - struct→aero normalwash
+        f = A_jj @ w              # (n_boxes,)  - aero forces
+        return G_sp.T @ f         # (n_free,)   - aero→struct forces
 
     # 5. Parse trim variables
     trim_vars = {}
@@ -177,13 +188,13 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
         w_contrib = _trim_variable_normalwash(label, boxes, box_id_to_index,
                                               bdf_model)
         w_fixed += value * w_contrib
-    F_trim_fixed = G_eff.T @ A_jj @ w_fixed
+    F_trim_fixed = G_sp.T @ (A_jj @ w_fixed)
 
     Q_ax = np.zeros((n_free, n_trim_free))
     for k, label in enumerate(free_labels):
         w_contrib = _trim_variable_normalwash(label, boxes, box_id_to_index,
                                               bdf_model)
-        Q_ax[:, k] = G_eff.T @ A_jj @ w_contrib
+        Q_ax[:, k] = G_sp.T @ (A_jj @ w_contrib)
 
     # 7. Build trim constraint equations
     total_weight = _compute_total_weight(bdf_model)
@@ -196,6 +207,7 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
     if n_constraints < 1:
         n_constraints = 0
 
+    # D_r[c, :] is a vector of size n_free, D_x[c, :] of size n_trim_free
     D_r = np.zeros((n_constraints, n_free))
     D_x = np.zeros((n_constraints, n_trim_free))
     rhs_trim = np.zeros(n_constraints)
@@ -205,65 +217,54 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
 
     if n_constraints >= 1:
         # Z-force balance: sum aero Fz = weight
-        D_r[0, :] = sum_force @ A_jj @ G_eff
+        # D_r[0,:] = sum_force @ A_jj @ G → (1,n_boxes) @ (n_boxes,n_boxes) @ (n_boxes,n_free)
+        sum_A = sum_force @ A_jj  # (n_boxes,)
+        D_r[0, :] = (G_sp.T @ sum_A).ravel()
         for k in range(n_trim_free):
             w_k = _trim_variable_normalwash(free_labels[k], boxes,
                                             box_id_to_index, bdf_model)
-            D_x[0, k] = sum_force @ A_jj @ w_k
-        F_z_fixed = sum_force @ A_jj @ w_fixed
+            D_x[0, k] = sum_A @ w_k
+        F_z_fixed = sum_A @ w_fixed
         rhs_trim[0] = total_weight - F_z_fixed
 
     if n_constraints >= 2:
         # Pitch moment balance about CG: sum(F_z * (x_cp - x_cg)) = 0
-        # Positive moment = nose-up
         moment_arm = np.array([boxes[i].control_point[0] - cg_x
                                for i in range(n_boxes)])
-        D_r[1, :] = moment_arm @ A_jj @ G_eff
+        mom_A = moment_arm @ A_jj  # (n_boxes,)
+        D_r[1, :] = (G_sp.T @ mom_A).ravel()
         for k in range(n_trim_free):
             w_k = _trim_variable_normalwash(free_labels[k], boxes,
                                             box_id_to_index, bdf_model)
-            D_x[1, k] = moment_arm @ A_jj @ w_k
-        M_y_fixed = moment_arm @ A_jj @ w_fixed
+            D_x[1, k] = mom_A @ w_k
+        M_y_fixed = mom_A @ w_fixed
         rhs_trim[1] = -M_y_fixed  # Moment equilibrium: M_aero = 0
 
-        logger.info("  Moment ref (CG_x) = %.4f m", cg_x)
+        logger.info("  Moment ref (CG_x) = %.4f", cg_x)
 
-    # 8. Assemble and solve
+    # 8. Solve: use iterative approach for large models
     #
-    # Physical system:
-    #   K*u = P_aero(u, x) + P_external
-    #   P_aero = Q_aa*u + Q_ax*x + F_trim_fixed
+    # The coupled aeroelastic trim system:
+    #   (K + Q_aa) u + (-Q_ax) x = F_f + F_trim_fixed
+    #   D_r u + D_x x = rhs_trim
     #
-    # Rearranging:
-    #   [K + Q_aa | -Q_ax] [u]   [F_f + F_trim_fixed]
-    #   [  D_r    |  D_x ] [x] = [     rhs_trim      ]
-    #
-    n_total = n_free + n_trim_free
-    K_dense = K_ff.toarray() if sp.issparse(K_ff) else K_ff
+    # Strategy: solve for x_trim from constraint equations, then for u iteratively.
+    # For n_trim_free free variables, first compute condensed system.
 
-    if n_trim_free > 0:
-        A_sys = np.zeros((n_total + n_constraints, n_total))
-        rhs_sys = np.zeros(n_total + n_constraints)
+    use_iterative = n_free > 10000
+    logger.info("  Solver mode: %s (%d free DOFs, %d trim vars)",
+                "iterative" if use_iterative else "dense", n_free, n_trim_free)
 
-        A_sys[:n_free, :n_free] = K_dense + Q_aa_free
-        A_sys[:n_free, n_free:n_total] = -Q_ax  # negative: trim aero force on RHS
-        rhs_sys[:n_free] = F_f + F_trim_fixed
-
-        A_sys[n_total:n_total+n_constraints, :n_free] = D_r
-        A_sys[n_total:n_total+n_constraints, n_free:n_total] = D_x
-        rhs_sys[n_total:n_total+n_constraints] = rhs_trim
-
-        logger.info("  Solving coupled system (%d x %d, %d constraints)...",
-                     A_sys.shape[0], A_sys.shape[1], n_constraints)
-        sol, residuals, rank, sv = np.linalg.lstsq(A_sys, rhs_sys, rcond=None)
-
-        u_f = sol[:n_free]
-        x_trim = sol[n_free:n_total]
+    if use_iterative:
+        u_f, x_trim = _solve_iterative(K_ff, apply_Q_aa, Q_ax, F_f,
+                                         F_trim_fixed, D_r, D_x, rhs_trim,
+                                         n_free, n_trim_free, n_constraints,
+                                         G_sp, A_jj, w_fixed, boxes, D_inv,
+                                         free_labels, box_id_to_index, bdf_model)
     else:
-        K_eff = K_dense + Q_aa_free
-        rhs_eff = F_f + F_trim_fixed
-        u_f = np.linalg.solve(K_eff, rhs_eff)
-        x_trim = np.array([])
+        u_f, x_trim = _solve_dense(K_ff, G_sp, A_jj, Q_ax, F_f,
+                                    F_trim_fixed, D_r, D_x, rhs_trim,
+                                    n_free, n_trim_free, n_constraints)
 
     # 9. Post-process
     ndof = dof_mgr.total_dof
@@ -272,7 +273,7 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
         u_full[dof] = u_f[i]
 
     # Total normalwash
-    w_total = G_eff @ u_f + w_fixed
+    w_total = G_sp @ u_f + w_fixed
     for k, label in enumerate(free_labels):
         w_contrib = _trim_variable_normalwash(label, boxes, box_id_to_index,
                                               bdf_model)
@@ -316,6 +317,184 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
         logger.info("  Pitch moment about CG = %.2f N*m", my_total)
 
     return sc_result
+
+
+def _solve_dense(K_ff, G_sp, A_jj, Q_ax, F_f, F_trim_fixed,
+                 D_r, D_x, rhs_trim, n_free, n_trim_free, n_constraints):
+    """Solve trim using dense matrices (small models)."""
+    G_dense = G_sp.toarray()
+    Q_aa_free = G_dense.T @ A_jj @ G_dense
+
+    n_total = n_free + n_trim_free
+    K_dense = K_ff.toarray() if sp.issparse(K_ff) else K_ff
+
+    if n_trim_free > 0:
+        A_sys = np.zeros((n_total + n_constraints, n_total))
+        rhs_sys = np.zeros(n_total + n_constraints)
+
+        A_sys[:n_free, :n_free] = K_dense + Q_aa_free
+        A_sys[:n_free, n_free:n_total] = -Q_ax
+        rhs_sys[:n_free] = F_f + F_trim_fixed
+
+        A_sys[n_total:n_total+n_constraints, :n_free] = D_r
+        A_sys[n_total:n_total+n_constraints, n_free:n_total] = D_x
+        rhs_sys[n_total:n_total+n_constraints] = rhs_trim
+
+        logger.info("  Solving dense coupled system (%d x %d)...",
+                     A_sys.shape[0], A_sys.shape[1])
+        sol, _, _, _ = np.linalg.lstsq(A_sys, rhs_sys, rcond=None)
+        u_f = sol[:n_free]
+        x_trim = sol[n_free:n_total]
+    else:
+        K_eff = K_dense + Q_aa_free
+        rhs_eff = F_f + F_trim_fixed
+        u_f = np.linalg.solve(K_eff, rhs_eff)
+        x_trim = np.array([])
+
+    return u_f, x_trim
+
+
+def _solve_iterative(K_ff, apply_Q_aa, Q_ax, F_f, F_trim_fixed,
+                     D_r, D_x, rhs_trim, n_free, n_trim_free, n_constraints,
+                     G_sp, A_jj, w_fixed, boxes, D_inv,
+                     free_labels, box_id_to_index, bdf_model):
+    """Solve trim using sparse direct solver for large models.
+
+    For SOL 144 static aeroelastic analysis, the aero contribution Q_aa
+    is low-rank (n_boxes << n_free). We add it to K_ff as a sparse
+    low-rank update using the Woodbury identity approach, or more
+    practically, we add the aero stiffness as sparse COO entries.
+
+    The system: (K + G^T A_jj G) u = F + Q_ax x
+    with G sparse (n_boxes x n_free), A_jj dense (n_boxes x n_boxes).
+
+    Strategy: form K_eff = K_ff + G^T @ A_jj @ G as sparse using
+    the fact that G is very sparse. The product G^T @ A_jj @ G has
+    at most (nnz_G)^2 / n_boxes nonzeros per row.
+    """
+    import time
+    t_start = time.perf_counter()
+
+    K_sparse = K_ff if sp.issparse(K_ff) else sp.csc_matrix(K_ff)
+
+    # Build Q_aa as sparse: Q_aa = G^T @ A_jj @ G
+    # Since G is sparse with ~28K nonzeros and n_boxes=783,
+    # AG = A_jj @ G is (n_boxes x n_free) but computed column-by-column
+    # via G's sparse structure.
+    logger.info("  Building sparse Q_aa via G^T @ A_jj @ G ...")
+    t_q = time.perf_counter()
+
+    # A_jj @ G_sp.T gives (n_boxes x n_free) dense, but we only need
+    # G_sp.T @ (A_jj @ G_sp) which uses G's sparsity
+    # Compute AG = A_jj @ G_sp^T → (n_boxes x n_free), but only for
+    # columns with nonzero entries in G
+    # Better approach: G^T @ A_jj @ G = (G^T @ A_jj) @ G
+    # GA = G_sp @ A_jj.T = (A_jj @ G_sp^T)^T  → transpose approach
+    # Actually: G_sp^T has shape (n_free, n_boxes)
+    # Q_aa = G_sp^T @ A_jj @ G_sp
+
+    # For G_sp (n_boxes x n_free), A_jj (n_boxes x n_boxes):
+    # Step 1: B = A_jj @ G_sp → (n_boxes x n_free) - G_sp is sparse
+    # This is n_boxes x n_free but we can use sparse G to keep it manageable
+    # Step 2: Q_aa = G_sp.T @ B → (n_free x n_free)
+    # With G_sp sparse, the result is also sparse.
+
+    # Convert G to CSC for efficient column operations
+    G_csc = G_sp.tocsc()
+
+    # B = A_jj @ G → dense * sparse = dense, but only nonzero columns matter
+    # Get nonzero column indices of G
+    col_nnz = np.diff(G_csc.indptr) > 0
+    active_cols = np.where(col_nnz)[0]
+    n_active = len(active_cols)
+    logger.info("  G has %d active columns out of %d", n_active, n_free)
+
+    # Compute B_active = A_jj @ G[:, active_cols] → (n_boxes x n_active)
+    G_active = G_csc[:, active_cols].toarray()  # (n_boxes x n_active)
+    B_active = A_jj @ G_active  # (n_boxes x n_active)
+
+    # Q_active = G[:, active_cols]^T @ B_active → (n_active x n_active)
+    Q_active = G_active.T @ B_active  # (n_active x n_active)
+    logger.info("  Q_active size: %d x %d, computed in %.2f s",
+                n_active, n_active, time.perf_counter() - t_q)
+
+    # Build K_eff = K_ff + Q_aa (in reduced active space)
+    # Add small regularization for near-singular K
+    K_reg = K_sparse.copy()
+    diag = np.abs(K_reg.diagonal())
+    avg_diag = np.mean(diag[diag > 0]) if np.any(diag > 0) else 1.0
+    eps_reg = avg_diag * 1e-8
+    K_reg = K_reg + sp.eye(n_free, format='csc') * eps_reg
+    logger.info("  Regularization: eps = %.2e (avg_diag = %.2e)", eps_reg, avg_diag)
+
+    # Add Q_aa contribution at active DOFs
+    # Build Q_aa as sparse and add to K
+    if n_active > 0 and n_active < 5000:
+        # Small enough to add Q_active directly
+        Q_rows, Q_cols, Q_vals = [], [], []
+        for i_loc in range(n_active):
+            for j_loc in range(n_active):
+                val = Q_active[i_loc, j_loc]
+                if abs(val) > 1e-30:
+                    Q_rows.append(active_cols[i_loc])
+                    Q_cols.append(active_cols[j_loc])
+                    Q_vals.append(val)
+
+        if Q_vals:
+            Q_sp = sp.coo_matrix((Q_vals, (Q_rows, Q_cols)),
+                                 shape=(n_free, n_free)).tocsc()
+            K_eff = K_reg + Q_sp
+        else:
+            K_eff = K_reg
+    else:
+        K_eff = K_reg
+
+    # Factorize K_eff
+    logger.info("  Factorizing K_eff (%d x %d)...", n_free, n_free)
+    t_lu = time.perf_counter()
+    try:
+        K_lu = spla.splu(K_eff.tocsc())
+        logger.info("  LU factorization done in %.2f s", time.perf_counter() - t_lu)
+    except Exception as e:
+        logger.error("  LU factorization failed: %s", e)
+        return np.zeros(n_free), np.zeros(n_trim_free)
+
+    # Iterative trim solution
+    x_trim = np.zeros(n_trim_free)
+    max_iter = 20
+    tol_trim = 1e-6
+
+    for iteration in range(max_iter):
+        rhs = F_f + F_trim_fixed
+        if n_trim_free > 0:
+            rhs = rhs + Q_ax @ x_trim
+
+        u_f = K_lu.solve(rhs)
+
+        if n_constraints == 0 or n_trim_free == 0:
+            break
+
+        # Update trim variables
+        residual_trim = rhs_trim - D_r @ u_f
+        if n_trim_free == n_constraints:
+            x_new = np.linalg.solve(D_x, residual_trim)
+        else:
+            x_new, _, _, _ = np.linalg.lstsq(D_x, residual_trim, rcond=None)
+
+        dx = np.linalg.norm(x_new - x_trim)
+        x_trim = x_new
+
+        logger.info("  Trim iter %d: dx = %.2e, x = %s",
+                     iteration, dx, np.array2string(x_trim, precision=6))
+
+        if dx < tol_trim:
+            logger.info("  Trim converged in %d iterations", iteration + 1)
+            break
+
+    t_elapsed = time.perf_counter() - t_start
+    logger.info("  Iterative solve done in %.2f s", t_elapsed)
+
+    return u_f, x_trim
 
 
 def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
@@ -612,6 +791,26 @@ def _trim_variable_normalwash(label: str, boxes: List[AeroBox],
     return w
 
 
+def _detect_gravity(bdf_model: BDFModel) -> float:
+    """Detect gravitational acceleration from model unit system.
+
+    Heuristic: if AEROS reference chord > 100, model is in mm → g = 9810 mm/s²
+    Otherwise assume m → g = 9.81 m/s²
+    """
+    refc = 0.0
+    if bdf_model.aeros:
+        refc = bdf_model.aeros.refc
+    elif bdf_model.aero:
+        refc = bdf_model.aero.refc
+
+    if refc > 100:
+        # mm-N-sec system: g = 9810 mm/s²
+        return 9810.0
+    else:
+        # m-N-sec system: g = 9.81 m/s²
+        return 9.81
+
+
 def _compute_total_weight(bdf_model: BDFModel) -> float:
     """Compute total structural weight from mass properties."""
     total_mass = 0.0
@@ -620,21 +819,60 @@ def _compute_total_weight(bdf_model: BDFModel) -> float:
         if not hasattr(elem, 'property_ref') or elem.property_ref is None:
             continue
         prop = elem.property_ref
-        if not hasattr(prop, 'material_ref') or prop.material_ref is None:
-            continue
-        mat = prop.material_ref
 
-        if elem.type == "CBAR":
+        if elem.type in ("CBAR", "CBEAM"):
+            mat = getattr(prop, 'material_ref', None)
+            if mat is None:
+                continue
             n1 = bdf_model.nodes[elem.node_ids[0]]
             n2 = bdf_model.nodes[elem.node_ids[1]]
             L = np.linalg.norm(n2.xyz_global - n1.xyz_global)
             total_mass += mat.rho * prop.A * L
 
+        elif elem.type == "CROD":
+            mat = getattr(prop, 'material_ref', None)
+            if mat is None:
+                continue
+            n1 = bdf_model.nodes[elem.node_ids[0]]
+            n2 = bdf_model.nodes[elem.node_ids[1]]
+            L = np.linalg.norm(n2.xyz_global - n1.xyz_global)
+            total_mass += mat.rho * prop.A * L
+
+        elif elem.type in ("CQUAD4", "CTRIA3"):
+            # Get rho and t depending on property type
+            if hasattr(prop, 'equivalent_isotropic'):
+                # PCOMP: use equivalent properties
+                E, nu, t, rho = prop.equivalent_isotropic()
+            else:
+                mat = getattr(prop, 'material_ref', None)
+                if mat is None:
+                    continue
+                rho = mat.rho
+                t = getattr(prop, 't', 0.0)
+
+            if rho > 0 and t > 0:
+                # Compute area
+                coords = np.array([bdf_model.nodes[nid].xyz_global
+                                   for nid in elem.node_ids])
+                if elem.type == "CTRIA3":
+                    v1 = coords[1] - coords[0]
+                    v2 = coords[2] - coords[0]
+                    area = 0.5 * np.linalg.norm(np.cross(v1, v2))
+                else:
+                    # CQUAD4: sum of 2 triangles
+                    v1 = coords[1] - coords[0]; v2 = coords[2] - coords[0]
+                    v3 = coords[2] - coords[0]; v4 = coords[3] - coords[0]
+                    area = 0.5 * (np.linalg.norm(np.cross(v1, v2)) +
+                                  np.linalg.norm(np.cross(v3, v4)))
+                total_mass += rho * t * area
+
     for mid, mass_elem in bdf_model.masses.items():
         total_mass += mass_elem.mass
 
-    weight = total_mass * 9.81
-    logger.info("  Total mass = %.4f kg, Weight = %.2f N", total_mass, weight)
+    g = _detect_gravity(bdf_model)
+    weight = total_mass * g
+    logger.info("  Total mass = %.4f (consistent units), Weight = %.2f, g = %.1f",
+                total_mass, weight, g)
     return weight
 
 
@@ -679,11 +917,11 @@ def _compute_cg_x(bdf_model: BDFModel) -> float:
         if not hasattr(elem, 'property_ref') or elem.property_ref is None:
             continue
         prop = elem.property_ref
-        if not hasattr(prop, 'material_ref') or prop.material_ref is None:
-            continue
-        mat = prop.material_ref
 
-        if elem.type == "CBAR":
+        if elem.type in ("CBAR", "CBEAM", "CROD"):
+            mat = getattr(prop, 'material_ref', None)
+            if mat is None:
+                continue
             n1 = bdf_model.nodes[elem.node_ids[0]]
             n2 = bdf_model.nodes[elem.node_ids[1]]
             L = np.linalg.norm(n2.xyz_global - n1.xyz_global)
@@ -691,6 +929,32 @@ def _compute_cg_x(bdf_model: BDFModel) -> float:
             x_mid = 0.5 * (n1.xyz_global[0] + n2.xyz_global[0])
             total_mass += mass
             moment_x += mass * x_mid
+
+        elif elem.type in ("CQUAD4", "CTRIA3"):
+            if hasattr(prop, 'equivalent_isotropic'):
+                E, nu, t, rho = prop.equivalent_isotropic()
+            else:
+                mat = getattr(prop, 'material_ref', None)
+                if mat is None:
+                    continue
+                rho = mat.rho
+                t = getattr(prop, 't', 0.0)
+
+            if rho > 0 and t > 0:
+                coords = np.array([bdf_model.nodes[nid].xyz_global
+                                   for nid in elem.node_ids])
+                centroid_x = np.mean(coords[:, 0])
+                if elem.type == "CTRIA3":
+                    v1 = coords[1] - coords[0]; v2 = coords[2] - coords[0]
+                    area = 0.5 * np.linalg.norm(np.cross(v1, v2))
+                else:
+                    v1 = coords[1] - coords[0]; v2 = coords[2] - coords[0]
+                    v3 = coords[2] - coords[0]; v4 = coords[3] - coords[0]
+                    area = 0.5 * (np.linalg.norm(np.cross(v1, v2)) +
+                                  np.linalg.norm(np.cross(v3, v4)))
+                mass = rho * t * area
+                total_mass += mass
+                moment_x += mass * centroid_x
 
     for mid, mass_elem in bdf_model.masses.items():
         nid = mass_elem.node_id

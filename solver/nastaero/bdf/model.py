@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 class Subcase:
     id: int = 0
     spc_id: int = 0
+    mpc_id: int = 0
     load_id: int = 0
     method_id: int = 0
     flutter_id: int = 0
@@ -29,11 +30,13 @@ class BDFModel:
     load_combinations: Dict[int, Any] = field(default_factory=dict)
     spcs: Dict[int, list] = field(default_factory=dict)
     mpcs: Dict[int, list] = field(default_factory=dict)
+    spcadds: Dict[int, Any] = field(default_factory=dict)
+    mpcadds: Dict[int, Any] = field(default_factory=dict)
     masses: Dict[int, Any] = field(default_factory=dict)
     rigids: Dict[int, Any] = field(default_factory=dict)
     eigrls: Dict[int, Any] = field(default_factory=dict)
     sets: Dict[int, Any] = field(default_factory=dict)
-    # Aero placeholders
+    # Aero data
     aero: Optional[Any] = None
     aeros: Optional[Any] = None
     caero_panels: Dict[int, Any] = field(default_factory=dict)
@@ -45,16 +48,35 @@ class BDFModel:
     aestats: Dict[int, Any] = field(default_factory=dict)
     aesurfs: Dict[int, Any] = field(default_factory=dict)
     aelists: Dict[int, Any] = field(default_factory=dict)
+    aefacts: Dict[int, Any] = field(default_factory=dict)
+    # Spring elements (stored separately from elements dict)
+    springs: Dict[int, Any] = field(default_factory=dict)
 
     def cross_reference(self) -> None:
+        """Cross-reference elements → properties → materials."""
         for eid, elem in self.elements.items():
             if hasattr(elem, "pid") and elem.pid in self.properties:
                 elem.property_ref = self.properties[elem.pid]
                 prop = elem.property_ref
                 if hasattr(prop, "mid") and prop.mid in self.materials:
                     prop.material_ref = self.materials[prop.mid]
+                # PCOMP: cross-reference ply materials
+                if hasattr(prop, 'plies') and hasattr(prop, 'ply_materials'):
+                    prop.ply_materials = []
+                    for mid, t, theta, sout in prop.plies:
+                        if mid in self.materials:
+                            prop.ply_materials.append(self.materials[mid])
+                        else:
+                            prop.ply_materials.append(None)
+                    # Pre-compute equivalent isotropic with materials
+                    if hasattr(prop, 'equivalent_isotropic'):
+                        prop.equivalent_isotropic(self.materials)
             if hasattr(elem, "node_ids"):
                 elem.node_refs = [self.nodes[nid] for nid in elem.node_ids if nid in self.nodes]
+        # Cross-reference spring elements
+        for eid, spring in self.springs.items():
+            if hasattr(spring, 'pid') and spring.pid in self.properties:
+                spring.property_ref = self.properties[spring.pid]
 
     def get_subcase(self, subcase_id: int) -> Subcase:
         for sc in self.subcases:
@@ -65,6 +87,7 @@ class BDFModel:
     def get_effective_subcase(self, subcase: Subcase) -> Subcase:
         effective = Subcase(id=subcase.id)
         effective.spc_id = self.global_case.spc_id
+        effective.mpc_id = self.global_case.mpc_id
         effective.load_id = self.global_case.load_id
         effective.method_id = self.global_case.method_id
         effective.flutter_id = self.global_case.flutter_id
@@ -72,6 +95,8 @@ class BDFModel:
         effective.output_requests = dict(self.global_case.output_requests)
         if subcase.spc_id:
             effective.spc_id = subcase.spc_id
+        if subcase.mpc_id:
+            effective.mpc_id = subcase.mpc_id
         if subcase.load_id:
             effective.load_id = subcase.load_id
         if subcase.method_id:
@@ -83,3 +108,25 @@ class BDFModel:
         effective.output_requests.update(subcase.output_requests)
         effective.label = subcase.label
         return effective
+
+    def resolve_spc_ids(self, spc_id: int) -> list:
+        """Resolve SPCADD to get all SPC/SPC1 entries."""
+        all_spcs = []
+        if spc_id in self.spcadds:
+            spcadd = self.spcadds[spc_id]
+            for child_id in spcadd.spc_ids:
+                all_spcs.extend(self.spcs.get(child_id, []))
+        else:
+            all_spcs.extend(self.spcs.get(spc_id, []))
+        return all_spcs
+
+    def resolve_mpc_ids(self, mpc_id: int) -> list:
+        """Resolve MPCADD to get all MPC entries."""
+        all_mpcs = []
+        if mpc_id in self.mpcadds:
+            mpcadd = self.mpcadds[mpc_id]
+            for child_id in mpcadd.mpc_ids:
+                all_mpcs.extend(self.mpcs.get(child_id, []))
+        else:
+            all_mpcs.extend(self.mpcs.get(mpc_id, []))
+        return all_mpcs

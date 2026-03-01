@@ -20,7 +20,8 @@ class FEModel:
     def get_partitioned_system(self, subcase: Subcase):
         effective = self.bdf_model.get_effective_subcase(subcase)
         F = assemble_load_vector(self.bdf_model, effective, self.dof_mgr)
-        spc_list = self.bdf_model.spcs.get(effective.spc_id, [])
+        # Resolve SPCADD to get all SPC/SPC1 entries
+        spc_list = self.bdf_model.resolve_spc_ids(effective.spc_id)
         constrained, enforced = self.dof_mgr.get_constrained_dofs(spc_list, self.bdf_model.nodes)
         return apply_spcs(self.K, self.M, F, constrained, enforced)
 

@@ -22,9 +22,18 @@ def parse_case_control(lines: List[str], model: BDFModel) -> None:
         if label_match:
             current_subcase.label = label_match.group(1).strip()
             continue
+        subtitle_match = re.match(r"SUBTITLE\s*=\s*(.*)", stripped, re.IGNORECASE)
+        if subtitle_match:
+            if not current_subcase.label:
+                current_subcase.label = subtitle_match.group(1).strip()
+            continue
         spc_match = re.match(r"SPC\s*=\s*(\d+)", upper)
         if spc_match:
             current_subcase.spc_id = int(spc_match.group(1))
+            continue
+        mpc_match = re.match(r"MPC\s*=\s*(\d+)", upper)
+        if mpc_match:
+            current_subcase.mpc_id = int(mpc_match.group(1))
             continue
         load_match = re.match(r"LOAD\s*=\s*(\d+)", upper)
         if load_match:
@@ -34,7 +43,8 @@ def parse_case_control(lines: List[str], model: BDFModel) -> None:
         if method_match:
             current_subcase.method_id = int(method_match.group(1))
             continue
-        for kw in ["DISPLACEMENT", "STRESS", "SPCFORCES", "OLOAD", "FORCE", "STRAIN"]:
+        for kw in ["DISPLACEMENT", "STRESS", "SPCFORCES", "OLOAD", "FORCE",
+                    "STRAIN", "AEROF", "APRES", "DISP", "ECHO"]:
             m = re.match(rf"{kw}.*=\s*(.*)", upper)
             if m:
                 current_subcase.output_requests[kw] = m.group(1).strip()
@@ -50,6 +60,7 @@ def parse_case_control(lines: List[str], model: BDFModel) -> None:
     if not model.subcases:
         default_sc = Subcase(id=1)
         default_sc.spc_id = model.global_case.spc_id
+        default_sc.mpc_id = model.global_case.mpc_id
         default_sc.load_id = model.global_case.load_id
         default_sc.method_id = model.global_case.method_id
         default_sc.output_requests = dict(model.global_case.output_requests)
