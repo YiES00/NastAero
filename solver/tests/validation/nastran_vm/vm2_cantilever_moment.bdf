@@ -1,0 +1,48 @@
+$ NastAero VM2: Cantilever Beam Under End Moment
+$ Reference: Timoshenko - Strength of Materials
+$ 10 CBAR elements, L=10m, E=200GPa, I=1.0e-4 m^4
+$ Applied moment M=10000 N-m at tip
+$ Analytical: theta_tip = ML/EI = 10000*10/(200e9*1e-4) = 5.0e-3 rad
+$ delta_tip = ML^2/(2EI) = 10000*100/(2*200e9*1e-4) = 2.5e-2 m
+$
+SOL 101
+CEND
+TITLE = VM2 - CANTILEVER BEAM UNDER END MOMENT
+SPC = 1
+LOAD = 1
+DISPLACEMENT(PRINT) = ALL
+BEGIN BULK
+$
+GRID,1,,0.0,0.0,0.0
+GRID,2,,1.0,0.0,0.0
+GRID,3,,2.0,0.0,0.0
+GRID,4,,3.0,0.0,0.0
+GRID,5,,4.0,0.0,0.0
+GRID,6,,5.0,0.0,0.0
+GRID,7,,6.0,0.0,0.0
+GRID,8,,7.0,0.0,0.0
+GRID,9,,8.0,0.0,0.0
+GRID,10,,9.0,0.0,0.0
+GRID,11,,10.0,0.0,0.0
+$
+CBAR,1,1,1,2,0.0,0.0,1.0
+CBAR,2,1,2,3,0.0,0.0,1.0
+CBAR,3,1,3,4,0.0,0.0,1.0
+CBAR,4,1,4,5,0.0,0.0,1.0
+CBAR,5,1,5,6,0.0,0.0,1.0
+CBAR,6,1,6,7,0.0,0.0,1.0
+CBAR,7,1,7,8,0.0,0.0,1.0
+CBAR,8,1,8,9,0.0,0.0,1.0
+CBAR,9,1,9,10,0.0,0.0,1.0
+CBAR,10,1,10,11,0.0,0.0,1.0
+$
+$ A=0.01 m^2, I1=I2=1.0e-4 m^4, J=2.0e-4 m^4
+PBAR,1,1,0.01,1.0e-4,1.0e-4,2.0e-4
+MAT1,1,200.0e9,,0.3,7850.0
+$
+SPC1,1,123456,1
+$
+$ Moment about Y-axis at tip (bending in XZ plane)
+MOMENT,1,11,,10000.0,0.0,1.0,0.0
+$
+ENDDATA

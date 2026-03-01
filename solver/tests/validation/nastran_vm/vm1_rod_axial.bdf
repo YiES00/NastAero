@@ -1,0 +1,35 @@
+$ NastAero VM1: Axial Rod Under Tension
+$ Reference: Nastran Verification Manual Problem 1
+$ A single rod (CBAR used as rod) under axial tension
+$ L=10 in, A=1 in^2, E=30e6 psi, F=1000 lb
+$ Analytical: delta = PL/AE = 1000*10/(1*30e6) = 3.333e-4 in
+$ Stress = P/A = 1000 psi
+$
+SOL 101
+CEND
+TITLE = VM1 - AXIAL ROD UNDER TENSION
+SPC = 1
+LOAD = 1
+DISPLACEMENT(PRINT) = ALL
+SPCFORCES(PRINT) = ALL
+BEGIN BULK
+$
+GRID,1,,0.0,0.0,0.0
+GRID,2,,10.0,0.0,0.0
+$
+$ CBAR as axial rod
+CBAR,1,1,1,2,0.0,1.0,0.0
+$
+$ A=1.0, I1=I2=0.0833 (dummy for bending), J=0.1406
+PBAR,1,1,1.0,0.0833,0.0833,0.1406
+MAT1,1,30.0e6,,0.3,0.0
+$
+$ Fix left end fully
+SPC1,1,123456,1
+$ Allow only X-translation at right end
+SPC1,1,23456,2
+$
+$ Axial force in +X direction at node 2
+FORCE,1,2,,1000.0,1.0,0.0,0.0
+$
+ENDDATA

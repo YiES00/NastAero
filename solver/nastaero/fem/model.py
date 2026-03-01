@@ -23,3 +23,8 @@ class FEModel:
         spc_list = self.bdf_model.spcs.get(effective.spc_id, [])
         constrained, enforced = self.dof_mgr.get_constrained_dofs(spc_list, self.bdf_model.nodes)
         return apply_spcs(self.K, self.M, F, constrained, enforced)
+
+    def get_load_vector(self, subcase: Subcase) -> np.ndarray:
+        """Get the full (unpartitioned) load vector for a subcase."""
+        effective = self.bdf_model.get_effective_subcase(subcase)
+        return assemble_load_vector(self.bdf_model, effective, self.dof_mgr)

@@ -1,0 +1,70 @@
+$ NastAero VM6: Fixed-Fixed Beam with Center Point Load
+$ Reference: Roark's Formulas for Stress and Strain
+$ 10 CBAR elements, L=10m, E=200GPa, 0.1x0.1m square cross section
+$ A=0.01 m^2, I=8.333e-6 m^4, J=1.406e-5 m^4
+$ Point load P=10000N at midspan (node 6, x=5.0m)
+$
+$ Analytical:
+$ delta_center = PL^3/(192*E*I)
+$             = 10000*10^3/(192*200e9*8.333e-6)
+$             = 10000*1000/(320000)
+$             = 3.125e-2 m ... recalc:
+$             = 1e7/(192*200e9*8.333e-6)
+$             = 1e7/(192*1.6666e6)
+$             = 1e7/3.2e8 = 3.125e-2 m
+$ Wait: 192*200e9*8.333e-6 = 192*1666600 = 319987200 ~ 3.2e8
+$ delta = 1e7/3.2e8 = 0.03125 m
+$
+$ Correction: PL^3 = 10000 * 10^3 = 10000*1000 = 1e7
+$ 192*E*I = 192 * 200e9 * 8.333e-6 = 192 * 1.6666e6 = 3.19987e8
+$ delta = 1e7 / 3.2e8 = 0.03125 m
+$
+$ Reaction at each end: R = P/2 = 5000 N
+$ Fixed-end moment: M = PL/8 = 10000*10/8 = 12500 N-m
+$
+SOL 101
+CEND
+TITLE = VM6 - FIXED-FIXED BEAM WITH CENTER POINT LOAD
+SPC = 1
+LOAD = 1
+DISPLACEMENT(PRINT) = ALL
+SPCFORCES(PRINT) = ALL
+BEGIN BULK
+$
+$ 11 nodes along X axis: x=0 to x=10 (spacing=1.0m)
+GRID,1,,0.0,0.0,0.0
+GRID,2,,1.0,0.0,0.0
+GRID,3,,2.0,0.0,0.0
+GRID,4,,3.0,0.0,0.0
+GRID,5,,4.0,0.0,0.0
+GRID,6,,5.0,0.0,0.0
+GRID,7,,6.0,0.0,0.0
+GRID,8,,7.0,0.0,0.0
+GRID,9,,8.0,0.0,0.0
+GRID,10,,9.0,0.0,0.0
+GRID,11,,10.0,0.0,0.0
+$
+$ 10 CBAR elements
+CBAR,1,1,1,2,0.0,1.0,0.0
+CBAR,2,1,2,3,0.0,1.0,0.0
+CBAR,3,1,3,4,0.0,1.0,0.0
+CBAR,4,1,4,5,0.0,1.0,0.0
+CBAR,5,1,5,6,0.0,1.0,0.0
+CBAR,6,1,6,7,0.0,1.0,0.0
+CBAR,7,1,7,8,0.0,1.0,0.0
+CBAR,8,1,8,9,0.0,1.0,0.0
+CBAR,9,1,9,10,0.0,1.0,0.0
+CBAR,10,1,10,11,0.0,1.0,0.0
+$
+$ 0.1m x 0.1m square beam: A=0.01, I1=I2=8.333e-6, J=1.406e-5
+PBAR,1,1,0.01,8.333e-6,8.333e-6,1.406e-5
+MAT1,1,200.0e9,,0.3,7850.0
+$
+$ Fixed at both ends (all 6 DOFs)
+SPC1,1,123456,1
+SPC1,1,123456,11
+$
+$ Point load at midspan node 6 in -Y direction (transverse)
+FORCE,1,6,,10000.0,0.0,-1.0,0.0
+$
+ENDDATA

@@ -29,17 +29,18 @@ def solve_static(bdf_model: BDFModel) -> ResultData:
         for i, dof in enumerate(f_dofs):
             u_full[dof] = u_f[i]
 
-        # SPC reaction forces: F_spc = K_sf * u_f + K_ss * u_s - F_s
+        # SPC reaction forces: F_reaction = K_sf * u_f - F_applied_s
+        # where F_applied_s is the external load applied at constrained DOFs
         K = fe_model.K
         f_idx = np.array(f_dofs)
         s_idx = np.array(s_dofs)
+        spc_forces_full = np.zeros(ndof)
         if len(s_dofs) > 0:
-            spc_forces_full = np.zeros(ndof)
-            F_spc = K[np.ix_(s_idx, f_idx)] @ u_f
+            # Get full load vector to extract loads at constrained DOFs
+            F_full = fe_model.get_load_vector(subcase)
+            F_spc = K[np.ix_(s_idx, f_idx)] @ u_f - F_full[s_idx]
             for i, dof in enumerate(s_dofs):
                 spc_forces_full[dof] = F_spc[i]
-        else:
-            spc_forces_full = np.zeros(ndof)
 
         # Store results
         sc_result = SubcaseResult(subcase_id=subcase.id)

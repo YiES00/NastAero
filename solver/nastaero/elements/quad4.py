@@ -76,7 +76,12 @@ class CQuad4Element(BaseElement):
         return J
 
     def _local_stiffness(self):
-        """Build 24x24 local stiffness (DOF order: u,v,w,rx,ry,rz per node)."""
+        """Build 24x24 local stiffness (DOF order: u,v,w,rx,ry,rz per node).
+
+        Uses selective reduced integration:
+        - 2x2 Gauss for membrane and bending
+        - 1-point (center) for transverse shear (prevents shear locking)
+        """
         E, nu, t = self.E, self.nu, self.t
         # Membrane constitutive (plane stress)
         Dm = (E * t / (1 - nu**2)) * np.array([[1, nu, 0], [nu, 1, 0], [0, 0, (1-nu)/2]])
@@ -87,6 +92,15 @@ class CQuad4Element(BaseElement):
         Ds = kappa * (E * t / (2 * (1 + nu))) * np.eye(2)
 
         k = np.zeros((24, 24))
+
+        # DOF index arrays (precompute)
+        mem_dofs = []
+        bend_dofs = []
+        shear_dofs = []
+        for n_idx in range(4):
+            mem_dofs.extend([6*n_idx, 6*n_idx+1])
+            bend_dofs.extend([6*n_idx+3, 6*n_idx+4])
+            shear_dofs.extend([6*n_idx+2, 6*n_idx+3, 6*n_idx+4])
 
         # 2x2 integration for membrane and bending
         for i in range(2):
@@ -100,7 +114,7 @@ class CQuad4Element(BaseElement):
                 dNdx = Jinv[0,0]*dNdxi + Jinv[0,1]*dNdeta
                 dNdy = Jinv[1,0]*dNdxi + Jinv[1,1]*dNdeta
 
-                # Membrane B-matrix (3 x 8): relates [exx, eyy, gxy] to [u1,v1, u2,v2, ...]
+                # Membrane B-matrix (3 x 8)
                 Bm = np.zeros((3, 8))
                 for n_idx in range(4):
                     Bm[0, 2*n_idx] = dNdx[n_idx]
@@ -108,11 +122,12 @@ class CQuad4Element(BaseElement):
                     Bm[2, 2*n_idx] = dNdy[n_idx]
                     Bm[2, 2*n_idx+1] = dNdx[n_idx]
 
-                # Membrane stiffness contribution
                 km = Bm.T @ Dm @ Bm * detJ * w
+                for ii in range(8):
+                    for jj in range(8):
+                        k[mem_dofs[ii], mem_dofs[jj]] += km[ii, jj]
 
-                # Bending B-matrix (3 x 8): relates [kxx, kyy, kxy] to [rx1,ry1, ...]
-                # kxx = -d(ry)/dx, kyy = d(rx)/dy, kxy = d(rx)/dx - d(ry)/dy
+                # Bending B-matrix (3 x 8)
                 Bb = np.zeros((3, 8))
                 for n_idx in range(4):
                     Bb[0, 2*n_idx+1] = -dNdx[n_idx]  # -d(ry)/dx
@@ -121,47 +136,33 @@ class CQuad4Element(BaseElement):
                     Bb[2, 2*n_idx+1] = -dNdy[n_idx]   # -d(ry)/dy
 
                 kb = Bb.T @ Db @ Bb * detJ * w
-
-                # Shear B-matrix (2 x 12): relates [gxz, gyz] to [w1,rx1,ry1, ...]
-                Bs = np.zeros((2, 12))
-                for n_idx in range(4):
-                    Bs[0, 3*n_idx] = dNdx[n_idx]       # dw/dx
-                    Bs[0, 3*n_idx+2] = -N[n_idx]       # -ry (= beta_x in Mindlin)
-                    Bs[1, 3*n_idx] = dNdy[n_idx]        # dw/dy
-                    Bs[1, 3*n_idx+1] = N[n_idx]         # rx (= -beta_y in Mindlin)
-
-                ks = Bs.T @ Ds @ Bs * detJ * w
-
-                # Map to 24x24 DOF ordering: [u,v,w,rx,ry,rz] per node
-                # Membrane DOFs: u,v -> indices 0,1, 6,7, 12,13, 18,19
-                mem_dofs = []
-                for n_idx in range(4):
-                    mem_dofs.extend([6*n_idx, 6*n_idx+1])
-
-                for ii in range(8):
-                    for jj in range(8):
-                        k[mem_dofs[ii], mem_dofs[jj]] += km[ii, jj]
-
-                # Bending DOFs: rx,ry -> indices 3,4, 9,10, 15,16, 21,22
-                bend_dofs = []
-                for n_idx in range(4):
-                    bend_dofs.extend([6*n_idx+3, 6*n_idx+4])
-
                 for ii in range(8):
                     for jj in range(8):
                         k[bend_dofs[ii], bend_dofs[jj]] += kb[ii, jj]
 
-                # Shear DOFs: w,rx,ry -> indices 2,3,4, 8,9,10, 14,15,16, 20,21,22
-                shear_dofs = []
-                for n_idx in range(4):
-                    shear_dofs.extend([6*n_idx+2, 6*n_idx+3, 6*n_idx+4])
+        # 1-point integration for transverse shear (selective reduced integration)
+        xi_c, eta_c = 0.0, 0.0
+        w_c = 4.0  # weight for 1-point rule over [-1,1]^2
+        N_c, dNdxi_c, dNdeta_c = self._shape_functions(xi_c, eta_c)
+        J_c = self._jacobian(dNdxi_c, dNdeta_c)
+        detJ_c = np.linalg.det(J_c)
+        Jinv_c = np.linalg.inv(J_c)
+        dNdx_c = Jinv_c[0,0]*dNdxi_c + Jinv_c[0,1]*dNdeta_c
+        dNdy_c = Jinv_c[1,0]*dNdxi_c + Jinv_c[1,1]*dNdeta_c
 
-                for ii in range(12):
-                    for jj in range(12):
-                        k[shear_dofs[ii], shear_dofs[jj]] += ks[ii, jj]
+        Bs = np.zeros((2, 12))
+        for n_idx in range(4):
+            Bs[0, 3*n_idx] = dNdx_c[n_idx]       # dw/dx
+            Bs[0, 3*n_idx+2] = -N_c[n_idx]        # -ry
+            Bs[1, 3*n_idx] = dNdy_c[n_idx]         # dw/dy
+            Bs[1, 3*n_idx+1] = N_c[n_idx]          # rx
+
+        ks = Bs.T @ Ds @ Bs * detJ_c * w_c
+        for ii in range(12):
+            for jj in range(12):
+                k[shear_dofs[ii], shear_dofs[jj]] += ks[ii, jj]
 
         # Drilling DOF stabilization (rz DOFs: 5, 11, 17, 23)
-        # Use small penalty stiffness
         area = self._compute_area()
         alpha_drill = E * t * area * 1e-6
         for n_idx in range(4):
