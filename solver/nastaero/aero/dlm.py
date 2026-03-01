@@ -2,6 +2,9 @@
 
 Implements the steady (k=0) DLM for SOL 144 static aeroelastic analysis.
 The kernel is based on the Landahl planar lifting surface theory.
+
+Performance: AIC build is fully vectorized using NumPy broadcasting —
+all n×n Biot-Savart interactions computed in a single pass with no Python loops.
 """
 from __future__ import annotations
 from typing import List
@@ -42,203 +45,192 @@ def build_aic_matrix(boxes: List[AeroBox], mach: float = 0.0,
     beta = np.sqrt(max(1.0 - mach**2, 0.01))
 
     if reduced_freq < 1e-10:
-        # Steady VLM - horseshoe vortex method
-        return _build_steady_aic(boxes, beta)
+        return _build_steady_aic_vectorized(boxes, beta)
     else:
-        # Unsteady DLM (simplified kernel for now, can be extended)
-        return _build_steady_aic(boxes, beta)
+        return _build_steady_aic_vectorized(boxes, beta)
 
 
-def _build_steady_aic(boxes: List[AeroBox], beta: float) -> np.ndarray:
-    """Build steady AIC using horseshoe vortex method (VLM).
+def _build_steady_aic_vectorized(boxes: List[AeroBox], beta: float) -> np.ndarray:
+    """Build steady AIC using fully vectorized horseshoe vortex method.
 
-    Each box has a horseshoe vortex:
-    - Bound vortex at 1/4 chord (doublet_point, spanning the box width)
-    - Two trailing vortices extending to +infinity in x-direction
-
-    The induced normalwash at each control point (3/4 chord) is computed
-    using the Biot-Savart law.
+    All n×n Biot-Savart interactions are computed in one pass using
+    NumPy broadcasting. No Python for-loops over box pairs.
     """
     n = len(boxes)
-    D = np.zeros((n, n))
 
-    for i in range(n):  # receiving box (control point)
-        xc = boxes[i].control_point
-        nrm = boxes[i].normal
+    # Pre-extract all geometry into contiguous arrays
+    corners = np.array([b.corners for b in boxes])  # (n, 4, 3)
+    c0 = corners[:, 0]  # (n, 3) inboard LE
+    c1 = corners[:, 1]  # (n, 3) inboard TE
+    c2 = corners[:, 2]  # (n, 3) outboard TE
+    c3 = corners[:, 3]  # (n, 3) outboard LE
 
-        for j in range(n):  # sending box (horseshoe vortex)
-            # Get bound vortex endpoints (spanwise extent at 1/4 chord)
-            bj = boxes[j]
-            # Bound vortex endpoints: 1/4 chord at inboard and outboard edges
-            c0, c1, c2, c3 = bj.corners
-            # 1/4 chord inboard
-            a_pt = c0 + 0.25 * (c1 - c0)
-            # 1/4 chord outboard
-            b_pt = c3 + 0.25 * (c2 - c3)
+    # 1/4 chord points for horseshoe vortex
+    a_pts = c0 + 0.25 * (c1 - c0)  # (n, 3) inboard quarter-chord
+    b_pts = c3 + 0.25 * (c2 - c3)  # (n, 3) outboard quarter-chord
 
-            # Apply Prandtl-Glauert: scale y,z by 1/beta
-            # (transform to incompressible frame)
-            xc_pg = np.array([xc[0], xc[1] / beta, xc[2] / beta])
-            a_pg = np.array([a_pt[0], a_pt[1] / beta, a_pt[2] / beta])
-            b_pg = np.array([b_pt[0], b_pt[1] / beta, b_pt[2] / beta])
+    # Control points and normals
+    xc_all = np.array([b.control_point for b in boxes])  # (n, 3)
+    nrm_all = np.array([b.normal for b in boxes])         # (n, 3)
 
-            # Horseshoe vortex induced velocity (Biot-Savart)
-            w = _horseshoe_normalwash(xc_pg, a_pg, b_pg, nrm)
+    # Prandtl-Glauert transformation: scale y, z by 1/beta
+    pg_scale = np.array([1.0, 1.0 / beta, 1.0 / beta])
+    xc_pg = xc_all * pg_scale   # (n, 3)
+    a_pg = a_pts * pg_scale     # (n, 3)
+    b_pg = b_pts * pg_scale     # (n, 3)
 
-            # Scale by box chord (normalizing)
-            D[i, j] = w
+    # Broadcast: receiving (i) = axis 0, sending (j) = axis 1
+    # xc_pg[i] shape: (n, 1, 3) after expand; a_pg[j] shape: (1, n, 3)
+    xc_i = xc_pg[:, np.newaxis, :]  # (n, 1, 3)
+    a_j = a_pg[np.newaxis, :, :]    # (1, n, 3)
+    b_j = b_pg[np.newaxis, :, :]    # (1, n, 3)
+
+    # ============================================================
+    # 1. Bound vortex segment: a → b (Biot-Savart)
+    # ============================================================
+    v_bound = _biot_savart_segment_vec(xc_i, a_j, b_j)  # (n, n, 3)
+
+    # ============================================================
+    # 2. Semi-infinite trailing legs (direction = +x)
+    # ============================================================
+    v_trail_a = _semi_infinite_vortex_vec(xc_i, a_j)  # (n, n, 3)
+    v_trail_b = _semi_infinite_vortex_vec(xc_i, b_j)  # (n, n, 3)
+
+    # Total induced velocity (horseshoe: bound - trail_a + trail_b)
+    v_total = v_bound - v_trail_a + v_trail_b  # (n, n, 3)
+
+    # Normalwash: dot product with receiving panel normal
+    # nrm_all[i]: (n, 1, 3)
+    nrm_i = nrm_all[:, np.newaxis, :]  # (n, 1, 3)
+    D = np.sum(v_total * nrm_i, axis=2)  # (n, n)
 
     return D
 
 
-def _horseshoe_normalwash(xc: np.ndarray, a: np.ndarray, b: np.ndarray,
-                           normal: np.ndarray) -> float:
-    """Compute normalwash at xc due to a unit horseshoe vortex.
+def _biot_savart_segment_vec(xc, p1, p2):
+    """Vectorized Biot-Savart for finite vortex segment p1→p2.
 
-    The horseshoe vortex loop (following Bertin & Cummings convention):
-    - Trailing leg from a extending downstream to x=+inf (inboard leg)
-    - Bound segment from a to b (finite vortex, positive lift)
-    - Trailing leg from b extending downstream to x=+inf (outboard leg)
-
-    The circulation sense: going around the loop from downstream-a → a →
-    b → downstream-b, the inboard trailing leg has opposite sense to the
-    outboard trailing leg relative to the bound vortex.
-
-    For positive lift (downwash at control point), the correct combination is:
-      v_total = v_bound(a→b) - v_trail(a,+x) + v_trail(b,+x)
-
-    Uses Biot-Savart law with unit circulation Gamma=1.
-
-    Returns the component of induced velocity along the normal direction.
+    Parameters: all broadcastable to (n_recv, n_send, 3)
+    Returns: induced velocity (n_recv, n_send, 3)
     """
-    # 1. Bound vortex segment (a → b)
+    r1 = xc - p1       # (ni, nj, 3)
+    r2 = xc - p2       # (ni, nj, 3)
+    r0 = p2 - p1       # (1, nj, 3) or (ni, nj, 3)
+
+    # Cross product r1 × r2
+    cross = np.cross(r1, r2)                         # (ni, nj, 3)
+    cross_sq = np.sum(cross * cross, axis=2)          # (ni, nj)
+
+    # Magnitudes
+    r1_mag = np.sqrt(np.sum(r1 * r1, axis=2))        # (ni, nj)
+    r2_mag = np.sqrt(np.sum(r2 * r2, axis=2))        # (ni, nj)
+
+    # Avoid division by zero
+    safe = (cross_sq > 1e-20) & (r1_mag > 1e-12) & (r2_mag > 1e-12)
+
+    # r0 · (r1/|r1| - r2/|r2|)
+    r1_hat = r1 / np.maximum(r1_mag[..., np.newaxis], 1e-30)
+    r2_hat = r2 / np.maximum(r2_mag[..., np.newaxis], 1e-30)
+    factor = np.sum(r0 * (r1_hat - r2_hat), axis=2)  # (ni, nj)
+
+    # V = (1/4π) * cross / cross_sq * factor
+    coeff = np.where(safe, factor / np.maximum(cross_sq, 1e-30), 0.0)
+    v = (1.0 / (4.0 * np.pi)) * cross * coeff[..., np.newaxis]
+
+    return v
+
+
+def _semi_infinite_vortex_vec(xc, origin):
+    """Vectorized semi-infinite vortex (direction = +x).
+
+    Parameters: all broadcastable to (n_recv, n_send, 3)
+    Returns: induced velocity (n_recv, n_send, 3)
+    """
+    r = xc - origin                                   # (ni, nj, 3)
+    r_mag = np.sqrt(np.sum(r * r, axis=2))             # (ni, nj)
+
+    # direction × r where direction = [1, 0, 0]
+    # cross([1,0,0], [rx, ry, rz]) = [0*rz - 0*ry, 0*rx - 1*rz, 1*ry - 0*rx]
+    #                               = [0, -rz, ry]
+    cross = np.empty_like(r)
+    cross[..., 0] = 0.0
+    cross[..., 1] = -r[..., 2]
+    cross[..., 2] = r[..., 1]
+
+    cross_sq = np.sum(cross * cross, axis=2)           # (ni, nj)
+
+    safe = (r_mag > 1e-12) & (cross_sq > 1e-20)
+
+    # cos_theta = r · [1,0,0] / |r| = rx / |r|
+    cos_theta = r[..., 0] / np.maximum(r_mag, 1e-30)
+
+    coeff = np.where(safe,
+                     (1.0 + cos_theta) / np.maximum(cross_sq, 1e-30),
+                     0.0)
+    v = (1.0 / (4.0 * np.pi)) * cross * coeff[..., np.newaxis]
+
+    return v
+
+
+# ============================================================
+# Scalar reference functions (kept for testing/debugging)
+# ============================================================
+
+def _horseshoe_normalwash(xc, a, b, normal):
+    """Scalar: normalwash at xc due to unit horseshoe vortex."""
     v_bound = _biot_savart_segment(xc, a, b)
-
-    # 2. Trailing leg from a to +infinity (semi-infinite, direction +x)
     v_trail_a = _semi_infinite_vortex(xc, a, np.array([1.0, 0.0, 0.0]))
-
-    # 3. Trailing leg from b to +infinity (semi-infinite, direction +x)
     v_trail_b = _semi_infinite_vortex(xc, b, np.array([1.0, 0.0, 0.0]))
-
-    # Total: bound + outboard_trail - inboard_trail
-    # The inboard trailing leg (from a) has opposite sense in the vortex loop
     v_total = v_bound - v_trail_a + v_trail_b
-
-    # Return normalwash component
     return np.dot(v_total, normal)
 
 
-def _biot_savart_segment(xc: np.ndarray, p1: np.ndarray, p2: np.ndarray) -> np.ndarray:
-    """Induced velocity at xc due to a finite vortex segment p1→p2.
-
-    Biot-Savart for finite segment with unit circulation:
-    V = (Gamma/4pi) * [(r1×r2)/|r1×r2|^2] * (r0 . (r1/|r1| - r2/|r2|))
-
-    where r1 = xc-p1, r2 = xc-p2, r0 = p2-p1
-    """
+def _biot_savart_segment(xc, p1, p2):
+    """Scalar: Biot-Savart for finite vortex segment p1→p2."""
     r1 = xc - p1
     r2 = xc - p2
     r0 = p2 - p1
-
     cross = np.cross(r1, r2)
     cross_sq = np.dot(cross, cross)
-
-    # Cutoff for numerical stability
     if cross_sq < 1e-20:
         return np.zeros(3)
-
     r1_mag = np.linalg.norm(r1)
     r2_mag = np.linalg.norm(r2)
-
     if r1_mag < 1e-12 or r2_mag < 1e-12:
         return np.zeros(3)
-
     factor = np.dot(r0, r1 / r1_mag - r2 / r2_mag)
-
     return (1.0 / (4.0 * np.pi)) * (cross / cross_sq) * factor
 
 
-def _semi_infinite_vortex(xc: np.ndarray, origin: np.ndarray,
-                          direction: np.ndarray) -> np.ndarray:
-    """Induced velocity at xc due to a semi-infinite vortex.
-
-    Vortex starts at 'origin' and extends to infinity in 'direction'.
-    Uses the limiting form of Biot-Savart.
-
-    V = (Gamma/4pi) * (d × e_inf) / |d × e_inf|^2 * (1 + r.e_inf/|r|)
-
-    where r = xc - origin, e_inf = direction (unit vector)
-    """
+def _semi_infinite_vortex(xc, origin, direction):
+    """Scalar: semi-infinite vortex induced velocity."""
     r = xc - origin
     r_mag = np.linalg.norm(r)
     if r_mag < 1e-12:
         return np.zeros(3)
-
     cross = np.cross(direction, r)
     cross_sq = np.dot(cross, cross)
     if cross_sq < 1e-20:
         return np.zeros(3)
-
     cos_theta = np.dot(r, direction) / r_mag
-
     return (1.0 / (4.0 * np.pi)) * (cross / cross_sq) * (1.0 + cos_theta)
 
 
+# ============================================================
+# Post-processing helpers (also vectorized)
+# ============================================================
+
 def compute_aero_forces(boxes: List[AeroBox], delta_cp: np.ndarray,
                         q: float) -> np.ndarray:
-    """Compute aerodynamic forces from pressure difference coefficients.
-
-    Parameters
-    ----------
-    boxes : list of AeroBox
-    delta_cp : ndarray (n,)
-        Pressure difference coefficient (delta_Cp) for each box.
-    q : float
-        Dynamic pressure (0.5 * rho * V^2).
-
-    Returns
-    -------
-    forces : ndarray (n, 3)
-        Force vector (fx, fy, fz) for each box.
-    """
-    n = len(boxes)
-    forces = np.zeros((n, 3))
-    for i in range(n):
-        # Force = q * delta_Cp * area, directed along panel normal
-        forces[i] = q * delta_cp[i] * boxes[i].area * boxes[i].normal
-    return forces
+    """Compute aerodynamic forces from pressure difference coefficients."""
+    areas = np.array([b.area for b in boxes])        # (n,)
+    normals = np.array([b.normal for b in boxes])     # (n, 3)
+    return q * (delta_cp * areas)[:, np.newaxis] * normals
 
 
 def circulation_to_delta_cp(boxes: List[AeroBox], gamma: np.ndarray) -> np.ndarray:
-    """Convert VLM normalized circulation to pressure difference coefficient.
-
-    In VLM, the AIC relates normalwash ratio to normalized circulation:
-        {w/V} = [D]{gamma}
-    where gamma = Gamma/V (normalized by freestream velocity).
-
-    The pressure coefficient for each box is:
-        delta_Cp_j = 2 * gamma_j / chord_j
-
-    This follows from Kutta-Joukowski:
-        L_j = rho * V * Gamma_j * span_j = rho * V^2 * gamma_j * span_j
-        delta_Cp_j = L_j / (q * area_j)
-                   = (rho * V^2 * gamma_j * span_j) / (0.5*rho*V^2 * chord_j*span_j)
-                   = 2 * gamma_j / chord_j
-
-    Parameters
-    ----------
-    boxes : list of AeroBox
-    gamma : ndarray (n,)
-        Normalized circulation (Gamma/V) from solving D @ gamma = w/V.
-
-    Returns
-    -------
-    delta_cp : ndarray (n,)
-        Pressure difference coefficient for each box.
-    """
-    n = len(boxes)
-    delta_cp = np.zeros(n)
-    for i in range(n):
-        if boxes[i].chord > 1e-12:
-            delta_cp[i] = 2.0 * gamma[i] / boxes[i].chord
+    """Convert VLM normalized circulation to pressure difference coefficient."""
+    chords = np.array([b.chord for b in boxes])
+    safe = chords > 1e-12
+    delta_cp = np.where(safe, 2.0 * gamma / np.maximum(chords, 1e-30), 0.0)
     return delta_cp

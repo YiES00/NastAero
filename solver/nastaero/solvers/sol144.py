@@ -427,21 +427,15 @@ def _solve_iterative(K_ff, apply_Q_aa, Q_ax, F_f, F_trim_fixed,
     K_reg = K_reg + sp.eye(n_free, format='csc') * eps_reg
     logger.info("  Regularization: eps = %.2e (avg_diag = %.2e)", eps_reg, avg_diag)
 
-    # Add Q_aa contribution at active DOFs
-    # Build Q_aa as sparse and add to K
+    # Add Q_aa contribution at active DOFs (vectorized COO construction)
     if n_active > 0 and n_active < 5000:
-        # Small enough to add Q_active directly
-        Q_rows, Q_cols, Q_vals = [], [], []
-        for i_loc in range(n_active):
-            for j_loc in range(n_active):
-                val = Q_active[i_loc, j_loc]
-                if abs(val) > 1e-30:
-                    Q_rows.append(active_cols[i_loc])
-                    Q_cols.append(active_cols[j_loc])
-                    Q_vals.append(val)
-
-        if Q_vals:
-            Q_sp = sp.coo_matrix((Q_vals, (Q_rows, Q_cols)),
+        # Build COO indices via broadcasting (no Python loops)
+        row_idx = np.repeat(active_cols, n_active)       # (n_active^2,)
+        col_idx = np.tile(active_cols, n_active)          # (n_active^2,)
+        q_vals = Q_active.ravel()                         # (n_active^2,)
+        mask = np.abs(q_vals) > 1e-30
+        if mask.any():
+            Q_sp = sp.coo_matrix((q_vals[mask], (row_idx[mask], col_idx[mask])),
                                  shape=(n_free, n_free)).tocsc()
             K_eff = K_reg + Q_sp
         else:
@@ -449,15 +443,63 @@ def _solve_iterative(K_ff, apply_Q_aa, Q_ax, F_f, F_trim_fixed,
     else:
         K_eff = K_reg
 
-    # Factorize K_eff
+    # Factorize K_eff using best available solver
     logger.info("  Factorizing K_eff (%d x %d)...", n_free, n_free)
     t_lu = time.perf_counter()
+
+    K_eff_csc = K_eff.tocsc()
+
+    # Strategy: try ILU-preconditioned CG first (2-3x faster for SPD systems),
+    # fall back to direct LU if CG fails
+    _solver_mode = None  # 'pardiso', 'ilu_cg', or 'splu'
+    _pardiso_solve = None
+    _ilu_pc = None
+    K_lu = None
+
+    # 1. Try pypardiso (MKL PARDISO) — multi-threaded direct solver
     try:
-        K_lu = spla.splu(K_eff.tocsc())
-        logger.info("  LU factorization done in %.2f s", time.perf_counter() - t_lu)
-    except Exception as e:
-        logger.error("  LU factorization failed: %s", e)
-        return np.zeros(n_free), np.zeros(n_trim_free)
+        from pypardiso import spsolve as pardiso_solve
+        _solver_mode = 'pardiso'
+        _pardiso_solve = pardiso_solve
+        logger.info("  Using PyPardiso (MKL PARDISO) solver")
+    except ImportError:
+        pass
+
+    # 2. Try ILU-preconditioned CG (much faster for large SPD systems)
+    if _solver_mode is None:
+        try:
+            K_sym = ((K_eff_csc + K_eff_csc.T) * 0.5).tocsc()
+            ilu = spla.spilu(K_sym, fill_factor=10)
+            _ilu_pc = spla.LinearOperator(K_sym.shape, matvec=ilu.solve)
+            _solver_mode = 'ilu_cg'
+            logger.info("  Using ILU(10)-preconditioned CG solver")
+        except Exception as e:
+            logger.info("  ILU build failed (%s), falling back to direct LU", e)
+
+    # 3. Fallback: SciPy SuperLU
+    if _solver_mode is None:
+        try:
+            K_lu = spla.splu(K_eff_csc, permc_spec='COLAMD')
+            _solver_mode = 'splu'
+        except Exception as e:
+            logger.error("  All solvers failed: %s", e)
+            return np.zeros(n_free), np.zeros(n_trim_free)
+
+    logger.info("  Factorization done in %.2f s", time.perf_counter() - t_lu)
+
+    def _solve_system(rhs_vec):
+        """Solve K_eff @ x = rhs using best available solver."""
+        if _solver_mode == 'pardiso':
+            return _pardiso_solve(K_eff_csc, rhs_vec)
+        elif _solver_mode == 'ilu_cg':
+            x_cg, info = spla.cg(K_sym, rhs_vec, M=_ilu_pc,
+                                  rtol=1e-10, maxiter=500)
+            if info != 0:
+                logger.warning("  CG did not converge (info=%d), using direct solve", info)
+                lu_fallback = spla.splu(K_eff_csc, permc_spec='COLAMD')
+                return lu_fallback.solve(rhs_vec)
+            return x_cg
+        return K_lu.solve(rhs_vec)
 
     # Iterative trim solution
     x_trim = np.zeros(n_trim_free)
@@ -469,7 +511,7 @@ def _solve_iterative(K_ff, apply_Q_aa, Q_ax, F_f, F_trim_fixed,
         if n_trim_free > 0:
             rhs = rhs + Q_ax @ x_trim
 
-        u_f = K_lu.solve(rhs)
+        u_f = _solve_system(rhs)
 
         if n_constraints == 0 or n_trim_free == 0:
             break

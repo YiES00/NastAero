@@ -300,66 +300,303 @@ def _apply_cd_transforms(K, M, model: BDFModel, dof_mgr: DOFManager):
 # Vectorized batch assembly for CQUAD4
 # ============================================================
 
+# 2x2 Gauss quadrature
+_GP2 = np.array([-1.0 / np.sqrt(3.0), 1.0 / np.sqrt(3.0)])
+
+
 def _assemble_cquad4_batch(elems, model, dof_mgr,
                             rows_k, cols_k, vals_k,
                             rows_m, cols_m, vals_m,
                             ptr_k, ptr_m):
-    """Batch assemble CQUAD4 elements with vectorized COO construction."""
+    """Fully vectorized CQUAD4 assembly — all elements computed in batch.
+
+    Computes stiffness and mass matrices for all CQUAD4 elements simultaneously
+    using NumPy broadcasting and einsum, with no Python per-element loops for
+    the numerical computation.
+    """
     n_elem = len(elems)
     ndof_e = 24
 
-    # Pre-compute all element DOF indices as a (n_elem, 24) array
+    # --- Collect element data into contiguous arrays ---
     all_edofs = np.empty((n_elem, ndof_e), dtype=np.int64)
-    for idx, (eid, elem) in enumerate(elems):
-        all_edofs[idx, :] = dof_mgr.get_element_dofs(elem.node_ids)
+    all_xyz = np.empty((n_elem, 4, 3))
+    all_E = np.empty(n_elem)
+    all_nu = np.empty(n_elem)
+    all_t = np.empty(n_elem)
+    all_rho = np.empty(n_elem)
+    valid = np.ones(n_elem, dtype=bool)
 
-    # Create the (i,j) index pairs for a 24x24 matrix (576 pairs)
-    ii_local, jj_local = np.meshgrid(np.arange(ndof_e), np.arange(ndof_e), indexing='ij')
-    ii_flat = ii_local.ravel()  # (576,)
-    jj_flat = jj_local.ravel()  # (576,)
-
-    # For each element, compute ke, me and fill COO arrays
     for idx, (eid, elem) in enumerate(elems):
         try:
+            all_edofs[idx, :] = dof_mgr.get_element_dofs(elem.node_ids)
+            for k, nid in enumerate(elem.node_ids):
+                all_xyz[idx, k] = model.nodes[nid].xyz_global
             prop = elem.property_ref
-            # PCOMP: use equivalent isotropic properties
             if hasattr(prop, 'equivalent_isotropic'):
                 E, nu, t, rho = prop.equivalent_isotropic()
             else:
                 mat = prop.material_ref
                 E = mat.E; nu = mat.nu; t = prop.t; rho = mat.rho
-            node_xyz = np.array([model.nodes[nid].xyz_global for nid in elem.node_ids])
-            q = CQuad4Element(node_xyz, E, nu, t, rho)
-            ke = q.stiffness_matrix()
-            me = q.mass_matrix()
+            all_E[idx] = E; all_nu[idx] = nu; all_t[idx] = t; all_rho[idx] = rho
         except Exception as exc:
-            logger.warning("Error assembling CQUAD4 %d: %s", eid, exc)
-            continue
+            logger.warning("Error collecting CQUAD4 %d: %s", eid, exc)
+            valid[idx] = False
 
-        edofs = all_edofs[idx]
-        # Vectorized COO fill: map local indices to global DOFs
-        global_rows = edofs[ii_flat]  # (576,)
-        global_cols = edofs[jj_flat]  # (576,)
-        ke_flat = ke.ravel()
-        me_flat = me.ravel()
+    # Filter valid elements
+    if not np.all(valid):
+        mask = valid
+        all_edofs = all_edofs[mask]
+        all_xyz = all_xyz[mask]
+        all_E = all_E[mask]; all_nu = all_nu[mask]
+        all_t = all_t[mask]; all_rho = all_rho[mask]
+        n_elem = int(mask.sum())
 
-        # Filter near-zero entries for K
-        mask_k = np.abs(ke_flat) > 1e-30
-        nk = mask_k.sum()
-        rows_k[ptr_k:ptr_k+nk] = global_rows[mask_k]
-        cols_k[ptr_k:ptr_k+nk] = global_cols[mask_k]
-        vals_k[ptr_k:ptr_k+nk] = ke_flat[mask_k]
-        ptr_k += nk
+    if n_elem == 0:
+        return ptr_k, ptr_m
 
-        # Filter near-zero entries for M
-        mask_m = np.abs(me_flat) > 1e-30
-        nm = mask_m.sum()
-        rows_m[ptr_m:ptr_m+nm] = global_rows[mask_m]
-        cols_m[ptr_m:ptr_m+nm] = global_cols[mask_m]
-        vals_m[ptr_m:ptr_m+nm] = me_flat[mask_m]
-        ptr_m += nm
+    # --- Build local coordinate systems (vectorized) ---
+    # ne = n_elem
+    p = all_xyz  # (ne, 4, 3)
+    center = p.mean(axis=1)  # (ne, 3)
+    d13 = p[:, 2] - p[:, 0]  # (ne, 3)
+    d24 = p[:, 3] - p[:, 1]  # (ne, 3)
+    ez = np.cross(d13, d24)   # (ne, 3)
+    ez_norm = np.linalg.norm(ez, axis=1, keepdims=True)  # (ne, 1)
+    ez = ez / np.maximum(ez_norm, 1e-30)
+
+    ex = p[:, 1] - p[:, 0]  # (ne, 3)
+    ex = ex - np.sum(ex * ez, axis=1, keepdims=True) * ez
+    ex = ex / np.maximum(np.linalg.norm(ex, axis=1, keepdims=True), 1e-30)
+    ey = np.cross(ez, ex)    # (ne, 3)
+
+    # T_local (ne, 3, 3) — rows are ex, ey, ez
+    T_local = np.stack([ex, ey, ez], axis=1)  # (ne, 3, 3)
+
+    # Project nodes to local 2D: xy_local (ne, 4, 2)
+    d = p - center[:, np.newaxis, :]  # (ne, 4, 3)
+    xy_local = np.empty((n_elem, 4, 2))
+    xy_local[:, :, 0] = np.einsum('nij,nj->ni', d, ex)  # x = d · ex
+    xy_local[:, :, 1] = np.einsum('nij,nj->ni', d, ey)  # y = d · ey
+
+    # --- Constitutive matrices (ne,) ---
+    E_ = all_E; nu_ = all_nu; t_ = all_t
+
+    # --- Compute all ke in batch ---
+    ke_all = _batch_cquad4_stiffness(xy_local, E_, nu_, t_, n_elem)  # (ne, 24, 24)
+
+    # --- Transform to global: ke_global = T24.T @ ke_local @ T24 ---
+    # Instead of building full (ne, 24, 24) T24 matrix and doing triple einsum,
+    # use block structure: T24 is block-diagonal with 8 copies of T_local (3x3).
+    # Apply rotation block-by-block: for each 3x3 sub-block (i,j) of ke (24x24),
+    # ke_global[3i:3i+3, 3j:3j+3] = R^T @ ke_local[3i:3i+3, 3j:3j+3] @ R
+    ke_global = np.empty_like(ke_all)
+    RT = T_local.transpose(0, 2, 1)  # (ne, 3, 3) — R^T
+    for bi in range(8):
+        si = 3 * bi
+        for bj in range(8):
+            sj = 3 * bj
+            # block = R^T @ ke[si:si+3, sj:sj+3] @ R
+            tmp = np.einsum('nij,njk->nik', RT, ke_all[:, si:si+3, sj:sj+3])
+            ke_global[:, si:si+3, sj:sj+3] = np.einsum('nij,njk->nik', tmp, T_local)
+
+    # --- Lumped mass matrices ---
+    dl13 = xy_local[:, 2] - xy_local[:, 0]
+    dl24 = xy_local[:, 3] - xy_local[:, 1]
+    area = 0.5 * np.abs(dl13[:, 0]*dl24[:, 1] - dl13[:, 1]*dl24[:, 0])
+
+    total_mass = all_rho * t_ * area           # (ne,)
+    m_per_node = total_mass / 4.0              # (ne,)
+    rot_inertia = m_per_node * t_**2 / 12.0   # (ne,)
+
+    # Mass matrix is diagonal in local coords. Under block rotation R^T diag R,
+    # diagonal blocks become R^T @ (m*I) @ R = m*I (since R is orthogonal).
+    # So lumped mass matrix is the same in global coords — no transform needed.
+    me_global = np.zeros((n_elem, 24, 24))
+    for nd in range(4):
+        base = 6 * nd
+        for i in range(3):
+            me_global[:, base+i, base+i] = m_per_node
+        for i in range(3, 6):
+            me_global[:, base+i, base+i] = rot_inertia
+
+    # --- Assemble into COO arrays ---
+    ii_local, jj_local = np.meshgrid(np.arange(ndof_e), np.arange(ndof_e), indexing='ij')
+    ii_flat = ii_local.ravel()  # (576,)
+    jj_flat = jj_local.ravel()  # (576,)
+
+    # Map local DOF indices to global DOFs for all elements at once
+    global_rows_all = all_edofs[:, ii_flat]  # (ne, 576)
+    global_cols_all = all_edofs[:, jj_flat]  # (ne, 576)
+    ke_flat_all = ke_global.reshape(n_elem, -1)  # (ne, 576)
+    me_flat_all = me_global.reshape(n_elem, -1)  # (ne, 576)
+
+    # Filter near-zero entries
+    mask_k_all = np.abs(ke_flat_all) > 1e-30  # (ne, 576)
+    nk_total = mask_k_all.sum()
+    rows_k[ptr_k:ptr_k+nk_total] = global_rows_all[mask_k_all]
+    cols_k[ptr_k:ptr_k+nk_total] = global_cols_all[mask_k_all]
+    vals_k[ptr_k:ptr_k+nk_total] = ke_flat_all[mask_k_all]
+    ptr_k += nk_total
+
+    mask_m_all = np.abs(me_flat_all) > 1e-30
+    nm_total = mask_m_all.sum()
+    rows_m[ptr_m:ptr_m+nm_total] = global_rows_all[mask_m_all]
+    cols_m[ptr_m:ptr_m+nm_total] = global_cols_all[mask_m_all]
+    vals_m[ptr_m:ptr_m+nm_total] = me_flat_all[mask_m_all]
+    ptr_m += nm_total
 
     return ptr_k, ptr_m
+
+
+def _batch_cquad4_stiffness(xy_local, E_, nu_, t_, n_elem):
+    """Compute 24x24 local stiffness for all CQUAD4 elements simultaneously.
+
+    Uses fully vectorized Gauss integration over all elements in parallel.
+
+    Parameters
+    ----------
+    xy_local : (ne, 4, 2)  - local 2D coordinates
+    E_, nu_, t_ : (ne,) - material/thickness arrays
+    n_elem : int
+
+    Returns
+    -------
+    ke : (ne, 24, 24) - local stiffness matrices
+    """
+    ne = n_elem
+
+    # Constitutive matrices (scalars per element)
+    # Membrane: Dm = E*t/(1-nu^2) * [[1, nu, 0], [nu, 1, 0], [0, 0, (1-nu)/2]]
+    fac_m = E_ * t_ / (1.0 - nu_**2)   # (ne,)
+    # Bending:  Db = E*t^3/(12*(1-nu^2)) * same pattern
+    fac_b = E_ * t_**3 / (12.0 * (1.0 - nu_**2))  # (ne,)
+    # Shear:    Ds = kappa * E*t / (2*(1+nu)) * I_2
+    kappa = 5.0 / 6.0
+    fac_s = kappa * E_ * t_ / (2.0 * (1.0 + nu_))  # (ne,)
+
+    ke = np.zeros((ne, 24, 24))
+
+    # DOF index arrays
+    mem_idx = np.array([0,1, 6,7, 12,13, 18,19])  # u,v for 4 nodes
+    bend_idx = np.array([3,4, 9,10, 15,16, 21,22])  # rx,ry for 4 nodes
+    shear_idx = np.array([2,3,4, 8,9,10, 14,15,16, 20,21,22])  # w,rx,ry
+
+    # 2x2 Gauss integration for membrane and bending
+    for gi in range(2):
+        for gj in range(2):
+            xi = _GP2[gi]; eta = _GP2[gj]
+
+            # Shape function derivatives
+            dNdxi = 0.25 * np.array([-(1-eta), (1-eta), (1+eta), -(1+eta)])
+            dNdeta = 0.25 * np.array([-(1-xi), -(1+xi), (1+xi), (1-xi)])
+            N = 0.25 * np.array([(1-xi)*(1-eta), (1+xi)*(1-eta),
+                                 (1+xi)*(1+eta), (1-xi)*(1+eta)])
+
+            # Jacobian: J[ne, 2, 2]
+            # J[0,0] = dNdxi . x, J[0,1] = dNdxi . y, etc.
+            J = np.empty((ne, 2, 2))
+            J[:, 0, 0] = dNdxi @ xy_local[:, :, 0].T  # (ne,) ← (4,) @ (4, ne)
+            J[:, 0, 1] = dNdxi @ xy_local[:, :, 1].T
+            J[:, 1, 0] = dNdeta @ xy_local[:, :, 0].T
+            J[:, 1, 1] = dNdeta @ xy_local[:, :, 1].T
+
+            detJ = J[:, 0, 0] * J[:, 1, 1] - J[:, 0, 1] * J[:, 1, 0]  # (ne,)
+
+            # Inverse Jacobian (2x2 analytic)
+            inv_det = 1.0 / np.maximum(np.abs(detJ), 1e-30)
+            Jinv = np.empty((ne, 2, 2))
+            Jinv[:, 0, 0] = J[:, 1, 1] * inv_det
+            Jinv[:, 0, 1] = -J[:, 0, 1] * inv_det
+            Jinv[:, 1, 0] = -J[:, 1, 0] * inv_det
+            Jinv[:, 1, 1] = J[:, 0, 0] * inv_det
+
+            # dN/dx, dN/dy (ne, 4)
+            dNdx = np.outer(Jinv[:, 0, 0], dNdxi).reshape(ne, 4) + \
+                   np.outer(Jinv[:, 0, 1], dNdeta).reshape(ne, 4)
+            dNdy = np.outer(Jinv[:, 1, 0], dNdxi).reshape(ne, 4) + \
+                   np.outer(Jinv[:, 1, 1], dNdeta).reshape(ne, 4)
+
+            # --- Membrane: Bm (ne, 3, 8) ---
+            Bm = np.zeros((ne, 3, 8))
+            for nd in range(4):
+                Bm[:, 0, 2*nd] = dNdx[:, nd]
+                Bm[:, 1, 2*nd+1] = dNdy[:, nd]
+                Bm[:, 2, 2*nd] = dNdy[:, nd]
+                Bm[:, 2, 2*nd+1] = dNdx[:, nd]
+
+            # Dm (ne, 3, 3) * Bm (ne, 3, 8) → DmBm (ne, 3, 8)
+            # Dm = fac_m * [[1, nu, 0], [nu, 1, 0], [0, 0, (1-nu)/2]]
+            Dm_Bm = np.empty((ne, 3, 8))
+            Dm_Bm[:, 0] = fac_m[:, None] * (Bm[:, 0] + nu_[:, None] * Bm[:, 1])
+            Dm_Bm[:, 1] = fac_m[:, None] * (nu_[:, None] * Bm[:, 0] + Bm[:, 1])
+            Dm_Bm[:, 2] = fac_m[:, None] * ((1 - nu_[:, None]) / 2) * Bm[:, 2]
+
+            # km = Bm^T @ Dm @ Bm * detJ = Bm^T @ Dm_Bm * detJ
+            km = np.einsum('nai,naj->nij', Bm, Dm_Bm) * detJ[:, None, None]  # (ne, 8, 8)
+            ke[:, mem_idx[:, None], mem_idx[None, :]] += km
+
+            # --- Bending: Bb (ne, 3, 8) ---
+            Bb = np.zeros((ne, 3, 8))
+            for nd in range(4):
+                Bb[:, 0, 2*nd+1] = -dNdx[:, nd]
+                Bb[:, 1, 2*nd] = dNdy[:, nd]
+                Bb[:, 2, 2*nd] = dNdx[:, nd]
+                Bb[:, 2, 2*nd+1] = -dNdy[:, nd]
+
+            Db_Bb = np.empty((ne, 3, 8))
+            Db_Bb[:, 0] = fac_b[:, None] * (Bb[:, 0] + nu_[:, None] * Bb[:, 1])
+            Db_Bb[:, 1] = fac_b[:, None] * (nu_[:, None] * Bb[:, 0] + Bb[:, 1])
+            Db_Bb[:, 2] = fac_b[:, None] * ((1 - nu_[:, None]) / 2) * Bb[:, 2]
+
+            kb = np.einsum('nai,naj->nij', Bb, Db_Bb) * detJ[:, None, None]
+            ke[:, bend_idx[:, None], bend_idx[None, :]] += kb
+
+    # --- 1-point shear integration ---
+    dNdxi_c = 0.25 * np.array([-1.0, 1.0, 1.0, -1.0])
+    dNdeta_c = 0.25 * np.array([-1.0, -1.0, 1.0, 1.0])
+    N_c = np.array([0.25, 0.25, 0.25, 0.25])
+
+    J_c = np.empty((ne, 2, 2))
+    J_c[:, 0, 0] = dNdxi_c @ xy_local[:, :, 0].T
+    J_c[:, 0, 1] = dNdxi_c @ xy_local[:, :, 1].T
+    J_c[:, 1, 0] = dNdeta_c @ xy_local[:, :, 0].T
+    J_c[:, 1, 1] = dNdeta_c @ xy_local[:, :, 1].T
+
+    detJ_c = J_c[:, 0, 0]*J_c[:, 1, 1] - J_c[:, 0, 1]*J_c[:, 1, 0]
+    inv_det_c = 1.0 / np.maximum(np.abs(detJ_c), 1e-30)
+    Jinv_c = np.empty((ne, 2, 2))
+    Jinv_c[:, 0, 0] = J_c[:, 1, 1] * inv_det_c
+    Jinv_c[:, 0, 1] = -J_c[:, 0, 1] * inv_det_c
+    Jinv_c[:, 1, 0] = -J_c[:, 1, 0] * inv_det_c
+    Jinv_c[:, 1, 1] = J_c[:, 0, 0] * inv_det_c
+
+    dNdx_c = np.outer(Jinv_c[:, 0, 0], dNdxi_c).reshape(ne, 4) + \
+             np.outer(Jinv_c[:, 0, 1], dNdeta_c).reshape(ne, 4)
+    dNdy_c = np.outer(Jinv_c[:, 1, 0], dNdxi_c).reshape(ne, 4) + \
+             np.outer(Jinv_c[:, 1, 1], dNdeta_c).reshape(ne, 4)
+
+    Bs = np.zeros((ne, 2, 12))
+    for nd in range(4):
+        Bs[:, 0, 3*nd] = dNdx_c[:, nd]
+        Bs[:, 0, 3*nd+2] = -N_c[nd]
+        Bs[:, 1, 3*nd] = dNdy_c[:, nd]
+        Bs[:, 1, 3*nd+1] = N_c[nd]
+
+    # Ds @ Bs = fac_s * Bs (isotropic shear)
+    Ds_Bs = fac_s[:, None, None] * Bs  # (ne, 2, 12)
+    ks = np.einsum('nai,naj->nij', Bs, Ds_Bs) * (detJ_c * 4.0)[:, None, None]
+    ke[:, shear_idx[:, None], shear_idx[None, :]] += ks
+
+    # Drilling stabilization
+    dl13 = xy_local[:, 2] - xy_local[:, 0]
+    dl24 = xy_local[:, 3] - xy_local[:, 1]
+    area = 0.5 * np.abs(dl13[:, 0]*dl24[:, 1] - dl13[:, 1]*dl24[:, 0])
+    alpha_drill = E_ * t_ * area * 1e-6  # (ne,)
+    for nd in range(4):
+        rz_dof = 6 * nd + 5
+        ke[:, rz_dof, rz_dof] += alpha_drill
+
+    return ke
 
 
 def _assemble_ctria3_batch(elems, model, dof_mgr,
