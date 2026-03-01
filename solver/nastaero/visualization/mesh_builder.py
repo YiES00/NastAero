@@ -693,6 +693,96 @@ def build_rbe_lines(bdf_model) -> Optional[pv.PolyData]:
     return mesh
 
 
+def build_nodal_force_arrows(
+    bdf_model,
+    nodal_forces: Dict[int, np.ndarray],
+    scale: float = 0.0,
+    min_fraction: float = 0.01,
+) -> Optional[pv.PolyData]:
+    """Build arrow glyphs showing force vectors at structural nodes.
+
+    Parameters
+    ----------
+    bdf_model : BDFModel
+    nodal_forces : Dict[int, ndarray(6)]
+        Node ID -> force/moment vector.
+    scale : float
+        Arrow length scale. 0 = auto-scale based on model size.
+    min_fraction : float
+        Minimum force fraction to display (filters noise).
+
+    Returns
+    -------
+    pv.PolyData or None
+        Arrow glyph mesh, or None if no valid data.
+    """
+    if not nodal_forces:
+        return None
+
+    # Collect non-zero force nodes
+    origins = []
+    force_vecs = []
+    magnitudes_list = []
+
+    for nid in sorted(nodal_forces.keys()):
+        if nid not in bdf_model.nodes:
+            continue
+        fv = nodal_forces[nid][:3]
+        mag = np.linalg.norm(fv)
+        if mag < 1e-30:
+            continue
+        origins.append(bdf_model.nodes[nid].xyz_global)
+        force_vecs.append(fv)
+        magnitudes_list.append(mag)
+
+    if not origins:
+        return None
+
+    origins = np.array(origins)
+    force_vecs = np.array(force_vecs)
+    magnitudes = np.array(magnitudes_list)
+
+    max_mag = np.max(magnitudes)
+
+    # Filter out very small forces
+    mask = magnitudes > (max_mag * min_fraction)
+    if not np.any(mask):
+        return None
+    origins = origins[mask]
+    force_vecs = force_vecs[mask]
+    magnitudes = magnitudes[mask]
+
+    # Auto-scale: arrow length relative to model bounding box
+    if scale <= 0.0:
+        all_pts = np.array([bdf_model.nodes[nid].xyz_global
+                            for nid in bdf_model.nodes])
+        bbox_diag = np.linalg.norm(all_pts.max(axis=0) - all_pts.min(axis=0))
+        scale = 0.05 * bbox_diag / max_mag
+
+    # Normalize and scale
+    directions = force_vecs / magnitudes[:, np.newaxis]
+    arrow_lengths = magnitudes * scale
+
+    points = pv.PolyData(origins)
+    points['vectors'] = directions * arrow_lengths[:, np.newaxis]
+    points['Force_Magnitude'] = magnitudes
+
+    arrows = points.glyph(
+        orient='vectors',
+        scale='vectors',
+        factor=1.0,
+        geom=pv.Arrow(
+            tip_length=0.25,
+            tip_radius=0.10,
+            shaft_radius=0.03,
+            shaft_resolution=12,
+            tip_resolution=12,
+        ),
+    )
+
+    return arrows
+
+
 def add_displacement_data(
     grid: pv.UnstructuredGrid,
     bdf_model,

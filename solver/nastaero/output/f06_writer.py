@@ -25,6 +25,15 @@ def write_f06(results: ResultData, bdf_model: BDFModel, filepath: str) -> None:
                 _write_spc_forces(f, sc)
             if sc.aero_pressures is not None:
                 _write_aero_pressures(f, sc)
+            if sc.nodal_aero_forces is not None:
+                _write_nodal_forces(f, sc, 'AERODYNAMIC', sc.nodal_aero_forces)
+            if sc.nodal_inertial_forces is not None:
+                _write_nodal_forces(f, sc, 'INERTIAL', sc.nodal_inertial_forces)
+            if sc.nodal_combined_forces is not None:
+                _write_nodal_forces(f, sc, 'COMBINED (AERO+INERTIAL)',
+                                    sc.nodal_combined_forces)
+            if sc.trim_balance is not None:
+                _write_trim_balance(f, sc)
         _write_footer(f)
 
 
@@ -129,6 +138,56 @@ def _write_aero_pressures(f: TextIO, sc: SubcaseResult) -> None:
         cp = sc.aero_pressures[i]
         fx, fy, fz = sc.aero_forces[i] if sc.aero_forces is not None else (0, 0, 0)
         f.write(f"  {box_id:>10d}  {cp:>13.6E}  {fx:>13.6E}  {fy:>13.6E}  {fz:>13.6E}\n")
+    f.write("\n")
+
+
+def _write_nodal_forces(f: TextIO, sc: SubcaseResult, label: str,
+                         forces: dict) -> None:
+    """Write nodal force table for a specific load type."""
+    f.write("1" + " " * 20 + f"SUBCASE {sc.subcase_id}\n\n")
+    f.write(f"              {label}   N O D A L   F O R C E S\n\n")
+    f.write("      POINT ID.   TYPE          FX             FY             FZ"
+            "             MX             MY             MZ\n")
+
+    total = np.zeros(6)
+    n_written = 0
+    for nid in sorted(forces.keys()):
+        fv = forces[nid]
+        mag = np.linalg.norm(fv[:3])
+        if mag < 1e-20:
+            continue
+        f.write(f"  {nid:>12d}      G  ")
+        for i in range(6):
+            f.write(f"  {fv[i]:>13.6E}")
+        f.write("\n")
+        total += fv
+        n_written += 1
+
+    f.write("\n")
+    f.write(f"      TOTAL ({n_written} nodes):  ")
+    for i in range(6):
+        f.write(f"  {total[i]:>13.6E}")
+    f.write("\n\n")
+
+
+def _write_trim_balance(f: TextIO, sc: SubcaseResult) -> None:
+    """Write trim equilibrium balance check."""
+    f.write("1" + " " * 20 + f"SUBCASE {sc.subcase_id}\n\n")
+    f.write("              T R I M   E Q U I L I B R I U M   B A L A N C E   C H E C K\n\n")
+    f.write("      COMPONENT       RESULTANT            STATUS\n")
+    f.write("      " + "-" * 60 + "\n")
+
+    b = sc.trim_balance
+    for comp in ['Fx', 'Fy', 'Fz', 'Mx', 'My', 'Mz']:
+        val = b[comp]
+        # Determine trim status
+        if abs(val) < 1.0:
+            status = "OK (< 1.0)"
+        elif abs(val) < 100.0:
+            status = "MARGINAL"
+        else:
+            status = "CHECK"
+        f.write(f"      {comp:<16s}  {val:>16.6E}    {status}\n")
     f.write("\n")
 
 

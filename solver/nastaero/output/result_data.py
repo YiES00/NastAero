@@ -21,6 +21,11 @@ class SubcaseResult:
     aero_pressures: Optional[np.ndarray] = None
     aero_forces: Optional[np.ndarray] = None
     aero_boxes: Optional[list] = None
+    # SOL 144 nodal loads (Dict[node_id, np.ndarray(6)])
+    nodal_aero_forces: Optional[Dict[int, np.ndarray]] = None
+    nodal_inertial_forces: Optional[Dict[int, np.ndarray]] = None
+    nodal_combined_forces: Optional[Dict[int, np.ndarray]] = None
+    trim_balance: Optional[Dict[str, float]] = None  # 6-DOF balance check
 
 
 @dataclass

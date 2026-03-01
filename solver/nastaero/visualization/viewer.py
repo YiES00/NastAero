@@ -26,6 +26,7 @@ from .mesh_builder import (
     build_aero_pressure_mesh,
     build_aero_force_arrows,
     build_aero_normal_arrows,
+    build_nodal_force_arrows,
     build_rbe_lines,
     build_beam_tubes,
     build_deformed_beam_tubes,
@@ -840,6 +841,105 @@ class NastAeroViewer:
                     parts.append(f"{var}={val:.4e}")
             trim_text += ", ".join(parts)
             pl.add_text(trim_text, position='upper_edge', font_size=9)
+
+        _finalize_plot(pl, screenshot, self.off_screen)
+
+    def plot_nodal_forces(
+        self,
+        subcase: int = 0,
+        loads_type: str = 'all',
+        screenshot: Optional[str] = None,
+        window_size: Tuple[int, int] = (2000, 700),
+    ) -> None:
+        """Plot nodal force vectors: aerodynamic, inertial, and combined.
+
+        Creates a 1x3 subplot layout suitable for loads analysis reports:
+        - Left: Aerodynamic forces (blue arrows)
+        - Center: Inertial forces (red arrows)
+        - Right: Combined forces (green arrows)
+
+        Parameters
+        ----------
+        subcase : int
+            Subcase index (0-based).
+        loads_type : str
+            'all' for 1x3 layout, 'aero', 'inertial', or 'combined' for single.
+        screenshot : str, optional
+            Save to file.
+        window_size : tuple
+        """
+        if not self.results or not self.results.subcases:
+            raise ValueError("No results available")
+
+        sc = self.results.subcases[subcase]
+        if sc.nodal_aero_forces is None:
+            raise ValueError("No nodal force data. Run SOL 144 with trim loads.")
+
+        load_sets = []
+        if loads_type == 'all':
+            load_sets = [
+                ('Aerodynamic Forces', sc.nodal_aero_forces, 'dodgerblue'),
+                ('Inertial Forces', sc.nodal_inertial_forces, 'red'),
+                ('Combined Forces (Aero + Inertial)', sc.nodal_combined_forces, 'green'),
+            ]
+        elif loads_type == 'aero':
+            load_sets = [('Aerodynamic Forces', sc.nodal_aero_forces, 'dodgerblue')]
+        elif loads_type == 'inertial':
+            load_sets = [('Inertial Forces', sc.nodal_inertial_forces, 'red')]
+        elif loads_type == 'combined':
+            load_sets = [
+                ('Combined Forces (Aero + Inertial)', sc.nodal_combined_forces, 'green')]
+
+        n_plots = len(load_sets)
+        if n_plots == 1:
+            window_size = (1200, 800)
+
+        pl = pv.Plotter(
+            shape=(1, n_plots),
+            off_screen=self.off_screen,
+            window_size=window_size,
+        )
+
+        for col, (title, forces, color) in enumerate(load_sets):
+            if n_plots > 1:
+                pl.subplot(0, col)
+
+            # Structural mesh background
+            if self._has_beams():
+                shell_mesh = build_structural_mesh(self.bdf_model,
+                                                    include_beams=False)
+                if shell_mesh.n_cells > 0:
+                    pl.add_mesh(shell_mesh, color='lightgray', opacity=0.3,
+                                show_edges=True, edge_color='whitesmoke')
+                self._add_beam_tubes(pl, color='lightgray', opacity=0.3)
+            else:
+                pl.add_mesh(self.struct_mesh, color='lightgray', opacity=0.3,
+                            show_edges=True, edge_color='whitesmoke')
+
+            # Aero panels as reference
+            self._add_aero_panels(pl, color='cyan', opacity=0.15)
+
+            # Force arrows
+            if forces is not None:
+                arrows = build_nodal_force_arrows(self.bdf_model, forces)
+                if arrows is not None:
+                    pl.add_mesh(
+                        arrows,
+                        color=color,
+                        opacity=0.9,
+                        label=title,
+                    )
+
+            pl.add_title(title, font_size=11)
+            pl.add_axes()
+
+        # Add trim balance text if available
+        if sc.trim_balance and n_plots > 1:
+            b = sc.trim_balance
+            bal_text = (f"Trim Balance: "
+                       f"Fx={b['Fx']:.1f}  Fy={b['Fy']:.1f}  Fz={b['Fz']:.1f}  "
+                       f"Mx={b['Mx']:.0f}  My={b['My']:.0f}  Mz={b['Mz']:.0f}")
+            pl.add_text(bal_text, position='upper_edge', font_size=9)
 
         _finalize_plot(pl, screenshot, self.off_screen)
 

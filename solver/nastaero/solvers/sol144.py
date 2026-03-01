@@ -316,6 +316,27 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
                        for i in range(n_boxes))
         logger.info("  Pitch moment about CG = %.2f N*m", my_total)
 
+    # 10. Compute nodal trim loads (aero + inertial + combined)
+    try:
+        from ..loads_analysis.trim_loads import (
+            compute_trim_nodal_loads, verify_trim_balance)
+
+        g = _detect_gravity(bdf_model)
+        aero_nodal, inertial_nodal, combined_nodal = compute_trim_nodal_loads(
+            bdf_model, boxes, aero_forces, G_sp, f_dofs, dof_mgr,
+            nz=1.0, g=g)
+
+        sc_result.nodal_aero_forces = aero_nodal
+        sc_result.nodal_inertial_forces = inertial_nodal
+        sc_result.nodal_combined_forces = combined_nodal
+
+        # Verify trim balance
+        cg_pt = np.array([cg_x, 0.0, 0.0])
+        balance = verify_trim_balance(bdf_model, combined_nodal, ref_point=cg_pt)
+        sc_result.trim_balance = balance
+    except Exception as e:
+        logger.warning("  Trim loads computation failed: %s", e)
+
     return sc_result
 
 

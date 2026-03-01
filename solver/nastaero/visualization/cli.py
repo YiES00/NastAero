@@ -51,6 +51,13 @@ Examples:
                         help='Show aerodynamic pressure (SOL 144)')
     parser.add_argument('--trim', action='store_true',
                         help='Show combined trim results (SOL 144)')
+    parser.add_argument('--loads', action='store_true',
+                        help='Show nodal force vectors (SOL 144 trim loads)')
+    parser.add_argument('--loads-type', type=str, default='all',
+                        choices=['all', 'aero', 'inertial', 'combined'],
+                        help='Type of loads to display (default: all)')
+    parser.add_argument('--force-cards', type=str, default=None,
+                        help='Write FORCE cards to file (BDF format)')
 
     # Display options
     parser.add_argument('--component', type=str, default='magnitude',
@@ -124,11 +131,30 @@ Examples:
     from .viewer import NastAeroViewer
     viewer = NastAeroViewer(bdf_model, results, off_screen=off_screen)
 
+    # Write FORCE cards if requested
+    if args.force_cards and results and results.subcases:
+        sc = results.subcases[0]
+        if sc.nodal_combined_forces:
+            from ..loads_analysis.trim_loads import write_force_cards
+            import os
+            base = os.path.splitext(args.force_cards)[0]
+            write_force_cards(sc.nodal_aero_forces,
+                              base + '_aero.bdf', load_sid=101,
+                              label='AERODYNAMIC')
+            write_force_cards(sc.nodal_inertial_forces,
+                              base + '_inertial.bdf', load_sid=102,
+                              label='INERTIAL')
+            write_force_cards(sc.nodal_combined_forces,
+                              base + '_combined.bdf', load_sid=100,
+                              label='COMBINED')
+            print(f"  FORCE cards written: {base}_aero.bdf, "
+                  f"{base}_inertial.bdf, {base}_combined.bdf")
+
     # Export VTK if requested
     if args.export:
         viewer.export_vtk(args.export)
         if not any([args.disp, args.modes, args.mode is not None, args.aero,
-                     args.pressure, args.trim]) and not args.screenshot:
+                     args.pressure, args.trim, args.loads]) and not args.screenshot:
             return
 
     # Determine what to plot
@@ -136,7 +162,13 @@ Examples:
     show_arrows = not args.no_arrows
     cmap = args.cmap
 
-    if args.trim and results:
+    if args.loads and results:
+        viewer.plot_nodal_forces(
+            loads_type=args.loads_type,
+            screenshot=args.screenshot,
+            window_size=window_size,
+        )
+    elif args.trim and results:
         viewer.plot_trim_results(
             disp_scale=args.scale,
             show_aero_arrows=show_arrows,

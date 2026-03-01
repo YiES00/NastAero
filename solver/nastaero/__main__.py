@@ -40,6 +40,23 @@ def main() -> None:
     write_f06(results, bdf_model, f06_path)
     logger.info("Results written to %s", f06_path)
 
+    # Write FORCE cards for SOL 144 trim loads
+    if bdf_model.sol == 144 and results.subcases:
+        sc = results.subcases[0]
+        if sc.nodal_combined_forces is not None:
+            from .loads_analysis.trim_loads import write_force_cards
+            base = str(bdf_path.with_suffix(''))
+            write_force_cards(sc.nodal_aero_forces,
+                              base + '_aero_forces.bdf',
+                              load_sid=101, label='AERODYNAMIC')
+            write_force_cards(sc.nodal_inertial_forces,
+                              base + '_inertial_forces.bdf',
+                              load_sid=102, label='INERTIAL')
+            write_force_cards(sc.nodal_combined_forces,
+                              base + '_combined_forces.bdf',
+                              load_sid=100, label='COMBINED')
+            logger.info("FORCE cards written for trim loads")
+
 
 if __name__ == "__main__":
     main()
