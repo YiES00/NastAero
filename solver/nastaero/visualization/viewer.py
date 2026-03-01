@@ -25,6 +25,8 @@ from .mesh_builder import (
     build_aero_mesh,
     build_aero_pressure_mesh,
     build_rbe_lines,
+    build_beam_tubes,
+    build_deformed_beam_tubes,
     add_displacement_data,
 )
 
@@ -74,6 +76,49 @@ class NastAeroViewer:
             self._struct_mesh = build_structural_mesh(self.bdf_model)
         return self._struct_mesh
 
+    def _has_beams(self) -> bool:
+        """Check if model has CBAR/CROD elements."""
+        return any(e.type in ("CBAR", "CROD")
+                    for e in self.bdf_model.elements.values())
+
+    def _has_aero_panels(self) -> bool:
+        """Check if model has CAERO1 aerodynamic panels."""
+        return bool(self.bdf_model.caero_panels)
+
+    def _add_beam_tubes(self, pl, color='steelblue', opacity=1.0,
+                         label='Beams') -> None:
+        """Add 3D tube beams to plotter if model has CBAR/CROD."""
+        tubes = build_beam_tubes(self.bdf_model)
+        if tubes is not None:
+            pl.add_mesh(
+                tubes,
+                color=color,
+                opacity=opacity,
+                label=label,
+            )
+
+    def _add_aero_panels(self, pl, color='cyan', opacity=0.5,
+                          label='Aero Panels') -> None:
+        """Add aero panels to plotter if model has CAERO1."""
+        if not self._has_aero_panels():
+            return
+        try:
+            from ..aero.panel import generate_all_panels
+            aero_boxes = generate_all_panels(self.bdf_model)
+            if aero_boxes:
+                aero_mesh = build_aero_mesh(aero_boxes)
+                pl.add_mesh(
+                    aero_mesh,
+                    color=color,
+                    show_edges=True,
+                    edge_color='darkblue',
+                    line_width=1,
+                    opacity=opacity,
+                    label=label,
+                )
+        except Exception:
+            pass
+
     def plot_model(
         self,
         show_edges: bool = True,
@@ -86,17 +131,41 @@ class NastAeroViewer:
         title: Optional[str] = None,
         window_size: Tuple[int, int] = (1200, 800),
     ) -> None:
-        """Plot the undeformed structural model."""
+        """Plot the undeformed structural model.
+
+        Automatically renders CBAR/CROD as 3D tubes and shows
+        aerodynamic panels if CAERO1 cards are present.
+        """
         pl = pv.Plotter(off_screen=self.off_screen, window_size=window_size)
-        pl.add_mesh(
-            self.struct_mesh,
-            color=color,
-            show_edges=show_edges,
-            edge_color='gray',
-            line_width=1,
-            opacity=1.0,
-            label='Structure',
-        )
+
+        has_beams = self._has_beams()
+
+        # For beam-only models, use tubes instead of lines
+        if has_beams:
+            # Add shell/solid elements from the mesh (exclude beams)
+            shell_mesh = build_structural_mesh(self.bdf_model, include_beams=False)
+            if shell_mesh.n_cells > 0:
+                pl.add_mesh(
+                    shell_mesh,
+                    color=color,
+                    show_edges=show_edges,
+                    edge_color='gray',
+                    line_width=1,
+                    opacity=1.0,
+                    label='Shells',
+                )
+            # Add 3D beam tubes
+            self._add_beam_tubes(pl)
+        else:
+            pl.add_mesh(
+                self.struct_mesh,
+                color=color,
+                show_edges=show_edges,
+                edge_color='gray',
+                line_width=1,
+                opacity=1.0,
+                label='Structure',
+            )
 
         if show_nodes:
             pl.add_mesh(
@@ -124,13 +193,20 @@ class NastAeroViewer:
             if rbe_mesh is not None:
                 pl.add_mesh(rbe_mesh, color='red', line_width=3, label='RBE')
 
+        # Auto-detect and show aero panels
+        self._add_aero_panels(pl)
+
         if title:
             pl.add_title(title, font_size=14)
         else:
             n_elem = len(self.bdf_model.elements)
             n_node = len(self.bdf_model.nodes)
-            pl.add_title(f"NastAero Model ({n_node:,} nodes, {n_elem:,} elements)",
-                         font_size=14)
+            parts = [f"{n_node:,} nodes", f"{n_elem:,} elements"]
+            if self._has_aero_panels():
+                n_panels = sum(max(c.nspan,1) * max(c.nchord,1)
+                               for c in self.bdf_model.caero_panels.values())
+                parts.append(f"{n_panels} aero panels")
+            pl.add_title(f"NastAero Model ({', '.join(parts)})", font_size=14)
 
         pl.add_axes()
         pl.show_bounds(grid=False, location='outer')
@@ -182,7 +258,14 @@ class NastAeroViewer:
 
         pl = pv.Plotter(off_screen=self.off_screen, window_size=window_size)
 
+        has_beams = self._has_beams()
+
         if show_undeformed:
+            if has_beams:
+                # Ghost wireframe for undeformed beams
+                tubes_undef = build_beam_tubes(self.bdf_model)
+                if tubes_undef is not None:
+                    pl.add_mesh(tubes_undef, color='lightgray', opacity=0.2)
             pl.add_mesh(
                 self.struct_mesh,
                 color='lightgray',
@@ -191,6 +274,19 @@ class NastAeroViewer:
                 opacity=0.3,
                 label='Undeformed',
             )
+
+        # Add deformed beam tubes with displacement coloring
+        if has_beams:
+            def_tubes = build_deformed_beam_tubes(
+                self.bdf_model, displacements, scale)
+            if def_tubes is not None:
+                pl.add_mesh(
+                    def_tubes,
+                    scalars='Displacement_Magnitude',
+                    cmap=cmap,
+                    show_scalar_bar=False,
+                    label='Deformed Beams',
+                )
 
         pl.add_mesh(
             deformed,
@@ -207,6 +303,9 @@ class NastAeroViewer:
             },
             label='Deformed',
         )
+
+        # Auto-show aero panels
+        self._add_aero_panels(pl, opacity=0.3)
 
         max_val = deformed.point_data[scalar_name].max()
         if title:
@@ -529,6 +628,11 @@ class NastAeroViewer:
             deformed = build_deformed_mesh(self.bdf_model, displacements, disp_scale)
             add_displacement_data(deformed, self.bdf_model, displacements)
 
+            # Undeformed ghost
+            if self._has_beams():
+                tubes_undef = build_beam_tubes(self.bdf_model)
+                if tubes_undef is not None:
+                    pl.add_mesh(tubes_undef, color='lightgray', opacity=0.2)
             pl.add_mesh(
                 self.struct_mesh,
                 color='lightgray',
@@ -536,6 +640,19 @@ class NastAeroViewer:
                 line_width=0.5,
                 opacity=0.3,
             )
+
+            # Deformed beam tubes
+            if self._has_beams():
+                def_tubes = build_deformed_beam_tubes(
+                    self.bdf_model, displacements, disp_scale)
+                if def_tubes is not None:
+                    pl.add_mesh(
+                        def_tubes,
+                        scalars='Displacement_Magnitude',
+                        cmap='jet',
+                        show_scalar_bar=False,
+                    )
+
             pl.add_mesh(
                 deformed,
                 scalars='Displacement_Magnitude',
@@ -546,6 +663,8 @@ class NastAeroViewer:
             )
             pl.add_title("Structural Deformation", font_size=12)
         else:
+            if self._has_beams():
+                self._add_beam_tubes(pl)
             pl.add_mesh(self.struct_mesh, color='lightblue', show_edges=True)
             pl.add_title("Structure (no deformation)", font_size=12)
         pl.add_axes()

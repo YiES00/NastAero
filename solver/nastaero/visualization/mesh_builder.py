@@ -24,6 +24,160 @@ def _create_grid(cells, cell_types, points):
     return pv.UnstructuredGrid(cells_array, cell_types, points)
 
 
+def _estimate_beam_radius(bdf_model, elem) -> float:
+    """Estimate a representative cross-section radius for beam rendering.
+
+    Uses the cross-sectional area A from the property card:
+        r = sqrt(A / pi)
+
+    Falls back to a fraction of the beam length if A is not available.
+    """
+    radius = 0.0
+    pid = getattr(elem, 'pid', 0)
+    prop = bdf_model.properties.get(pid)
+    if prop is not None:
+        A = getattr(prop, 'A', 0.0)
+        if A > 0:
+            radius = np.sqrt(A / np.pi)
+
+    # Fallback: 3% of element length
+    if radius <= 0:
+        nids = elem.node_ids
+        if len(nids) >= 2 and nids[0] in bdf_model.nodes and nids[1] in bdf_model.nodes:
+            p1 = bdf_model.nodes[nids[0]].xyz_global
+            p2 = bdf_model.nodes[nids[1]].xyz_global
+            L = np.linalg.norm(p2 - p1)
+            radius = 0.03 * L
+
+    return max(radius, 1e-6)
+
+
+def build_beam_tubes(bdf_model, n_sides: int = 12) -> Optional[pv.PolyData]:
+    """Build 3D tube representations for CBAR/CROD elements.
+
+    Parameters
+    ----------
+    bdf_model : BDFModel
+        Parsed BDF model.
+    n_sides : int
+        Number of sides for the tube cross-section polygon.
+
+    Returns
+    -------
+    pv.PolyData or None
+        Combined tube mesh for all beam elements, or None if no beams.
+    """
+    beam_meshes = []
+
+    for eid in sorted(bdf_model.elements.keys()):
+        elem = bdf_model.elements[eid]
+        if elem.type not in ("CBAR", "CROD"):
+            continue
+
+        nids = elem.node_ids
+        if len(nids) < 2:
+            continue
+        if nids[0] not in bdf_model.nodes or nids[1] not in bdf_model.nodes:
+            continue
+
+        p1 = bdf_model.nodes[nids[0]].xyz_global
+        p2 = bdf_model.nodes[nids[1]].xyz_global
+        L = np.linalg.norm(p2 - p1)
+        if L < 1e-12:
+            continue
+
+        radius = _estimate_beam_radius(bdf_model, elem)
+
+        # Create a line and tube it
+        line = pv.Line(p1, p2, resolution=1)
+        tube = line.tube(radius=radius, n_sides=n_sides)
+        beam_meshes.append(tube)
+
+    if not beam_meshes:
+        return None
+
+    combined = beam_meshes[0]
+    for m in beam_meshes[1:]:
+        combined = combined.merge(m)
+
+    return combined
+
+
+def build_deformed_beam_tubes(
+    bdf_model,
+    displacements: Dict[int, np.ndarray],
+    scale: float = 1.0,
+    n_sides: int = 12,
+) -> Optional[pv.PolyData]:
+    """Build 3D tube representations for beams with deformed node positions.
+
+    Parameters
+    ----------
+    bdf_model : BDFModel
+    displacements : Dict[int, np.ndarray]
+        Node ID -> 6-DOF displacement.
+    scale : float
+        Deformation scale factor.
+    n_sides : int
+        Tube polygon sides.
+
+    Returns
+    -------
+    pv.PolyData or None
+    """
+    beam_meshes = []
+    disp_values = []
+
+    for eid in sorted(bdf_model.elements.keys()):
+        elem = bdf_model.elements[eid]
+        if elem.type not in ("CBAR", "CROD"):
+            continue
+
+        nids = elem.node_ids
+        if len(nids) < 2:
+            continue
+        if nids[0] not in bdf_model.nodes or nids[1] not in bdf_model.nodes:
+            continue
+
+        p1 = bdf_model.nodes[nids[0]].xyz_global.copy()
+        p2 = bdf_model.nodes[nids[1]].xyz_global.copy()
+
+        # Apply displacements
+        d1 = displacements.get(nids[0], np.zeros(6))
+        d2 = displacements.get(nids[1], np.zeros(6))
+        p1 += d1[:3] * scale
+        p2 += d2[:3] * scale
+
+        L = np.linalg.norm(p2 - p1)
+        if L < 1e-12:
+            continue
+
+        radius = _estimate_beam_radius(bdf_model, elem)
+
+        line = pv.Line(p1, p2, resolution=1)
+        tube = line.tube(radius=radius, n_sides=n_sides)
+        beam_meshes.append(tube)
+
+        # Average displacement magnitude for coloring
+        avg_disp = 0.5 * (np.linalg.norm(d1[:3]) + np.linalg.norm(d2[:3]))
+        disp_values.append(avg_disp)
+
+    if not beam_meshes:
+        return None
+
+    combined = beam_meshes[0]
+    # Assign scalar to first tube
+    combined.cell_data['Displacement_Magnitude'] = np.full(
+        combined.n_cells, disp_values[0])
+
+    for i, m in enumerate(beam_meshes[1:], 1):
+        m.cell_data['Displacement_Magnitude'] = np.full(
+            m.n_cells, disp_values[i])
+        combined = combined.merge(m)
+
+    return combined
+
+
 def build_structural_mesh(bdf_model, include_beams: bool = True) -> pv.UnstructuredGrid:
     """Build a PyVista UnstructuredGrid from BDF model structural elements.
 
@@ -90,7 +244,12 @@ def build_structural_mesh(bdf_model, include_beams: bool = True) -> pv.Unstructu
                 prop_ids.append(getattr(elem, 'pid', 0))
 
     if not cells_list:
-        raise ValueError("No renderable elements found in model")
+        # Return an empty grid with points but no cells
+        # (happens when include_beams=False and model has only beams)
+        grid = pv.UnstructuredGrid()
+        grid.points = points
+        grid.point_data['NodeID'] = np.array(sorted_nids, dtype=np.int64)
+        return grid
 
     grid = _create_grid(cells_list, np.array(cell_types, dtype=np.uint8), points)
     grid.cell_data['ElementID'] = np.array(elem_ids, dtype=np.int64)
