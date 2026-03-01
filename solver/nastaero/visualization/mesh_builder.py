@@ -396,6 +396,129 @@ def build_aero_pressure_mesh(
     return mesh
 
 
+def build_aero_force_arrows(
+    aero_boxes: list,
+    aero_forces: np.ndarray,
+    scale: float = 0.0,
+) -> Optional[pv.PolyData]:
+    """Build arrow glyphs showing aerodynamic force direction on each panel.
+
+    Parameters
+    ----------
+    aero_boxes : list
+        List of AeroBox objects.
+    aero_forces : ndarray (n, 3)
+        Force vector (fx, fy, fz) per box.
+    scale : float
+        Arrow length scale factor. 0 = auto-scale based on panel size.
+
+    Returns
+    -------
+    pv.PolyData or None
+        Arrow glyph mesh, or None if no valid data.
+    """
+    if aero_forces is None or len(aero_boxes) == 0:
+        return None
+
+    n = len(aero_boxes)
+    if len(aero_forces) != n:
+        return None
+
+    # Use control points (3/4 chord) as arrow origins
+    origins = np.array([box.control_point for box in aero_boxes])
+    force_vecs = np.real(aero_forces).astype(float)
+
+    # Compute force magnitudes
+    magnitudes = np.linalg.norm(force_vecs, axis=1)
+    max_mag = np.max(magnitudes)
+    if max_mag < 1e-30:
+        return None
+
+    # Auto-scale: arrow length ~ average panel chord
+    if scale <= 0.0:
+        avg_chord = np.mean([box.chord for box in aero_boxes])
+        scale = 1.5 * avg_chord / max_mag
+
+    # Normalize directions and compute scaled magnitudes
+    directions = np.zeros_like(force_vecs)
+    arrow_mags = np.zeros(n)
+    for i in range(n):
+        if magnitudes[i] > 1e-30:
+            directions[i] = force_vecs[i] / magnitudes[i]
+            arrow_mags[i] = magnitudes[i] * scale
+
+    # Build as PolyData with vectors for glyph
+    points = pv.PolyData(origins)
+    points['vectors'] = directions * arrow_mags[:, np.newaxis]
+    points['Force_Magnitude'] = magnitudes
+
+    # Create arrow glyphs
+    arrows = points.glyph(
+        orient='vectors',
+        scale='vectors',
+        factor=1.0,
+        geom=pv.Arrow(
+            tip_length=0.3,
+            tip_radius=0.12,
+            shaft_radius=0.04,
+            shaft_resolution=12,
+            tip_resolution=12,
+        ),
+    )
+
+    return arrows
+
+
+def build_aero_normal_arrows(
+    aero_boxes: list,
+    scale: float = 0.0,
+) -> Optional[pv.PolyData]:
+    """Build arrow glyphs showing panel normal directions.
+
+    Useful for verifying panel orientation without force data.
+
+    Parameters
+    ----------
+    aero_boxes : list
+        List of AeroBox objects.
+    scale : float
+        Arrow length. 0 = auto-scale based on panel chord.
+
+    Returns
+    -------
+    pv.PolyData or None
+    """
+    if not aero_boxes:
+        return None
+
+    n = len(aero_boxes)
+    origins = np.array([box.control_point for box in aero_boxes])
+    normals = np.array([box.normal for box in aero_boxes])
+
+    if scale <= 0.0:
+        avg_chord = np.mean([box.chord for box in aero_boxes])
+        scale = 0.3 * avg_chord
+
+    points = pv.PolyData(origins)
+    points['vectors'] = normals * scale
+    points['Normal_Z'] = normals[:, 2]  # z-component for coloring
+
+    arrows = points.glyph(
+        orient='vectors',
+        scale='vectors',
+        factor=1.0,
+        geom=pv.Arrow(
+            tip_length=0.3,
+            tip_radius=0.12,
+            shaft_radius=0.04,
+            shaft_resolution=12,
+            tip_resolution=12,
+        ),
+    )
+
+    return arrows
+
+
 def build_rbe_lines(bdf_model) -> Optional[pv.PolyData]:
     """Build line segments for RBE2/RBE3 visualization.
 

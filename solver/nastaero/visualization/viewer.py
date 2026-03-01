@@ -24,6 +24,8 @@ from .mesh_builder import (
     build_mode_shape_mesh,
     build_aero_mesh,
     build_aero_pressure_mesh,
+    build_aero_force_arrows,
+    build_aero_normal_arrows,
     build_rbe_lines,
     build_beam_tubes,
     build_deformed_beam_tubes,
@@ -96,6 +98,55 @@ class NastAeroViewer:
                 opacity=opacity,
                 label=label,
             )
+
+    def _add_aero_force_arrows(self, pl, subcase: int = 0,
+                                arrow_color: str = 'red',
+                                arrow_scale: float = 0.0,
+                                label: str = 'Aero Forces') -> None:
+        """Add aerodynamic force direction arrows to plotter.
+
+        Uses aero_forces from results if available, otherwise shows panel
+        normals as a fallback to indicate the positive lift direction.
+
+        Parameters
+        ----------
+        pl : pv.Plotter
+        subcase : int
+        arrow_color : str
+        arrow_scale : float
+            Arrow length scale factor. 0 = auto.
+        label : str
+        """
+        if self.results and self.results.subcases:
+            sc = self.results.subcases[subcase]
+            if sc.aero_forces is not None and sc.aero_boxes is not None:
+                arrows = build_aero_force_arrows(
+                    sc.aero_boxes, sc.aero_forces, scale=arrow_scale)
+                if arrows is not None:
+                    pl.add_mesh(
+                        arrows,
+                        color=arrow_color,
+                        opacity=0.9,
+                        label=label,
+                    )
+                    return
+
+        # Fallback: show panel normals if no force data
+        if self._has_aero_panels():
+            try:
+                from ..aero.panel import generate_all_panels
+                aero_boxes = generate_all_panels(self.bdf_model)
+                if aero_boxes:
+                    arrows = build_aero_normal_arrows(aero_boxes, scale=arrow_scale)
+                    if arrows is not None:
+                        pl.add_mesh(
+                            arrows,
+                            color='green',
+                            opacity=0.7,
+                            label='Panel Normals',
+                        )
+            except Exception:
+                pass
 
     def _add_aero_panels(self, pl, color='cyan', opacity=0.5,
                           label='Aero Panels') -> None:
@@ -220,12 +271,18 @@ class NastAeroViewer:
         scale: float = 0.0,
         show_undeformed: bool = True,
         show_edges: bool = True,
+        show_aero_arrows: bool = True,
         cmap: str = 'jet',
         screenshot: Optional[str] = None,
         title: Optional[str] = None,
         window_size: Tuple[int, int] = (1200, 800),
     ) -> None:
-        """Plot displacement results with contour coloring."""
+        """Plot displacement results with contour coloring.
+
+        When aero results are available and show_aero_arrows is True,
+        aerodynamic force direction arrows are displayed on panels to
+        help verify that displacement directions are physically consistent.
+        """
         if not self.results or not self.results.subcases:
             raise ValueError("No results available for plotting")
 
@@ -304,8 +361,10 @@ class NastAeroViewer:
             label='Deformed',
         )
 
-        # Auto-show aero panels
+        # Auto-show aero panels and force arrows
         self._add_aero_panels(pl, opacity=0.3)
+        if show_aero_arrows:
+            self._add_aero_force_arrows(pl, subcase=subcase)
 
         max_val = deformed.point_data[scalar_name].max()
         if title:
@@ -467,12 +526,17 @@ class NastAeroViewer:
         self,
         show_structure: bool = True,
         show_control_points: bool = False,
+        show_normals: bool = True,
         aero_color: str = 'cyan',
         struct_color: str = 'lightblue',
         screenshot: Optional[str] = None,
         window_size: Tuple[int, int] = (1200, 800),
     ) -> None:
-        """Plot aerodynamic panels with optional structural mesh."""
+        """Plot aerodynamic panels with optional structural mesh.
+
+        When show_normals is True, panel normal arrows are displayed to
+        indicate the positive pressure direction of each DLM box.
+        """
         from ..aero.panel import generate_all_panels
 
         aero_boxes = generate_all_panels(self.bdf_model)
@@ -522,6 +586,16 @@ class NastAeroViewer:
                 label='Doublet Points (1/4c)',
             )
 
+        if show_normals:
+            normal_arrows = build_aero_normal_arrows(aero_boxes)
+            if normal_arrows is not None:
+                pl.add_mesh(
+                    normal_arrows,
+                    color='green',
+                    opacity=0.8,
+                    label='Panel Normals',
+                )
+
         n_boxes = len(aero_boxes)
         pl.add_title(f"Aero Model ({n_boxes} DLM panels)", font_size=14)
         pl.add_axes()
@@ -534,10 +608,16 @@ class NastAeroViewer:
         subcase: int = 0,
         cmap: str = 'RdBu_r',
         show_structure: bool = True,
+        show_aero_arrows: bool = True,
         screenshot: Optional[str] = None,
         window_size: Tuple[int, int] = (1200, 800),
     ) -> None:
-        """Plot aerodynamic pressure distribution from trim results."""
+        """Plot aerodynamic pressure distribution from trim results.
+
+        When show_aero_arrows is True, force direction arrows are overlaid
+        on each panel showing the direction and relative magnitude of the
+        aerodynamic force.
+        """
         if not self.results or not self.results.subcases:
             raise ValueError("No results available")
 
@@ -573,6 +653,10 @@ class NastAeroViewer:
                 opacity=0.5,
             )
 
+        # Add force direction arrows
+        if show_aero_arrows:
+            self._add_aero_force_arrows(pl, subcase=subcase)
+
         if sc.trim_variables:
             trim_text = "Trim Variables:\n"
             for var, val in sc.trim_variables.items():
@@ -591,13 +675,17 @@ class NastAeroViewer:
         self,
         subcase: int = 0,
         disp_scale: float = 0.0,
+        show_aero_arrows: bool = True,
         screenshot: Optional[str] = None,
         window_size: Tuple[int, int] = (1600, 800),
     ) -> None:
         """Plot combined trim results: deformed structure + aero pressure.
 
         Creates a side-by-side view with structural deformation on the left
-        and aerodynamic pressure distribution on the right.
+        and aerodynamic pressure distribution on the right.  When
+        show_aero_arrows is True, force direction arrows are overlaid on the
+        structural deformation view (left panel) so that the relationship
+        between aero loads and structural response is clearly visible.
         """
         if not self.results or not self.results.subcases:
             raise ValueError("No results available")
@@ -661,7 +749,13 @@ class NastAeroViewer:
                 edge_color='gray',
                 scalar_bar_args={'title': 'Disp. Mag.', 'fmt': '%.3e'},
             )
-            pl.add_title("Structural Deformation", font_size=12)
+
+            # Add aero panels + force arrows on structural deformation view
+            self._add_aero_panels(pl, opacity=0.3)
+            if show_aero_arrows:
+                self._add_aero_force_arrows(pl, subcase=subcase)
+
+            pl.add_title("Structural Deformation + Aero Forces", font_size=12)
         else:
             if self._has_beams():
                 self._add_beam_tubes(pl)
@@ -669,7 +763,7 @@ class NastAeroViewer:
             pl.add_title("Structure (no deformation)", font_size=12)
         pl.add_axes()
 
-        # Right: Aero pressure
+        # Right: Aero pressure + force arrows
         pl.subplot(0, 1)
         if sc.aero_pressures is not None and sc.aero_boxes is not None:
             aero_mesh = build_aero_pressure_mesh(sc.aero_boxes, sc.aero_pressures)
@@ -681,7 +775,12 @@ class NastAeroViewer:
                 edge_color='gray',
                 scalar_bar_args={'title': 'Cp', 'fmt': '%.3f'},
             )
-            pl.add_title("Aero Pressure (Cp)", font_size=12)
+
+            # Force arrows on pressure view
+            if show_aero_arrows:
+                self._add_aero_force_arrows(pl, subcase=subcase)
+
+            pl.add_title("Aero Pressure (Cp) + Force Vectors", font_size=12)
         else:
             try:
                 from ..aero.panel import generate_all_panels

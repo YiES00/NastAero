@@ -66,6 +66,8 @@ Examples:
                         help='Show node points')
     parser.add_argument('--node-ids', action='store_true',
                         help='Show node ID labels')
+    parser.add_argument('--no-arrows', action='store_true',
+                        help='Hide aerodynamic force direction arrows')
 
     # Output
     parser.add_argument('--screenshot', type=str, default=None,
@@ -131,17 +133,20 @@ Examples:
 
     # Determine what to plot
     show_edges = not args.no_edges
+    show_arrows = not args.no_arrows
     cmap = args.cmap
 
     if args.trim and results:
         viewer.plot_trim_results(
             disp_scale=args.scale,
+            show_aero_arrows=show_arrows,
             screenshot=args.screenshot,
             window_size=window_size,
         )
     elif args.pressure and results:
         viewer.plot_aero_pressure(
             cmap=cmap or 'RdBu_r',
+            show_aero_arrows=show_arrows,
             screenshot=args.screenshot,
             window_size=window_size,
         )
@@ -171,6 +176,7 @@ Examples:
                 component=args.component,
                 scale=args.scale,
                 show_edges=show_edges,
+                show_aero_arrows=show_arrows,
                 cmap=cmap or 'jet',
                 screenshot=args.screenshot,
                 window_size=window_size,
@@ -185,6 +191,7 @@ Examples:
         elif sc.trim_variables is not None:
             viewer.plot_trim_results(
                 disp_scale=args.scale,
+                show_aero_arrows=show_arrows,
                 screenshot=args.screenshot,
                 window_size=window_size,
             )
@@ -200,6 +207,7 @@ Examples:
         try:
             viewer.plot_aero_model(
                 show_control_points=True,
+                show_normals=show_arrows,
                 screenshot=args.screenshot,
                 window_size=window_size,
             )
