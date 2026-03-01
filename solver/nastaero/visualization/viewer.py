@@ -148,16 +148,33 @@ class NastAeroViewer:
             except Exception:
                 pass
 
+    def _get_trim_variables(self, subcase: int = 0) -> Optional[dict]:
+        """Get trim variables from results if available."""
+        if self.results and self.results.subcases:
+            sc = self.results.subcases[subcase]
+            if sc.trim_variables:
+                return sc.trim_variables
+        return None
+
     def _add_aero_panels(self, pl, color='cyan', opacity=0.5,
-                          label='Aero Panels') -> None:
-        """Add aero panels to plotter if model has CAERO1."""
+                          label='Aero Panels', subcase: int = 0) -> None:
+        """Add aero panels to plotter if model has CAERO1.
+
+        When trim results are available, control surface panels are
+        deflected to show the actual elevator/aileron deflection angle.
+        """
         if not self._has_aero_panels():
             return
         try:
             from ..aero.panel import generate_all_panels
             aero_boxes = generate_all_panels(self.bdf_model)
             if aero_boxes:
-                aero_mesh = build_aero_mesh(aero_boxes)
+                trim_vars = self._get_trim_variables(subcase)
+                aero_mesh = build_aero_mesh(
+                    aero_boxes,
+                    bdf_model=self.bdf_model,
+                    trim_variables=trim_vars,
+                )
                 pl.add_mesh(
                     aero_mesh,
                     color=color,
@@ -543,7 +560,9 @@ class NastAeroViewer:
         if not aero_boxes:
             raise ValueError("No aerodynamic panels in model")
 
-        aero_mesh = build_aero_mesh(aero_boxes)
+        trim_vars = self._get_trim_variables()
+        aero_mesh = build_aero_mesh(
+            aero_boxes, bdf_model=self.bdf_model, trim_variables=trim_vars)
 
         pl = pv.Plotter(off_screen=self.off_screen, window_size=window_size)
 
@@ -625,7 +644,11 @@ class NastAeroViewer:
         if sc.aero_pressures is None or sc.aero_boxes is None:
             raise ValueError("No aerodynamic pressure data in results")
 
-        aero_mesh = build_aero_pressure_mesh(sc.aero_boxes, sc.aero_pressures)
+        aero_mesh = build_aero_pressure_mesh(
+            sc.aero_boxes, sc.aero_pressures,
+            bdf_model=self.bdf_model,
+            trim_variables=sc.trim_variables,
+        )
 
         pl = pv.Plotter(off_screen=self.off_screen, window_size=window_size)
 
@@ -659,8 +682,13 @@ class NastAeroViewer:
 
         if sc.trim_variables:
             trim_text = "Trim Variables:\n"
+            # Get control surface names for degree display
+            angle_vars = {'ANGLEA', 'SIDES'}
+            if hasattr(self.bdf_model, 'aesurfs'):
+                for surf in self.bdf_model.aesurfs.values():
+                    angle_vars.add(surf.label.upper())
             for var, val in sc.trim_variables.items():
-                if var.upper() in ('ANGLEA', 'SIDES'):
+                if var.upper() in angle_vars:
                     trim_text += f"  {var} = {np.degrees(val):.4f} deg\n"
                 else:
                     trim_text += f"  {var} = {val:.6e}\n"
@@ -766,7 +794,11 @@ class NastAeroViewer:
         # Right: Aero pressure + force arrows
         pl.subplot(0, 1)
         if sc.aero_pressures is not None and sc.aero_boxes is not None:
-            aero_mesh = build_aero_pressure_mesh(sc.aero_boxes, sc.aero_pressures)
+            aero_mesh = build_aero_pressure_mesh(
+                sc.aero_boxes, sc.aero_pressures,
+                bdf_model=self.bdf_model,
+                trim_variables=sc.trim_variables,
+            )
             pl.add_mesh(
                 aero_mesh,
                 scalars='Pressure',
@@ -796,8 +828,13 @@ class NastAeroViewer:
         if sc.trim_variables:
             trim_text = "Trim: "
             parts = []
+            # Get control surface names for degree display
+            angle_vars = {'ANGLEA', 'SIDES'}
+            if hasattr(self.bdf_model, 'aesurfs'):
+                for surf in self.bdf_model.aesurfs.values():
+                    angle_vars.add(surf.label.upper())
             for var, val in sc.trim_variables.items():
-                if var.upper() in ('ANGLEA', 'SIDES'):
+                if var.upper() in angle_vars:
                     parts.append(f"{var}={np.degrees(val):.3f}deg")
                 else:
                     parts.append(f"{var}={val:.4e}")

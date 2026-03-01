@@ -338,13 +338,117 @@ def build_mode_shape_mesh(
     return grid
 
 
-def build_aero_mesh(aero_boxes: list) -> pv.PolyData:
+def _rotate_point_about_axis(
+    point: np.ndarray,
+    axis_point: np.ndarray,
+    axis_dir: np.ndarray,
+    angle: float,
+) -> np.ndarray:
+    """Rotate a point about an arbitrary axis using Rodrigues' formula.
+
+    Parameters
+    ----------
+    point : (3,) point to rotate
+    axis_point : (3,) a point on the rotation axis
+    axis_dir : (3,) unit direction of rotation axis
+    angle : rotation angle in radians (positive = right-hand rule)
+
+    Returns
+    -------
+    ndarray (3,)
+        Rotated point.
+    """
+    v = point - axis_point
+    cos_a = np.cos(angle)
+    sin_a = np.sin(angle)
+    v_rot = (v * cos_a
+             + np.cross(axis_dir, v) * sin_a
+             + axis_dir * np.dot(axis_dir, v) * (1 - cos_a))
+    return axis_point + v_rot
+
+
+def _apply_control_surface_deflections(
+    aero_boxes: list,
+    bdf_model,
+    trim_variables: Dict[str, float],
+) -> np.ndarray:
+    """Compute deflected corner coordinates for control surface panels.
+
+    For each control surface (AESURF), finds the corresponding AELIST boxes
+    and rotates their trailing-edge corners about the hinge line (LE edge)
+    by the trim deflection angle.
+
+    Parameters
+    ----------
+    aero_boxes : list of AeroBox
+    bdf_model : BDFModel
+    trim_variables : dict
+        Trim variable name -> value in radians.
+
+    Returns
+    -------
+    corners : ndarray (n_boxes, 4, 3)
+        Corner coordinates with control surface panels deflected.
+    """
+    n = len(aero_boxes)
+    corners = np.array([box.corners.copy() for box in aero_boxes])
+
+    if not hasattr(bdf_model, 'aesurfs') or not hasattr(bdf_model, 'aelists'):
+        return corners
+
+    # Build box_id -> index mapping
+    box_id_to_idx = {box.box_id: i for i, box in enumerate(aero_boxes)}
+
+    for surf in bdf_model.aesurfs.values():
+        label = surf.label.upper()
+        if label not in trim_variables:
+            continue
+        delta = float(trim_variables[label])  # deflection in radians
+        if abs(delta) < 1e-12:
+            continue
+
+        # Get AELIST box IDs for this control surface
+        alid = surf.alid1
+        if alid not in bdf_model.aelists:
+            continue
+        cs_box_ids = bdf_model.aelists[alid].elements
+
+        for box_eid in cs_box_ids:
+            if box_eid not in box_id_to_idx:
+                continue
+            idx = box_id_to_idx[box_eid]
+            c = corners[idx]  # (4, 3): [LE_in, TE_in, TE_out, LE_out]
+
+            # Hinge line = LE edge of this box: c[0] (inboard LE) to c[3] (outboard LE)
+            hinge_pt = c[0].copy()
+            hinge_dir = c[3] - c[0]
+            hinge_len = np.linalg.norm(hinge_dir)
+            if hinge_len < 1e-12:
+                continue
+            hinge_axis = hinge_dir / hinge_len
+
+            # Rotate TE corners (c[1]=inboard TE, c[2]=outboard TE) about hinge
+            c[1] = _rotate_point_about_axis(c[1], hinge_pt, hinge_axis, delta)
+            c[2] = _rotate_point_about_axis(c[2], hinge_pt, hinge_axis, delta)
+
+    return corners
+
+
+def build_aero_mesh(
+    aero_boxes: list,
+    bdf_model=None,
+    trim_variables: Optional[Dict[str, float]] = None,
+) -> pv.PolyData:
     """Build aerodynamic panel mesh from AeroBox list.
 
     Parameters
     ----------
     aero_boxes : list
         List of AeroBox objects with corners (4,3).
+    bdf_model : BDFModel, optional
+        If provided with trim_variables, control surface panels are deflected.
+    trim_variables : dict, optional
+        Trim variable name -> value (radians) for control surface deflection.
 
     Returns
     -------
@@ -355,13 +459,21 @@ def build_aero_mesh(aero_boxes: list) -> pv.PolyData:
         raise ValueError("No aerodynamic boxes provided")
 
     n_boxes = len(aero_boxes)
+
+    # Apply control surface deflections if available
+    if bdf_model is not None and trim_variables is not None:
+        corners_all = _apply_control_surface_deflections(
+            aero_boxes, bdf_model, trim_variables)
+    else:
+        corners_all = np.array([box.corners for box in aero_boxes])
+
     points = np.zeros((n_boxes * 4, 3))
     faces = []
     box_ids = []
 
     for i, box in enumerate(aero_boxes):
         base = i * 4
-        points[base:base + 4] = box.corners
+        points[base:base + 4] = corners_all[i]
         faces.extend([4, base, base + 1, base + 2, base + 3])
         box_ids.append(box.box_id)
 
@@ -375,6 +487,8 @@ def build_aero_mesh(aero_boxes: list) -> pv.PolyData:
 def build_aero_pressure_mesh(
     aero_boxes: list,
     pressures: np.ndarray,
+    bdf_model=None,
+    trim_variables: Optional[Dict[str, float]] = None,
 ) -> pv.PolyData:
     """Build aerodynamic mesh with pressure distribution.
 
@@ -384,13 +498,18 @@ def build_aero_pressure_mesh(
         List of AeroBox objects.
     pressures : np.ndarray
         Pressure values (Cp or dimensional) per box.
+    bdf_model : BDFModel, optional
+        For control surface deflection.
+    trim_variables : dict, optional
+        Trim variable name -> value (radians).
 
     Returns
     -------
     pv.PolyData
         Mesh with 'Pressure' cell data.
     """
-    mesh = build_aero_mesh(aero_boxes)
+    mesh = build_aero_mesh(aero_boxes, bdf_model=bdf_model,
+                           trim_variables=trim_variables)
     if pressures is not None and len(pressures) == len(aero_boxes):
         mesh.cell_data['Pressure'] = np.real(pressures).astype(float)
     return mesh
