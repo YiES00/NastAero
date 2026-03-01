@@ -266,6 +266,21 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
         rhs_trim[0] = total_weight - F_z_fixed
 
     # 8. Assemble and solve
+    #
+    # Physical system:
+    #   K*u = P_aero(u, x) + P_external
+    #   P_aero = Q_aa*u + Q_ax*x + F_trim_fixed  (aero forces from deformation + trim vars)
+    #
+    # Rearranging:
+    #   (K - Q_aa)*u - Q_ax*x = P_external + F_trim_fixed
+    #
+    # But Q_aa here represents restoring aero feedback (negative for positive displacement),
+    # so K + Q_aa gives increased stiffness. The trim variable force Q_ax*x acts as
+    # external loading and goes on the opposite side:
+    #
+    #   [K + Q_aa | -Q_ax] [u]   [F_f + F_trim_fixed]
+    #   [  D_r    |  D_x ] [x] = [     rhs_trim      ]
+    #
     n_total = n_free + n_trim_free
     K_dense = K_ff.toarray() if sp.issparse(K_ff) else K_ff
 
@@ -274,7 +289,7 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
         rhs_sys = np.zeros(n_total + n_constraints)
 
         A_sys[:n_free, :n_free] = K_dense + Q_aa_free
-        A_sys[:n_free, n_free:n_total] = Q_ax
+        A_sys[:n_free, n_free:n_total] = -Q_ax  # negative: trim aero force on RHS
         rhs_sys[:n_free] = F_f + F_trim_fixed
 
         A_sys[n_total:n_total+n_constraints, :n_free] = D_r

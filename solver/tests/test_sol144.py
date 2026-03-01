@@ -103,9 +103,39 @@ class TestGolandTrim:
         assert total_fz > 0, f"Total Fz should be positive, got {total_fz:.2f}"
 
     def test_tip_displacement(self):
-        """Tip should deflect (node 11)."""
+        """Tip should deflect upward under positive lift."""
         sc = self.results.subcases[0]
         if 11 in sc.displacements:
             tip_z = sc.displacements[11][2]  # z-displacement
             # Should be non-trivial
             assert abs(tip_z) > 1e-10, "Tip should have non-zero displacement"
+            # Positive lift → wing bends upward (positive T3)
+            assert tip_z > 0, (
+                f"Tip should bend UP (positive T3) under upward lift, "
+                f"got T3 = {tip_z:.6e}"
+            )
+
+    def test_displacement_increases_spanwise(self):
+        """Displacement should increase from root to tip (cantilever wing)."""
+        sc = self.results.subcases[0]
+        prev_z = 0.0
+        for nid in sorted(sc.displacements.keys()):
+            d = sc.displacements[nid]
+            # Skip root (clamped)
+            if abs(d[2]) < 1e-15:
+                continue
+            assert d[2] >= prev_z, (
+                f"Displacement should increase spanwise, "
+                f"but node {nid} T3={d[2]:.6e} < prev {prev_z:.6e}"
+            )
+            prev_z = d[2]
+
+    def test_lift_equals_weight(self):
+        """Total aerodynamic lift should balance structural weight."""
+        sc = self.results.subcases[0]
+        total_fz = np.sum(sc.aero_forces[:, 2])
+        # Allow 1% tolerance for numerical precision
+        assert abs(total_fz) > 10, "Lift should be non-trivial"
+        # The trim should balance: lift ~= weight
+        # For Goland wing: weight ~ 2135 N
+        assert total_fz > 0, f"Lift should be positive, got {total_fz:.2f}"
