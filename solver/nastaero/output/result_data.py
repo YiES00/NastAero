@@ -16,6 +16,11 @@ class SubcaseResult:
     frequencies: Optional[np.ndarray] = None        # Hz
     mode_shapes: List[Dict[int, np.ndarray]] = field(default_factory=list)
     eigenvectors_full: List[np.ndarray] = field(default_factory=list)
+    # SOL 144
+    trim_variables: Optional[Dict[str, float]] = None
+    aero_pressures: Optional[np.ndarray] = None
+    aero_forces: Optional[np.ndarray] = None
+    aero_boxes: Optional[list] = None
 
 
 @dataclass

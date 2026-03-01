@@ -11,8 +11,11 @@ from .cards.loads import FORCE, MOMENT, GRAV, LoadCombination
 from .cards.constraints import SPC, SPC1
 from .cards.mass import CONM2
 from .cards.eigrl import EIGRL
-from .cards.rbe import RBE2
+from .cards.rbe import RBE2, RBE3
 from .cards.param import PARAM
+from .cards.sets import SET1
+from .cards.aero import (AERO, AEROS, CAERO1, PAERO1, SPLINE1, SPLINE2,
+                         AESTAT, AESURF, TRIM, FLFACT, MKAERO1)
 from ..config import logger
 
 def parse_bulk_card(fields: List[str], model: BDFModel) -> None:
@@ -59,8 +62,35 @@ def parse_bulk_card(fields: List[str], model: BDFModel) -> None:
             e = EIGRL.from_fields(fields); model.eigrls[e.sid] = e
         elif card_name == "RBE2":
             r = RBE2.from_fields(fields); model.rigids[r.eid] = r
+        elif card_name == "RBE3":
+            r = RBE3.from_fields(fields); model.rigids[r.eid] = r
+        elif card_name == "SET1":
+            s = SET1.from_fields(fields); model.sets[s.sid] = s
         elif card_name == "PARAM":
             name, value = PARAM.from_fields(fields); model.params[name] = value
+        # Aerodynamic cards
+        elif card_name == "AERO":
+            model.aero = AERO.from_fields(fields)
+        elif card_name == "AEROS":
+            model.aeros = AEROS.from_fields(fields)
+        elif card_name == "CAERO1":
+            c = CAERO1.from_fields(fields); model.caero_panels[c.eid] = c
+        elif card_name == "PAERO1":
+            p = PAERO1.from_fields(fields); model.properties[p.pid] = p
+        elif card_name == "SPLINE1":
+            s = SPLINE1.from_fields(fields); model.splines[s.eid] = s
+        elif card_name == "SPLINE2":
+            s = SPLINE2.from_fields(fields); model.splines[s.eid] = s
+        elif card_name == "AESTAT":
+            a = AESTAT.from_fields(fields); model.aestats[a.id] = a
+        elif card_name == "AESURF":
+            a = AESURF.from_fields(fields); model.aesurfs[a.id] = a
+        elif card_name == "TRIM":
+            t = TRIM.from_fields(fields); model.trims[t.tid] = t
+        elif card_name == "FLFACT":
+            f = FLFACT.from_fields(fields); model.flfacts[f.sid] = f
+        elif card_name == "MKAERO1":
+            m = MKAERO1.from_fields(fields); model.mkaeros.append(m)
         else:
             logger.debug("Unsupported card: %s", card_name)
     except (IndexError, ValueError) as exc:

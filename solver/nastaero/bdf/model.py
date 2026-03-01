@@ -66,6 +66,8 @@ class BDFModel:
         effective.spc_id = self.global_case.spc_id
         effective.load_id = self.global_case.load_id
         effective.method_id = self.global_case.method_id
+        effective.flutter_id = self.global_case.flutter_id
+        effective.trim_id = self.global_case.trim_id
         effective.output_requests = dict(self.global_case.output_requests)
         if subcase.spc_id:
             effective.spc_id = subcase.spc_id
@@ -73,6 +75,10 @@ class BDFModel:
             effective.load_id = subcase.load_id
         if subcase.method_id:
             effective.method_id = subcase.method_id
+        if subcase.flutter_id:
+            effective.flutter_id = subcase.flutter_id
+        if subcase.trim_id:
+            effective.trim_id = subcase.trim_id
         effective.output_requests.update(subcase.output_requests)
         effective.label = subcase.label
         return effective

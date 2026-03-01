@@ -84,15 +84,45 @@ def detect_format(line: str) -> str:
         return "fixed16"
     return "fixed8"
 
+def _is_continuation_marker(s: str) -> bool:
+    """Check if a string is a free-field continuation marker (e.g. +CA1)."""
+    s = s.strip()
+    if not s or not s.startswith("+"):
+        return False
+    # Must contain at least one alpha character to be a marker
+    # (pure numbers like +3 or +1.5 are values, not markers)
+    rest = s[1:]
+    if not rest:
+        return False
+    try:
+        float(s)
+        return False  # It's a number
+    except ValueError:
+        return True  # Not a number -> continuation marker
+
+
 def parse_card_fields(lines: List[str]) -> List[str]:
     if not lines:
         return []
     fmt = detect_format(lines[0])
     if fmt == "free":
-        all_text = ""
-        for line in lines:
-            all_text += line
-        return parse_free(all_text)
+        all_parts = []
+        for i, line in enumerate(lines):
+            parts = [p.strip() for p in line.split(",")]
+            if i == 0:
+                # Remove trailing continuation marker
+                if parts and _is_continuation_marker(parts[-1]):
+                    parts = parts[:-1]
+                all_parts.extend(parts)
+            else:
+                # Remove leading continuation marker
+                if parts and _is_continuation_marker(parts[0]):
+                    parts = parts[1:]
+                # Remove trailing continuation marker
+                if parts and _is_continuation_marker(parts[-1]):
+                    parts = parts[:-1]
+                all_parts.extend(parts)
+        return all_parts
     if fmt == "fixed16":
         return parse_fixed16(lines)
     all_fields: List[str] = []

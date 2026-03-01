@@ -6,6 +6,7 @@ from .config import setup_logging, logger
 from .bdf.parser import parse_bdf
 from .solvers.sol101 import solve_static
 from .solvers.sol103 import solve_modes
+from .solvers.sol144 import solve_trim
 from .output.f06_writer import write_f06
 
 
@@ -30,6 +31,8 @@ def main() -> None:
         results = solve_static(bdf_model)
     elif bdf_model.sol == 103:
         results = solve_modes(bdf_model)
+    elif bdf_model.sol == 144:
+        results = solve_trim(bdf_model)
     else:
         logger.error("Unsupported SOL %d", bdf_model.sol)
         sys.exit(1)

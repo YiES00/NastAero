@@ -17,10 +17,14 @@ def write_f06(results: ResultData, bdf_model: BDFModel, filepath: str) -> None:
             if sc.eigenvalues is not None:
                 _write_eigenvalue_summary(f, sc)
                 _write_mode_shapes(f, sc)
+            if sc.trim_variables:
+                _write_trim_results(f, sc)
             if sc.displacements:
                 _write_displacements(f, sc)
             if sc.spc_forces:
                 _write_spc_forces(f, sc)
+            if sc.aero_pressures is not None:
+                _write_aero_pressures(f, sc)
         _write_footer(f)
 
 
@@ -94,6 +98,37 @@ def _write_mode_shapes(f: TextIO, sc: SubcaseResult) -> None:
             for i in range(6):
                 f.write(f"  {d[i]:>13.6E}")
             f.write("\n")
+    f.write("\n")
+
+
+def _write_trim_results(f: TextIO, sc: SubcaseResult) -> None:
+    f.write("1" + " " * 20 + f"SUBCASE {sc.subcase_id}\n\n")
+    f.write("                           S T A T I C   A E R O E L A S T I C   T R I M   V A R I A B L E S\n\n")
+    f.write("      VARIABLE         VALUE            UNITS\n")
+    f.write("      " + "-" * 50 + "\n")
+    for label, val in sc.trim_variables.items():
+        if label == "ANGLEA":
+            f.write(f"      {label:<16s}  {val:>13.6E}    rad  ({np.degrees(val):.4f} deg)\n")
+        elif label == "SIDES":
+            f.write(f"      {label:<16s}  {val:>13.6E}    rad\n")
+        else:
+            f.write(f"      {label:<16s}  {val:>13.6E}\n")
+    f.write("\n")
+
+    if sc.aero_forces is not None:
+        total_fz = np.sum(sc.aero_forces[:, 2])
+        f.write(f"      TOTAL AERO Fz = {total_fz:>13.6E} N\n\n")
+
+
+def _write_aero_pressures(f: TextIO, sc: SubcaseResult) -> None:
+    f.write("                    A E R O D Y N A M I C   P R E S S U R E   C O E F F I C I E N T S\n\n")
+    f.write("      BOX ID       DELTA CP          FX              FY              FZ\n")
+    n = len(sc.aero_pressures)
+    for i in range(n):
+        box_id = sc.aero_boxes[i].box_id if sc.aero_boxes else i
+        cp = sc.aero_pressures[i]
+        fx, fy, fz = sc.aero_forces[i] if sc.aero_forces is not None else (0, 0, 0)
+        f.write(f"  {box_id:>10d}  {cp:>13.6E}  {fx:>13.6E}  {fy:>13.6E}  {fz:>13.6E}\n")
     f.write("\n")
 
 
