@@ -35,31 +35,72 @@ def _add_load_set(F, model, load_list, scale, dof_mgr):
             _add_gravity_load(F, model, load, scale, dof_mgr)
 
 def _add_gravity_load(F, model, grav_load, scale, dof_mgr):
+    """Optimized gravity load: uses vectorized node mass computation for shells."""
     accel = grav_load.get_acceleration_vector() * scale
-    node_mass: Dict[int, float] = {}
+
+    # Use numpy array for node masses (indexed by DOF manager index)
+    n_nodes = dof_mgr.n_nodes
+    node_mass_array = np.zeros(n_nodes)
+
+    # Process beam/rod elements
     for eid, elem in model.elements.items():
-        if not hasattr(elem, "property_ref") or elem.property_ref is None: continue
-        prop = elem.property_ref; mat = getattr(prop, "material_ref", None)
-        if mat is None or mat.rho <= 0: continue
+        if not hasattr(elem, "property_ref") or elem.property_ref is None:
+            continue
+        prop = elem.property_ref
+        mat = getattr(prop, "material_ref", None)
+        if mat is None or mat.rho <= 0:
+            continue
+
         if elem.type in ("CBAR", "CROD"):
-            n1 = model.nodes[elem.node_ids[0]]; n2 = model.nodes[elem.node_ids[1]]
+            n1 = model.nodes[elem.node_ids[0]]
+            n2 = model.nodes[elem.node_ids[1]]
             L = np.linalg.norm(n2.xyz_global - n1.xyz_global)
             em = mat.rho * prop.A * L + getattr(prop, "nsm", 0) * L
-            for nid in elem.node_ids: node_mass[nid] = node_mass.get(nid, 0.) + em/2
-        elif elem.type in ("CQUAD4", "CTRIA3"):
-            xyz = np.array([model.nodes[nid].xyz_global for nid in elem.node_ids])
-            if elem.type == "CQUAD4":
-                d13 = xyz[2]-xyz[0]; d24 = xyz[3]-xyz[1]
-                area = 0.5*np.linalg.norm(np.cross(d13, d24))
-            else:
-                v1 = xyz[1]-xyz[0]; v2 = xyz[2]-xyz[0]
-                area = 0.5*np.linalg.norm(np.cross(v1, v2))
+            for nid in elem.node_ids:
+                if nid in dof_mgr._nid_to_index:
+                    node_mass_array[dof_mgr._nid_to_index[nid]] += em / 2.0
+
+        elif elem.type == "CQUAD4":
+            # Vectorized area computation
+            nids = elem.node_ids
+            p0 = model.nodes[nids[0]].xyz_global
+            p1 = model.nodes[nids[1]].xyz_global
+            p2 = model.nodes[nids[2]].xyz_global
+            p3 = model.nodes[nids[3]].xyz_global
+            d13 = p2 - p0
+            d24 = p3 - p1
+            area = 0.5 * np.linalg.norm(np.cross(d13, d24))
             em = mat.rho * prop.t * area
-            nn = len(elem.node_ids)
-            for nid in elem.node_ids: node_mass[nid] = node_mass.get(nid, 0.) + em/nn
+            m_per_node = em / 4.0
+            for nid in nids:
+                if nid in dof_mgr._nid_to_index:
+                    node_mass_array[dof_mgr._nid_to_index[nid]] += m_per_node
+
+        elif elem.type == "CTRIA3":
+            nids = elem.node_ids
+            p0 = model.nodes[nids[0]].xyz_global
+            p1 = model.nodes[nids[1]].xyz_global
+            p2 = model.nodes[nids[2]].xyz_global
+            v1 = p1 - p0
+            v2 = p2 - p0
+            area = 0.5 * np.linalg.norm(np.cross(v1, v2))
+            em = mat.rho * prop.t * area
+            m_per_node = em / 3.0
+            for nid in nids:
+                if nid in dof_mgr._nid_to_index:
+                    node_mass_array[dof_mgr._nid_to_index[nid]] += m_per_node
+
+    # Concentrated masses (CONM2)
     for mid, me in model.masses.items():
-        node_mass[me.node_id] = node_mass.get(me.node_id, 0.) + me.mass
-    for nid, m in node_mass.items():
-        if nid not in dof_mgr._nid_to_index: continue
-        nd = dof_mgr.get_node_dofs(nid)
-        F[nd[0]] += m*accel[0]; F[nd[1]] += m*accel[1]; F[nd[2]] += m*accel[2]
+        if me.node_id in dof_mgr._nid_to_index:
+            node_mass_array[dof_mgr._nid_to_index[me.node_id]] += me.mass
+
+    # Vectorized force application
+    # F[nid*6 + 0] += mass * accel[0], etc.
+    for idx in range(n_nodes):
+        m = node_mass_array[idx]
+        if m > 0:
+            base = idx * 6
+            F[base] += m * accel[0]
+            F[base + 1] += m * accel[1]
+            F[base + 2] += m * accel[2]

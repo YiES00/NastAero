@@ -10,6 +10,11 @@ from .case_control import parse_case_control
 from .bulk_data import parse_bulk_card
 from ..config import logger
 
+def parse_bdf(filename: str) -> BDFModel:
+    """Convenience function to parse a BDF file."""
+    return BDFParser().parse(filename)
+
+
 class BDFParser:
     def __init__(self) -> None:
         self._include_depth = 0

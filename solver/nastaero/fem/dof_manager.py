@@ -27,7 +27,18 @@ class DOFManager:
     def get_element_dofs(self, node_ids: List[int]) -> List[int]:
         dofs: List[int] = []
         for nid in node_ids:
-            dofs.extend(self.get_node_dofs(nid))
+            base = self._nid_to_index[nid] * self._ndof_per_node
+            dofs.extend(range(base, base + 6))
+        return dofs
+
+    def get_element_dofs_array(self, node_ids: List[int]) -> np.ndarray:
+        """Return element DOFs as numpy array (faster for vectorized assembly)."""
+        n = len(node_ids)
+        dofs = np.empty(n * self._ndof_per_node, dtype=np.int64)
+        offsets = np.arange(self._ndof_per_node)
+        for i, nid in enumerate(node_ids):
+            base = self._nid_to_index[nid] * self._ndof_per_node
+            dofs[i*6:(i+1)*6] = base + offsets
         return dofs
 
     def get_constrained_dofs(self, spc_list: list, model_nodes: dict) -> Tuple[Set[int], Dict[int, float]]:
