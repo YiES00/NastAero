@@ -4,7 +4,8 @@ from typing import List
 from .model import BDFModel
 from .cards.grid import GRID
 from .cards.coord import CORD2R, CORD2C
-from .cards.elements import CBAR, CROD, CQUAD4, CTRIA3, CBEAM, CELAS1, CELAS2
+from .cards.elements import (CBAR, CROD, CQUAD4, CTRIA3, CQUAD8, CTRIA6,
+                              CBEAM, CELAS1, CELAS2)
 from .cards.properties import PBAR, PROD, PSHELL, PSOLID, PCOMP, PBARL, PBEAML, PELAS
 from .cards.materials import MAT1, MAT8
 from .cards.loads import FORCE, MOMENT, GRAV, LoadCombination
@@ -39,6 +40,10 @@ def parse_bulk_card(fields: List[str], model: BDFModel) -> None:
             e = CQUAD4.from_fields(fields); model.elements[e.eid] = e
         elif card_name == "CTRIA3":
             e = CTRIA3.from_fields(fields); model.elements[e.eid] = e
+        elif card_name == "CQUAD8":
+            e = CQUAD8.from_fields(fields); model.elements[e.eid] = e
+        elif card_name == "CTRIA6":
+            e = CTRIA6.from_fields(fields); model.elements[e.eid] = e
         elif card_name == "CELAS1":
             e = CELAS1.from_fields(fields); model.springs[e.eid] = e
         elif card_name == "CELAS2":

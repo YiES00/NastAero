@@ -27,4 +27,7 @@ class CONM2:
             m.I11 = nastran_float(fields[9]) if len(fields)>9 else 0.
             m.I21 = nastran_float(fields[10]) if len(fields)>10 else 0.
             m.I22 = nastran_float(fields[11]) if len(fields)>11 else 0.
+            m.I31 = nastran_float(fields[12]) if len(fields)>12 else 0.
+            m.I32 = nastran_float(fields[13]) if len(fields)>13 else 0.
+            m.I33 = nastran_float(fields[14]) if len(fields)>14 else 0.
         return m

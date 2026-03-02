@@ -151,6 +151,3 @@ python -m nastaero.visualization --load model.naero --vmt --vmt-save output_pref
 ## Known Issues / Future Work
 
 - Flutter analysis (SOL 145) not yet implemented
-- CONM2 mass element support is basic
-- CQUAD8/CTRIA6 higher-order elements not supported
-- No composite material (PCOMP) support yet

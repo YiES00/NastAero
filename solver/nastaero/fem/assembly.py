@@ -12,6 +12,8 @@ from ..bdf.model import BDFModel
 from ..elements.bar import CBarElement
 from ..elements.quad4 import CQuad4Element
 from ..elements.tria3 import CTria3Element
+from ..elements.quad8 import CQuad8Element
+from ..elements.tria6 import CTria6Element
 from ..config import logger
 
 
@@ -32,6 +34,8 @@ def assemble_global_matrices(model: BDFModel, dof_mgr: DOFManager):
     cquad4_elems = []
     ctria3_elems = []
     crod_elems = []
+    cquad8_elems = []
+    ctria6_elems = []
 
     for eid, elem in model.elements.items():
         if elem.type == "CBAR":
@@ -44,21 +48,31 @@ def assemble_global_matrices(model: BDFModel, dof_mgr: DOFManager):
             ctria3_elems.append((eid, elem))
         elif elem.type == "CROD":
             crod_elems.append((eid, elem))
+        elif elem.type == "CQUAD8":
+            cquad8_elems.append((eid, elem))
+        elif elem.type == "CTRIA6":
+            ctria6_elems.append((eid, elem))
 
     n_total = (len(cbar_elems) + len(cbeam_elems) + len(cquad4_elems) +
-               len(ctria3_elems) + len(crod_elems))
-    logger.info("Assembly: %d CBAR, %d CBEAM, %d CQUAD4, %d CTRIA3, %d CROD = %d total elements",
+               len(ctria3_elems) + len(crod_elems) +
+               len(cquad8_elems) + len(ctria6_elems))
+    logger.info("Assembly: %d CBAR, %d CBEAM, %d CQUAD4, %d CTRIA3, %d CROD, "
+                "%d CQUAD8, %d CTRIA6 = %d total elements",
                 len(cbar_elems), len(cbeam_elems), len(cquad4_elems),
-                len(ctria3_elems), len(crod_elems), n_total)
+                len(ctria3_elems), len(crod_elems),
+                len(cquad8_elems), len(ctria6_elems), n_total)
 
     # Pre-allocate COO arrays with known sizes
     # CBAR/CBEAM: 12x12 = 144 entries per element
     # CQUAD4: 24x24 = 576 entries per element
     # CTRIA3: 18x18 = 324 entries per element
     # CROD: 12x12 = 144 entries per element
+    # CQUAD8: 48x48 = 2304 entries per element
+    # CTRIA6: 36x36 = 1296 entries per element
     max_nnz = ((len(cbar_elems) + len(cbeam_elems)) * 144 +
                len(cquad4_elems) * 576 +
-               len(ctria3_elems) * 324 + len(crod_elems) * 144)
+               len(ctria3_elems) * 324 + len(crod_elems) * 144 +
+               len(cquad8_elems) * 2304 + len(ctria6_elems) * 1296)
 
     rows_k = np.empty(max_nnz, dtype=np.int64)
     cols_k = np.empty(max_nnz, dtype=np.int64)
@@ -131,6 +145,30 @@ def assemble_global_matrices(model: BDFModel, dof_mgr: DOFManager):
         n_assembled += len(crod_elems)
         logger.info("  CROD batch: %.3f s (%d elements)", time.perf_counter() - t_r, len(crod_elems))
 
+    # --- Batch process CQUAD8 elements ---
+    if cquad8_elems:
+        t_q8 = time.perf_counter()
+        pk, pm = _assemble_cquad8_batch(cquad8_elems, model, dof_mgr,
+                                         rows_k, cols_k, vals_k,
+                                         rows_m, cols_m, vals_m,
+                                         ptr_k, ptr_m)
+        ptr_k = pk
+        ptr_m = pm
+        n_assembled += len(cquad8_elems)
+        logger.info("  CQUAD8 batch: %.3f s (%d elements)", time.perf_counter() - t_q8, len(cquad8_elems))
+
+    # --- Batch process CTRIA6 elements ---
+    if ctria6_elems:
+        t_t6 = time.perf_counter()
+        pk, pm = _assemble_ctria6_batch(ctria6_elems, model, dof_mgr,
+                                         rows_k, cols_k, vals_k,
+                                         rows_m, cols_m, vals_m,
+                                         ptr_k, ptr_m)
+        ptr_k = pk
+        ptr_m = pm
+        n_assembled += len(ctria6_elems)
+        logger.info("  CTRIA6 batch: %.3f s (%d elements)", time.perf_counter() - t_t6, len(ctria6_elems))
+
     # Trim arrays to actual size
     rows_k = rows_k[:ptr_k]
     cols_k = cols_k[:ptr_k]
@@ -140,22 +178,76 @@ def assemble_global_matrices(model: BDFModel, dof_mgr: DOFManager):
     vals_m = vals_m[:ptr_m]
 
     # --- Concentrated masses (CONM2) ---
+    # Full 6x6 mass matrix at grid point including:
+    # - Translational mass (3x3 diagonal)
+    # - Full 3x3 symmetric inertia tensor (with off-diagonal terms)
+    # - Offset handling via parallel axis theorem
+    # - Translation-rotation coupling from offset
+    # - CID coordinate transform for offset and inertia
     conm2_rows, conm2_cols, conm2_vals = [], [], []
     for mid, mass_elem in model.masses.items():
         nid = mass_elem.node_id
         if nid not in dof_mgr._nid_to_index:
             continue
         node_dofs = dof_mgr.get_node_dofs(nid)
+        m = mass_elem.mass
+        offset = mass_elem.offset.copy()
+
+        # Inertia tensor at CG (symmetric, Nastran lower-triangular convention):
+        #   [[I11, I21, I31],
+        #    [I21, I22, I32],
+        #    [I31, I32, I33]]
+        I_cg = np.array([[mass_elem.I11, mass_elem.I21, mass_elem.I31],
+                         [mass_elem.I21, mass_elem.I22, mass_elem.I32],
+                         [mass_elem.I31, mass_elem.I32, mass_elem.I33]])
+
+        # CID coordinate transform: rotate offset and inertia to basic
+        cid = mass_elem.cid
+        if cid > 0 and cid in model.coords:
+            R = model.coords[cid].transform  # 3x3 rotation
+            offset = R @ offset
+            I_cg = R @ I_cg @ R.T
+
+        # Translational mass
         for i in range(3):
             conm2_rows.append(node_dofs[i])
             conm2_cols.append(node_dofs[i])
-            conm2_vals.append(mass_elem.mass)
-        if mass_elem.I11 > 0:
-            conm2_rows.append(node_dofs[3]); conm2_cols.append(node_dofs[3]); conm2_vals.append(mass_elem.I11)
-        if mass_elem.I22 > 0:
-            conm2_rows.append(node_dofs[4]); conm2_cols.append(node_dofs[4]); conm2_vals.append(mass_elem.I22)
-        if mass_elem.I33 > 0:
-            conm2_rows.append(node_dofs[5]); conm2_cols.append(node_dofs[5]); conm2_vals.append(mass_elem.I33)
+            conm2_vals.append(m)
+
+        # Parallel axis theorem: I_node = I_cg + m*(r·r*I - r⊗r)
+        r = offset
+        r_sq = np.dot(r, r)
+        I_node = I_cg + m * (r_sq * np.eye(3) - np.outer(r, r))
+
+        # Rotational inertia (full symmetric 3x3)
+        for i in range(3):
+            for j in range(3):
+                val = I_node[i, j]
+                if abs(val) > 1e-30:
+                    conm2_rows.append(node_dofs[3 + i])
+                    conm2_cols.append(node_dofs[3 + j])
+                    conm2_vals.append(val)
+
+        # Translation-rotation coupling from offset: M_tr = m * skew(r)
+        # M[trans, rot] = m * skew(r), M[rot, trans] = -m * skew(r) = (m*skew(r))^T
+        # skew(r) = [[0, -r3, r2], [r3, 0, -r1], [-r2, r1, 0]]
+        if m > 0 and np.linalg.norm(r) > 1e-15:
+            S = np.array([[0, -r[2], r[1]],
+                          [r[2], 0, -r[0]],
+                          [-r[1], r[0], 0]])
+            mS = m * S
+            for i in range(3):
+                for j in range(3):
+                    val = mS[i, j]
+                    if abs(val) > 1e-30:
+                        # Upper-right block: trans-rot
+                        conm2_rows.append(node_dofs[i])
+                        conm2_cols.append(node_dofs[3 + j])
+                        conm2_vals.append(val)
+                        # Lower-left block: rot-trans (transpose)
+                        conm2_rows.append(node_dofs[3 + j])
+                        conm2_cols.append(node_dofs[i])
+                        conm2_vals.append(val)
 
     if conm2_rows:
         rows_m = np.concatenate([rows_m, np.array(conm2_rows, dtype=np.int64)])
@@ -974,3 +1066,101 @@ def _assemble_mpc(mpc, dof_mgr, rows_k, cols_k, vals_k):
             rows_k.append(dof_i)
             cols_k.append(dof_j)
             vals_k.append(penalty * ai * aj)
+
+
+def _assemble_cquad8_batch(elems, model, dof_mgr,
+                            rows_k, cols_k, vals_k,
+                            rows_m, cols_m, vals_m,
+                            ptr_k, ptr_m):
+    """Batch assemble CQUAD8 elements (per-element loop)."""
+    ndof_e = 48
+    ii_local, jj_local = np.meshgrid(np.arange(ndof_e), np.arange(ndof_e), indexing='ij')
+    ii_flat = ii_local.ravel()
+    jj_flat = jj_local.ravel()
+
+    for idx, (eid, elem) in enumerate(elems):
+        try:
+            prop = elem.property_ref
+            if hasattr(prop, 'equivalent_isotropic'):
+                E, nu, t, rho = prop.equivalent_isotropic()
+            else:
+                mat = prop.material_ref
+                E = mat.E; nu = mat.nu; t = prop.t; rho = mat.rho
+            node_xyz = np.array([model.nodes[nid].xyz_global for nid in elem.node_ids])
+            q8 = CQuad8Element(node_xyz, E, nu, t, rho)
+            ke = q8.stiffness_matrix()
+            me = q8.mass_matrix()
+        except Exception as exc:
+            logger.warning("Error assembling CQUAD8 %d: %s", eid, exc)
+            continue
+
+        edofs = np.array(dof_mgr.get_element_dofs(elem.node_ids), dtype=np.int64)
+        global_rows = edofs[ii_flat]
+        global_cols = edofs[jj_flat]
+        ke_flat = ke.ravel()
+        me_flat = me.ravel()
+
+        mask_k = np.abs(ke_flat) > 1e-30
+        nk = mask_k.sum()
+        rows_k[ptr_k:ptr_k+nk] = global_rows[mask_k]
+        cols_k[ptr_k:ptr_k+nk] = global_cols[mask_k]
+        vals_k[ptr_k:ptr_k+nk] = ke_flat[mask_k]
+        ptr_k += nk
+
+        mask_m = np.abs(me_flat) > 1e-30
+        nm = mask_m.sum()
+        rows_m[ptr_m:ptr_m+nm] = global_rows[mask_m]
+        cols_m[ptr_m:ptr_m+nm] = global_cols[mask_m]
+        vals_m[ptr_m:ptr_m+nm] = me_flat[mask_m]
+        ptr_m += nm
+
+    return ptr_k, ptr_m
+
+
+def _assemble_ctria6_batch(elems, model, dof_mgr,
+                            rows_k, cols_k, vals_k,
+                            rows_m, cols_m, vals_m,
+                            ptr_k, ptr_m):
+    """Batch assemble CTRIA6 elements (per-element loop)."""
+    ndof_e = 36
+    ii_local, jj_local = np.meshgrid(np.arange(ndof_e), np.arange(ndof_e), indexing='ij')
+    ii_flat = ii_local.ravel()
+    jj_flat = jj_local.ravel()
+
+    for idx, (eid, elem) in enumerate(elems):
+        try:
+            prop = elem.property_ref
+            if hasattr(prop, 'equivalent_isotropic'):
+                E, nu, t, rho = prop.equivalent_isotropic()
+            else:
+                mat = prop.material_ref
+                E = mat.E; nu = mat.nu; t = prop.t; rho = mat.rho
+            node_xyz = np.array([model.nodes[nid].xyz_global for nid in elem.node_ids])
+            t6 = CTria6Element(node_xyz, E, nu, t, rho)
+            ke = t6.stiffness_matrix()
+            me = t6.mass_matrix()
+        except Exception as exc:
+            logger.warning("Error assembling CTRIA6 %d: %s", eid, exc)
+            continue
+
+        edofs = np.array(dof_mgr.get_element_dofs(elem.node_ids), dtype=np.int64)
+        global_rows = edofs[ii_flat]
+        global_cols = edofs[jj_flat]
+        ke_flat = ke.ravel()
+        me_flat = me.ravel()
+
+        mask_k = np.abs(ke_flat) > 1e-30
+        nk = mask_k.sum()
+        rows_k[ptr_k:ptr_k+nk] = global_rows[mask_k]
+        cols_k[ptr_k:ptr_k+nk] = global_cols[mask_k]
+        vals_k[ptr_k:ptr_k+nk] = ke_flat[mask_k]
+        ptr_k += nk
+
+        mask_m = np.abs(me_flat) > 1e-30
+        nm = mask_m.sum()
+        rows_m[ptr_m:ptr_m+nm] = global_rows[mask_m]
+        cols_m[ptr_m:ptr_m+nm] = global_cols[mask_m]
+        vals_m[ptr_m:ptr_m+nm] = me_flat[mask_m]
+        ptr_m += nm
+
+    return ptr_k, ptr_m

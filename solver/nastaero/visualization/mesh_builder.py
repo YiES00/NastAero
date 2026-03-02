@@ -224,6 +224,8 @@ def build_structural_mesh(bdf_model, include_beams: bool = True) -> pv.Unstructu
     VTK_LINE = 3
     VTK_TRIANGLE = 5
     VTK_QUAD = 9
+    VTK_QUADRATIC_TRIANGLE = 22
+    VTK_QUADRATIC_QUAD = 23
 
     for eid in sorted(bdf_model.elements.keys()):
         elem = bdf_model.elements[eid]
@@ -238,12 +240,30 @@ def build_structural_mesh(bdf_model, include_beams: bool = True) -> pv.Unstructu
                 elem_ids.append(eid)
                 prop_ids.append(getattr(elem, 'pid', 0))
 
+        elif etype == "CQUAD8":
+            nids = elem.node_ids
+            if all(n in nid_to_idx for n in nids):
+                idx = [nid_to_idx[n] for n in nids]
+                cells_list.append([8] + idx)
+                cell_types.append(VTK_QUADRATIC_QUAD)
+                elem_ids.append(eid)
+                prop_ids.append(getattr(elem, 'pid', 0))
+
         elif etype == "CTRIA3":
             nids = elem.node_ids
             if all(n in nid_to_idx for n in nids):
                 idx = [nid_to_idx[n] for n in nids]
                 cells_list.append([3] + idx)
                 cell_types.append(VTK_TRIANGLE)
+                elem_ids.append(eid)
+                prop_ids.append(getattr(elem, 'pid', 0))
+
+        elif etype == "CTRIA6":
+            nids = elem.node_ids
+            if all(n in nid_to_idx for n in nids):
+                idx = [nid_to_idx[n] for n in nids]
+                cells_list.append([6] + idx)
+                cell_types.append(VTK_QUADRATIC_TRIANGLE)
                 elem_ids.append(eid)
                 prop_ids.append(getattr(elem, 'pid', 0))
 

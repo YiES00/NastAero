@@ -6,17 +6,20 @@ Open-source structural analysis FEA solver with MSC Nastran BDF I/O compatibilit
 
 ### Phase 1+2 (Current)
 - **BDF Parser**: Fixed-8, fixed-16, and free-field format support
-  - Cards: GRID, CORD2R, CBAR, CROD, CQUAD4, CTRIA3, PBAR, PROD, PSHELL, PSOLID, MAT1
+  - Cards: GRID, CORD2R, CBAR, CROD, CQUAD4, CQUAD8, CTRIA3, CTRIA6, PBAR, PROD, PSHELL, PCOMP, PSOLID, MAT1, MAT8
   - Loads: FORCE, MOMENT, GRAV, LOAD (combination)
   - Constraints: SPC, SPC1, RBE2
-  - Mass: CONM2
+  - Mass: CONM2 (full 6x6 inertia with offset/parallel axis theorem)
   - Eigenvalue: EIGRL
 - **SOL 101**: Linear static analysis (scipy.sparse.linalg.spsolve)
 - **SOL 103**: Normal modes / real eigenvalue analysis (scipy.sparse.linalg.eigsh)
 - **Elements**:
   - CBAR: 12-DOF Euler-Bernoulli beam (stiffness + consistent mass)
   - CQUAD4: 24-DOF Mindlin plate (2x2 Gauss, selective reduced integration)
+  - CQUAD8: 48-DOF serendipity shell (3x3 Gauss membrane/bending, 2x2 reduced shear)
   - CTRIA3: 18-DOF CST membrane + DKT bending plate
+  - CTRIA6: 36-DOF quadratic triangle (3-point Gauss, area coordinates)
+- **Properties**: PSHELL, PCOMP (composite laminate, CLT A-matrix)
 - **Output**: F06 format (displacements, SPC forces, eigenvalues, mode shapes)
 
 ### Future Phases

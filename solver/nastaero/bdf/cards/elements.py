@@ -91,6 +91,54 @@ class CTRIA3:
 
 
 @dataclass
+class CQUAD8:
+    """8-node serendipity quadrilateral shell element (48 DOFs).
+
+    CQUAD8 EID PID G1 G2 G3 G4 G5 G6
+           G7 G8 T1 T2 T3 T4 THETA ZOFFS
+    """
+    eid: int = 0; pid: int = 0
+    node_ids: List[int] = field(default_factory=list)  # [G1..G8]
+    theta_mcid: float = 0.0
+    zoffs: float = 0.0
+    property_ref: Optional[Any] = None
+    node_refs: List[Any] = field(default_factory=list)
+    @property
+    def type(self) -> str: return "CQUAD8"
+    @classmethod
+    def from_fields(cls, fields: List[str]) -> CQUAD8:
+        e = cls(); e.eid = nastran_int(fields[1]); e.pid = nastran_int(fields[2])
+        e.node_ids = [nastran_int(fields[i]) for i in range(3, 11)]
+        if len(fields) > 15: e.theta_mcid = nastran_float(fields[15])
+        if len(fields) > 16: e.zoffs = nastran_float(fields[16])
+        return e
+
+
+@dataclass
+class CTRIA6:
+    """6-node quadratic triangular shell element (36 DOFs).
+
+    CTRIA6 EID PID G1 G2 G3 G4 G5 G6
+           THETA ZOFFS
+    """
+    eid: int = 0; pid: int = 0
+    node_ids: List[int] = field(default_factory=list)  # [G1..G6]
+    theta_mcid: float = 0.0
+    zoffs: float = 0.0
+    property_ref: Optional[Any] = None
+    node_refs: List[Any] = field(default_factory=list)
+    @property
+    def type(self) -> str: return "CTRIA6"
+    @classmethod
+    def from_fields(cls, fields: List[str]) -> CTRIA6:
+        e = cls(); e.eid = nastran_int(fields[1]); e.pid = nastran_int(fields[2])
+        e.node_ids = [nastran_int(fields[i]) for i in range(3, 9)]
+        if len(fields) > 9: e.theta_mcid = nastran_float(fields[9])
+        if len(fields) > 10: e.zoffs = nastran_float(fields[10])
+        return e
+
+
+@dataclass
 class CBEAM:
     """Beam element (treated same as CBAR for SOL 144).
 
