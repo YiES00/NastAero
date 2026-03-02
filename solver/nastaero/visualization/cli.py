@@ -165,7 +165,6 @@ Examples:
         sc = results.subcases[sc_idx]
         if sc.nodal_combined_forces:
             from ..loads_analysis.trim_loads import write_force_cards
-            import os
             base = os.path.splitext(args.force_cards)[0]
             write_force_cards(sc.nodal_aero_forces,
                               base + '_aero.bdf', load_sid=101,
