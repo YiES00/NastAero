@@ -6,6 +6,8 @@ Usage:
     python -m nastaero.visualization model.bdf --mode 1     # View mode shape
     python -m nastaero.visualization model.bdf --aero       # View aero panels
     python -m nastaero.visualization model.bdf --export out.vtk  # Export to VTK
+    python -m nastaero.visualization --load model.naero     # Load saved results
+    python -m nastaero.visualization --load model.naero --subcase 3
 """
 from __future__ import annotations
 import argparse
@@ -29,10 +31,17 @@ Examples:
   python -m nastaero.visualization goland.bdf --run --aero   # Run + view aero results
   python -m nastaero.visualization model.bdf --screenshot fig.png
   python -m nastaero.visualization model.bdf --export out.vtk
+  python -m nastaero.visualization --load model.naero --trim # Load saved results
+  python -m nastaero.visualization --load model.naero --loads --subcase 3
         """,
     )
 
-    parser.add_argument('bdf_file', help='BDF input file')
+    parser.add_argument('bdf_file', nargs='?', default=None,
+                        help='BDF input file')
+    parser.add_argument('--load', type=str, default=None, metavar='NAERO_FILE',
+                        help='Load results from .naero file (skip BDF parsing and solving)')
+    parser.add_argument('--subcase', type=int, default=0,
+                        help='Subcase index (0-based) for visualization (default: 0)')
 
     # Analysis
     parser.add_argument('--run', action='store_true',
@@ -95,45 +104,65 @@ Examples:
 
     # Import NastAero
     from ..config import setup_logging
-    from ..bdf.parser import parse_bdf
-
     setup_logging("WARNING")
-
-    # Parse BDF
-    print(f"Parsing: {args.bdf_file}")
-    bdf_model = parse_bdf(args.bdf_file)
-    print(f"  Nodes: {len(bdf_model.nodes):,}")
-    print(f"  Elements: {len(bdf_model.elements):,}")
-    print(f"  SOL: {bdf_model.sol}")
 
     results = None
 
-    # Run analysis if requested
-    if args.run:
-        print(f"\nRunning SOL {bdf_model.sol} analysis...")
-        if bdf_model.sol == 101:
-            from ..solvers.sol101 import solve_static
-            results = solve_static(bdf_model)
-            print("  Static analysis complete.")
-        elif bdf_model.sol == 103:
-            from ..solvers.sol103 import solve_modes
-            results = solve_modes(bdf_model)
-            n_modes = len(results.subcases[0].mode_shapes) if results.subcases else 0
-            print(f"  Modal analysis complete ({n_modes} modes).")
-        elif bdf_model.sol == 144:
-            from ..solvers.sol144 import solve_trim
-            results = solve_trim(bdf_model)
-            print("  Trim analysis complete.")
-        else:
-            print(f"  Warning: SOL {bdf_model.sol} not supported, showing model only.")
+    if args.load:
+        # Load from .naero file (no BDF parsing or solving needed)
+        from ..output.result_io import load_results
+        print(f"Loading: {args.load}")
+        results, bdf_model = load_results(args.load)
+        print(f"  Nodes: {len(bdf_model.nodes):,}")
+        print(f"  Elements: {len(bdf_model.elements):,}")
+        print(f"  SOL: {bdf_model.sol}")
+        print(f"  Subcases: {len(results.subcases)}")
+        if args.subcase >= len(results.subcases):
+            print(f"Error: --subcase {args.subcase} out of range "
+                  f"(0..{len(results.subcases)-1})")
+            sys.exit(1)
+    else:
+        if not args.bdf_file:
+            parser.error("bdf_file is required (or use --load NAERO_FILE)")
+
+        from ..bdf.parser import parse_bdf
+
+        # Parse BDF
+        print(f"Parsing: {args.bdf_file}")
+        bdf_model = parse_bdf(args.bdf_file)
+        print(f"  Nodes: {len(bdf_model.nodes):,}")
+        print(f"  Elements: {len(bdf_model.elements):,}")
+        print(f"  SOL: {bdf_model.sol}")
+
+        # Run analysis if requested
+        if args.run:
+            print(f"\nRunning SOL {bdf_model.sol} analysis...")
+            if bdf_model.sol == 101:
+                from ..solvers.sol101 import solve_static
+                results = solve_static(bdf_model)
+                print("  Static analysis complete.")
+            elif bdf_model.sol == 103:
+                from ..solvers.sol103 import solve_modes
+                results = solve_modes(bdf_model)
+                n_modes = len(results.subcases[0].mode_shapes) if results.subcases else 0
+                print(f"  Modal analysis complete ({n_modes} modes).")
+            elif bdf_model.sol == 144:
+                from ..solvers.sol144 import solve_trim
+                results = solve_trim(bdf_model)
+                print("  Trim analysis complete.")
+            else:
+                print(f"  Warning: SOL {bdf_model.sol} not supported, showing model only.")
 
     # Create viewer
     from .viewer import NastAeroViewer
     viewer = NastAeroViewer(bdf_model, results, off_screen=off_screen)
 
+    # Select subcase index for visualization
+    sc_idx = args.subcase
+
     # Write FORCE cards if requested
     if args.force_cards and results and results.subcases:
-        sc = results.subcases[0]
+        sc = results.subcases[sc_idx]
         if sc.nodal_combined_forces:
             from ..loads_analysis.trim_loads import write_force_cards
             import os
@@ -164,12 +193,14 @@ Examples:
 
     if args.loads and results:
         viewer.plot_nodal_forces(
+            subcase=sc_idx,
             loads_type=args.loads_type,
             screenshot=args.screenshot,
             window_size=window_size,
         )
     elif args.trim and results:
         viewer.plot_trim_results(
+            subcase=sc_idx,
             disp_scale=args.scale,
             show_aero_arrows=show_arrows,
             screenshot=args.screenshot,
@@ -177,6 +208,7 @@ Examples:
         )
     elif args.pressure and results:
         viewer.plot_aero_pressure(
+            subcase=sc_idx,
             cmap=cmap or 'RdBu_r',
             show_aero_arrows=show_arrows,
             screenshot=args.screenshot,
@@ -201,10 +233,11 @@ Examples:
         else:
             print("Error: --mode requires --run or results data")
             sys.exit(1)
-    elif (args.disp or args.run) and results and results.subcases:
-        sc = results.subcases[0]
+    elif (args.disp or args.run or args.load) and results and results.subcases:
+        sc = results.subcases[sc_idx]
         if sc.displacements:
             viewer.plot_displacement(
+                subcase=sc_idx,
                 component=args.component,
                 scale=args.scale,
                 show_edges=show_edges,
@@ -222,6 +255,7 @@ Examples:
             )
         elif sc.trim_variables is not None:
             viewer.plot_trim_results(
+                subcase=sc_idx,
                 disp_scale=args.scale,
                 show_aero_arrows=show_arrows,
                 screenshot=args.screenshot,

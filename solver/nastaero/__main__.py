@@ -32,6 +32,10 @@ def main() -> None:
                         help='Write FORCE card BDF files')
     parser.add_argument('--screenshot', type=str, default=None,
                         help='Save visualization screenshot')
+    parser.add_argument('--save-results', type=str, default=None, metavar='FILE',
+                        help='Save results to .naero file for later visualization')
+    parser.add_argument('--save', action='store_true',
+                        help='Auto-save results to <input>.naero')
     parser.add_argument('--log-level', default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                         help='Logging level (default: INFO)')
@@ -64,6 +68,12 @@ def main() -> None:
 
     write_f06(results, bdf_model, f06_path)
     logger.info("Results written to %s", f06_path)
+
+    # Save results to .naero file
+    save_path = args.save_results or (str(bdf_path.with_suffix('.naero')) if args.save else None)
+    if save_path:
+        from .output.result_io import save_results
+        save_results(results, bdf_model, save_path, bdf_file=str(bdf_path))
 
     # Write FORCE cards for SOL 144 trim loads
     if bdf_model.sol == 144 and results.subcases:
