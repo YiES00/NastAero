@@ -52,6 +52,99 @@ def _estimate_beam_radius(bdf_model, elem) -> float:
     return max(radius, 1e-6)
 
 
+def _collect_beam_segments(bdf_model, displacements=None, scale=1.0):
+    """Collect beam endpoints and radii from model.
+
+    Returns list of (p1, p2, radius) tuples and optionally disp_values.
+    """
+    segments = []
+    disp_values = [] if displacements is not None else None
+
+    for eid in sorted(bdf_model.elements.keys()):
+        elem = bdf_model.elements[eid]
+        if elem.type not in ("CBAR", "CROD"):
+            continue
+
+        nids = elem.node_ids
+        if len(nids) < 2:
+            continue
+        if nids[0] not in bdf_model.nodes or nids[1] not in bdf_model.nodes:
+            continue
+
+        p1 = bdf_model.nodes[nids[0]].xyz_global.copy()
+        p2 = bdf_model.nodes[nids[1]].xyz_global.copy()
+
+        if displacements is not None:
+            d1 = displacements.get(nids[0], np.zeros(6))
+            d2 = displacements.get(nids[1], np.zeros(6))
+            p1 += d1[:3] * scale
+            p2 += d2[:3] * scale
+            disp_values.append(0.5 * (np.linalg.norm(d1[:3]) + np.linalg.norm(d2[:3])))
+
+        L = np.linalg.norm(p2 - p1)
+        if L < 1e-12:
+            if disp_values is not None:
+                disp_values.pop()
+            continue
+
+        radius = _estimate_beam_radius(bdf_model, elem)
+        segments.append((p1, p2, radius))
+
+    return segments, disp_values
+
+
+def _build_tubes_bulk(segments, n_sides=12, disp_values=None):
+    """Build tube mesh from beam segments using bulk PolyData + tube filter.
+
+    Groups beams by radius to minimize tube() calls.
+    """
+    if not segments:
+        return None
+
+    # Group segments by radius for bulk tube generation
+    from collections import defaultdict
+    radius_groups = defaultdict(list)
+    radius_disp = defaultdict(list) if disp_values is not None else None
+    for i, (p1, p2, r) in enumerate(segments):
+        # Quantize radius to reduce groups (round to 4 significant digits)
+        rq = float(f'{r:.4g}')
+        radius_groups[rq].append((p1, p2))
+        if radius_disp is not None:
+            radius_disp[rq].append(disp_values[i])
+
+    tube_meshes = []
+    tube_disp_arrays = [] if disp_values is not None else None
+
+    for r, segs in radius_groups.items():
+        # Build all lines in this radius group as a single PolyData
+        n_segs = len(segs)
+        points = np.empty((n_segs * 2, 3), dtype=np.float64)
+        lines = np.empty((n_segs, 3), dtype=np.int64)
+        for j, (p1, p2) in enumerate(segs):
+            points[j * 2] = p1
+            points[j * 2 + 1] = p2
+            lines[j] = [2, j * 2, j * 2 + 1]
+
+        poly = pv.PolyData(points, lines=lines.ravel())
+        tube = poly.tube(radius=r, n_sides=n_sides)
+        tube_meshes.append(tube)
+
+        if tube_disp_arrays is not None:
+            # Assign per-cell displacement from segment averages
+            cells_per_seg = tube.n_cells // n_segs if n_segs > 0 else 0
+            if cells_per_seg > 0:
+                dv = np.array(radius_disp[r])
+                tube.cell_data['Displacement_Magnitude'] = np.repeat(dv, cells_per_seg)
+            else:
+                tube.cell_data['Displacement_Magnitude'] = np.zeros(tube.n_cells)
+
+    if len(tube_meshes) == 1:
+        return tube_meshes[0]
+
+    blocks = pv.MultiBlock(tube_meshes)
+    return blocks.combine()
+
+
 def build_beam_tubes(bdf_model, n_sides: int = 12) -> Optional[pv.PolyData]:
     """Build 3D tube representations for CBAR/CROD elements.
 
@@ -67,40 +160,8 @@ def build_beam_tubes(bdf_model, n_sides: int = 12) -> Optional[pv.PolyData]:
     pv.PolyData or None
         Combined tube mesh for all beam elements, or None if no beams.
     """
-    beam_meshes = []
-
-    for eid in sorted(bdf_model.elements.keys()):
-        elem = bdf_model.elements[eid]
-        if elem.type not in ("CBAR", "CROD"):
-            continue
-
-        nids = elem.node_ids
-        if len(nids) < 2:
-            continue
-        if nids[0] not in bdf_model.nodes or nids[1] not in bdf_model.nodes:
-            continue
-
-        p1 = bdf_model.nodes[nids[0]].xyz_global
-        p2 = bdf_model.nodes[nids[1]].xyz_global
-        L = np.linalg.norm(p2 - p1)
-        if L < 1e-12:
-            continue
-
-        radius = _estimate_beam_radius(bdf_model, elem)
-
-        # Create a line and tube it
-        line = pv.Line(p1, p2, resolution=1)
-        tube = line.tube(radius=radius, n_sides=n_sides)
-        beam_meshes.append(tube)
-
-    if not beam_meshes:
-        return None
-
-    combined = beam_meshes[0]
-    for m in beam_meshes[1:]:
-        combined = combined.merge(m)
-
-    return combined
+    segments, _ = _collect_beam_segments(bdf_model)
+    return _build_tubes_bulk(segments, n_sides=n_sides)
 
 
 def build_deformed_beam_tubes(
@@ -125,57 +186,9 @@ def build_deformed_beam_tubes(
     -------
     pv.PolyData or None
     """
-    beam_meshes = []
-    disp_values = []
-
-    for eid in sorted(bdf_model.elements.keys()):
-        elem = bdf_model.elements[eid]
-        if elem.type not in ("CBAR", "CROD"):
-            continue
-
-        nids = elem.node_ids
-        if len(nids) < 2:
-            continue
-        if nids[0] not in bdf_model.nodes or nids[1] not in bdf_model.nodes:
-            continue
-
-        p1 = bdf_model.nodes[nids[0]].xyz_global.copy()
-        p2 = bdf_model.nodes[nids[1]].xyz_global.copy()
-
-        # Apply displacements
-        d1 = displacements.get(nids[0], np.zeros(6))
-        d2 = displacements.get(nids[1], np.zeros(6))
-        p1 += d1[:3] * scale
-        p2 += d2[:3] * scale
-
-        L = np.linalg.norm(p2 - p1)
-        if L < 1e-12:
-            continue
-
-        radius = _estimate_beam_radius(bdf_model, elem)
-
-        line = pv.Line(p1, p2, resolution=1)
-        tube = line.tube(radius=radius, n_sides=n_sides)
-        beam_meshes.append(tube)
-
-        # Average displacement magnitude for coloring
-        avg_disp = 0.5 * (np.linalg.norm(d1[:3]) + np.linalg.norm(d2[:3]))
-        disp_values.append(avg_disp)
-
-    if not beam_meshes:
-        return None
-
-    combined = beam_meshes[0]
-    # Assign scalar to first tube
-    combined.cell_data['Displacement_Magnitude'] = np.full(
-        combined.n_cells, disp_values[0])
-
-    for i, m in enumerate(beam_meshes[1:], 1):
-        m.cell_data['Displacement_Magnitude'] = np.full(
-            m.n_cells, disp_values[i])
-        combined = combined.merge(m)
-
-    return combined
+    segments, disp_values = _collect_beam_segments(
+        bdf_model, displacements=displacements, scale=scale)
+    return _build_tubes_bulk(segments, n_sides=n_sides, disp_values=disp_values)
 
 
 def build_structural_mesh(bdf_model, include_beams: bool = True) -> pv.UnstructuredGrid:
@@ -698,6 +711,7 @@ def build_nodal_force_arrows(
     nodal_forces: Dict[int, np.ndarray],
     scale: float = 0.0,
     min_fraction: float = 0.01,
+    max_arrows: int = 500,
 ) -> Optional[pv.PolyData]:
     """Build arrow glyphs showing force vectors at structural nodes.
 
@@ -710,6 +724,10 @@ def build_nodal_force_arrows(
         Arrow length scale. 0 = auto-scale based on model size.
     min_fraction : float
         Minimum force fraction to display (filters noise).
+    max_arrows : int
+        Maximum number of arrows to display.  When more nodes have
+        non-negligible forces, only the top *max_arrows* by magnitude
+        are kept.  This keeps large models readable.
 
     Returns
     -------
@@ -752,12 +770,22 @@ def build_nodal_force_arrows(
     force_vecs = force_vecs[mask]
     magnitudes = magnitudes[mask]
 
+    # Keep only top-N arrows by magnitude for readability
+    if len(magnitudes) > max_arrows:
+        top_idx = np.argsort(magnitudes)[-max_arrows:]
+        origins = origins[top_idx]
+        force_vecs = force_vecs[top_idx]
+        magnitudes = magnitudes[top_idx]
+        max_mag = np.max(magnitudes)
+
     # Auto-scale: arrow length relative to model bounding box
     if scale <= 0.0:
         all_pts = np.array([bdf_model.nodes[nid].xyz_global
                             for nid in bdf_model.nodes])
         bbox_diag = np.linalg.norm(all_pts.max(axis=0) - all_pts.min(axis=0))
-        scale = 0.05 * bbox_diag / max_mag
+        # Adaptive factor: larger arrows for better visibility
+        # Use 15% of bbox for max arrow, ensuring clear display
+        scale = 0.15 * bbox_diag / max_mag
 
     # Normalize and scale
     directions = force_vecs / magnitudes[:, np.newaxis]
