@@ -33,6 +33,11 @@ Examples:
   python -m nastaero.visualization model.bdf --export out.vtk
   python -m nastaero.visualization --load model.naero --trim # Load saved results
   python -m nastaero.visualization --load model.naero --loads --subcase 3
+  python -m nastaero.visualization --load model.naero --vmt  # VMT diagrams (all components)
+  python -m nastaero.visualization --load model.naero --vmt --vmt-component "Right Wing"
+  python -m nastaero.visualization --load model.naero --vmt --vmt-loads all
+  python -m nastaero.visualization --load model.naero --vmt --vmt-envelope
+  python -m nastaero.visualization --load model.naero --vmt --vmt-save vmt_plots
         """,
     )
 
@@ -67,6 +72,21 @@ Examples:
                         help='Type of loads to display (default: all)')
     parser.add_argument('--force-cards', type=str, default=None,
                         help='Write FORCE cards to file (BDF format)')
+
+    # VMT (Shear/Bending Moment/Torsion) diagrams
+    parser.add_argument('--vmt', action='store_true',
+                        help='Plot VMT (V-M-T) internal loads diagrams (matplotlib)')
+    parser.add_argument('--vmt-component', type=str, default=None,
+                        help='Show VMT for specific component (e.g., "Right Wing")')
+    parser.add_argument('--vmt-loads', type=str, default='combined',
+                        choices=['all', 'aero', 'inertial', 'combined'],
+                        help='Load type for VMT (default: combined)')
+    parser.add_argument('--vmt-stations', type=int, default=50,
+                        help='Number of span stations for VMT (default: 50)')
+    parser.add_argument('--vmt-save', type=str, default=None,
+                        help='Save VMT plots to files (prefix, e.g., "vmt_output")')
+    parser.add_argument('--vmt-envelope', action='store_true',
+                        help='Plot VMT envelope across all subcases')
 
     # Display options
     parser.add_argument('--component', type=str, default='magnitude',
@@ -153,10 +173,6 @@ Examples:
             else:
                 print(f"  Warning: SOL {bdf_model.sol} not supported, showing model only.")
 
-    # Create viewer
-    from .viewer import NastAeroViewer
-    viewer = NastAeroViewer(bdf_model, results, off_screen=off_screen)
-
     # Select subcase index for visualization
     sc_idx = args.subcase
 
@@ -177,6 +193,108 @@ Examples:
                               label='COMBINED')
             print(f"  FORCE cards written: {base}_aero.bdf, "
                   f"{base}_inertial.bdf, {base}_combined.bdf")
+
+    # VMT diagrams (matplotlib, no PyVista needed — early return)
+    if args.vmt and results and results.subcases:
+        from ..loads_analysis.component_id import identify_components
+        from ..loads_analysis.vmt import compute_vmt, compute_vmt_all, VMTResult
+        from .vmt_plot import plot_vmt_component, plot_vmt_all, plot_vmt_envelope
+
+        print("\n--- VMT Internal Loads ---")
+        components = identify_components(bdf_model)
+        if not components.components:
+            print("Error: No structural components detected.")
+            sys.exit(1)
+
+        print(f"  Detected components: {', '.join(components.names())}")
+        for comp in components.components:
+            print(f"    {comp.name}: {len(comp.node_ids):,} nodes "
+                  f"(span axis={comp.span_axis})")
+
+        sc_idx = args.subcase
+
+        if args.vmt_envelope:
+            # Envelope across ALL subcases for each component
+            vmt_all = VMTResult()
+            for sc_i, sc in enumerate(results.subcases):
+                if not sc.nodal_combined_forces:
+                    continue
+                for comp in components.components:
+                    curve = compute_vmt(bdf_model, sc.nodal_combined_forces,
+                                        comp, n_stations=args.vmt_stations,
+                                        load_type='combined', subcase_id=sc_i)
+                    vmt_all.curves.append(curve)
+
+            print(f"  Computed VMT for {len(results.subcases)} subcases")
+
+            if args.vmt_component:
+                # Envelope for specific component
+                save_path = (f"{args.vmt_save}_{args.vmt_component.replace(' ', '_')}"
+                             f"_envelope.png" if args.vmt_save else None)
+                plot_vmt_envelope(vmt_all, args.vmt_component,
+                                  save_path=save_path, show=not args.vmt_save)
+            else:
+                # Envelope for each component
+                for comp_name in vmt_all.component_names:
+                    save_path = (f"{args.vmt_save}_{comp_name.replace(' ', '_')}"
+                                 f"_envelope.png" if args.vmt_save else None)
+                    plot_vmt_envelope(vmt_all, comp_name,
+                                      save_path=save_path, show=not args.vmt_save)
+        else:
+            # Single subcase VMT
+            sc = results.subcases[sc_idx]
+            load_types_to_plot = (['aero', 'inertial', 'combined']
+                                  if args.vmt_loads == 'all'
+                                  else [args.vmt_loads])
+
+            vmt_result = VMTResult()
+            for lt in load_types_to_plot:
+                force_dict = {
+                    'aero': sc.nodal_aero_forces,
+                    'inertial': sc.nodal_inertial_forces,
+                    'combined': sc.nodal_combined_forces,
+                }.get(lt)
+                if force_dict:
+                    r = compute_vmt_all(bdf_model, force_dict, components,
+                                         n_stations=args.vmt_stations,
+                                         load_type=lt, subcase_id=sc_idx)
+                    vmt_result.curves.extend(r.curves)
+
+            print(f"  Computed {len(vmt_result.curves)} VMT curves "
+                  f"(SC{sc_idx}, loads={args.vmt_loads})")
+
+            if args.vmt_component:
+                # Single component with all requested load types overlaid
+                curves = vmt_result.get_curves(
+                    component_name=args.vmt_component)
+                save_path = (f"{args.vmt_save}_{args.vmt_component.replace(' ', '_')}"
+                             f".png" if args.vmt_save else None)
+                plot_vmt_component(curves, save_path=save_path,
+                                    show=not args.vmt_save)
+            else:
+                if args.vmt_loads == 'all':
+                    # Per-component plots with all load types overlaid
+                    for comp_name in vmt_result.component_names:
+                        curves = vmt_result.get_curves(
+                            component_name=comp_name)
+                        save_path = (f"{args.vmt_save}_{comp_name.replace(' ', '_')}"
+                                     f".png" if args.vmt_save else None)
+                        plot_vmt_component(curves, save_path=save_path,
+                                            show=not args.vmt_save)
+                else:
+                    # Grid overview: all components, single load type
+                    save_path = (f"{args.vmt_save}_all.png"
+                                 if args.vmt_save else None)
+                    plot_vmt_all(vmt_result, load_type=args.vmt_loads,
+                                 subcase_id=sc_idx, save_path=save_path,
+                                 show=not args.vmt_save)
+
+        print("\nVMT diagram complete.")
+        return
+
+    # Create PyVista viewer (only for 3D visualization modes)
+    from .viewer import NastAeroViewer
+    viewer = NastAeroViewer(bdf_model, results, off_screen=off_screen)
 
     # Export VTK if requested
     if args.export:

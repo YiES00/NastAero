@@ -475,7 +475,7 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
             compute_trim_nodal_loads, verify_trim_balance)
 
         aero_nodal, inertial_nodal, combined_nodal = compute_trim_nodal_loads(
-            shared.bdf_model, boxes, aero_forces, G_sp, shared.f_dofs, dof_mgr,
+            shared.bdf_model, boxes, aero_forces, G_disp, shared.f_dofs, dof_mgr,
             nz=1.0, g=shared.g)
 
         sc_result.nodal_aero_forces = aero_nodal
