@@ -1,0 +1,137 @@
+$            * * * STATIC AEROELASTICITY SOLUTION DEC * * *             $
+$                                                                       $
+$                            (N-mm-sec SYSTEM)                          $
+$                                                                       $
+$ Aircraft Configuration Code : P400C(without winglet)
+$ FREE TRIM: ANGLEA and ELEV are FREE (not listed on TRIM card)
+$            ARON set to 0.0 for symmetric flight
+$                                                                       $
+TIME    100
+SOL     144
+CEND
+$                                                                       $
+TITLE      =KPP P400C FREE TRIM - 1G LEVEL FLIGHT
+$                                                                       $
+ECHO       =BOTH
+MPC = 999
+SPC        = 2
+DISP       =ALL
+AEROF      =ALL
+APRES      =ALL
+$                                                                       $
+SUBCASE 1
+  SUBTITLE =MACH 0.1 - 1G LEVEL FLIGHT FREE TRIM
+  TRIM     = 1
+SUBCASE 2
+  SUBTITLE =MACH 0.2 - 1G LEVEL FLIGHT FREE TRIM
+  TRIM     = 2
+SUBCASE 3
+  SUBTITLE =MACH 0.3 - 1G LEVEL FLIGHT FREE TRIM
+  TRIM     = 3
+SUBCASE 4
+  SUBTITLE =MACH 0.4 - 1G LEVEL FLIGHT FREE TRIM
+  TRIM     = 4
+SUBCASE 5
+  SUBTITLE =MACH 0.5 - 1G LEVEL FLIGHT FREE TRIM
+  TRIM     = 5
+SUBCASE 6
+  SUBTITLE =MACH 0.6 - 1G LEVEL FLIGHT FREE TRIM
+  TRIM     = 6
+SUBCASE 7
+  SUBTITLE =MACH 0.7 - 1G LEVEL FLIGHT FREE TRIM
+  TRIM     = 7
+$-----------------------------------------------------------------------$
+BEGIN BULK
+$                                                                       $
+$-----------------------------------------------------------------------
+$ AERO MODEL
+$-----------------------------------------------------------------------
+INCLUDE './BULK/p400r3-aero-asym_flex.dat'
+$-----------------------------------------------------------------------
+$ STRUCTURE MODEL
+$-----------------------------------------------------------------------
+INCLUDE './BULK/p400r3-struct-asym_flex.dat'
+$-----------------------------------------------------------------------
+$ PANEL-STRUCTURE SPLINE
+$-----------------------------------------------------------------------
+INCLUDE './BULK/p400r3-spline-asym_flex.dat'
+$-----------------------------------------------------------------------
+$ W2gj DMI
+$-----------------------------------------------------------------------
+INCLUDE './BULK/p400r3-w2gj-sym_full.dat'
+$-----------------------------------------------------------------------
+$ MASS MODEL
+$-----------------------------------------------------------------------
+INCLUDE './DATA/101006_MASS_DB/mft400r5-L01_wo_LRU.mass'
+INCLUDE './BULK/balance_101012.mass'
+INCLUDE './BULK/system_101012.mass'
+INCLUDE './BULK/cabin_empty_100714.mass'
+$                                                                       $
+$                     * * * GLOBAL PARAMETERS * * *                     $
+$
+PARAM   POST    0
+PARAM   OPPHIPA 1
+PARAM   WTMASS  1.00
+PARAM   GRDPNT  0
+PARAM   BAILOUT -1
+$
+$                  * * * SOLUTION SPECIFICATIONS * * *                  $
+$                                                                       $
+$                       * * AERODYNAMIC DOFS * *                        $
+$                                                                       $
+$        THE AESTAT ENTRY LISTS TRIM VARIABLES USED TO SPECIFY          $
+$        RIGID BODY MOTIONS.  THESE AND THE CONTROL SURFACE             $
+$        ROTATIONS MAKE UP THE VARIABLES IN THE EQUATIONS OF            $
+$        MOTION.                                                        $
+$                                                                       $
+$AESTAT ID      LABEL
+AESTAT  1711    ANGLEA
+AESTAT  1712    ROLL
+AESTAT  1713    YAW
+AESTAT  1714    URDD2
+AESTAT  1715    URDD4
+AESTAT  1716    URDD6
+$                                                                       $
+$                        * * TRIM CONDITIONS * *                        $
+$                                                                       $
+$ FREE TRIM SETUP:
+$ - ANGLEA (angle of attack): FREE - solver finds alpha for Fz balance
+$ - ELEV (elevator deflection): FREE - solver finds delta_e for My balance
+$ - All other variables: FIXED at 0.0 (symmetric straight flight)
+$ - ARON (aileron): FIXED at 0.0 (no asymmetric deflection)
+$
+$ Variables NOT listed on TRIM card are treated as FREE.
+$ n_free = 2 (ANGLEA, ELEV), n_constraints = 2 (Fz=W, My=0)
+$ System is exactly determined: n_free == n_constraints
+$                                                                       $
+$TRIM   ID      MACH    Q       LABEL1  UX1     LABEL2  UX2
+$       LABEL3  UX3     -etc.-
+TRIM    1       0.10000 7.0927-4ROLL    0.000   YAW     0.000           +TR1
++TR1    URDD2   0.000   URDD4   0.000   URDD6   0.000   ARON    0.000   +TR1
++TR1    RUD     0.000
+$
+TRIM    2       0.20000 2.8371-3ROLL    0.000   YAW     0.000           +TR2
++TR2    URDD2   0.000   URDD4   0.000   URDD6   0.000   ARON    0.000   +TR2
++TR2    RUD     0.000
+$
+TRIM    3       0.30000 6.3835-3ROLL    0.000   YAW     0.000           +TR3
++TR3    URDD2   0.000   URDD4   0.000   URDD6   0.000   ARON    0.000   +TR3
++TR3    RUD     0.000
+$
+TRIM    4       0.40000 1.1348-2ROLL    0.000   YAW     0.000           +TR4
++TR4    URDD2   0.000   URDD4   0.000   URDD6   0.000   ARON    0.000   +TR4
++TR4    RUD     0.000
+$
+TRIM    5       0.50000 1.7732-2ROLL    0.000   YAW     0.000           +TR5
++TR5    URDD2   0.000   URDD4   0.000   URDD6   0.000   ARON    0.000   +TR5
++TR5    RUD     0.000
+$
+TRIM    6       0.60000 2.5534-2ROLL    0.000   YAW     0.000           +TR6
++TR6    URDD2   0.000   URDD4   0.000   URDD6   0.000   ARON    0.000   +TR6
++TR6    RUD     0.000
+$
+TRIM    7       0.70000 3.4754-2ROLL    0.000   YAW     0.000           +TR7
++TR7    URDD2   0.000   URDD4   0.000   URDD6   0.000   ARON    0.000   +TR7
++TR7    RUD     0.000
+$                                                                       $
+ENDDATA
