@@ -220,6 +220,82 @@ def _semi_infinite_vortex(xc, origin, direction):
 # Post-processing helpers (also vectorized)
 # ============================================================
 
+def compute_rigid_clalpha(bdf_model, mach: float = 0.0,
+                          ref_area: float = 0.0) -> float:
+    """Compute rigid lift-curve slope CLα from VLM AIC matrix.
+
+    For unit angle of attack (α = 1 rad), the uniform normalwash is
+    w/V = −1 on every panel.  Solving the AIC system gives the
+    normalised circulation distribution, from which the total lift
+    coefficient (and hence CLα) is obtained.
+
+    The VLM includes all CAERO panels (wing, tail, etc.), so the
+    result is the *aircraft* lift-curve slope — appropriate for the
+    Pratt gust formula (§23.341).
+
+    Math
+    ----
+    AIC:   w_j/V = Σ_i D_ji · γ_i
+    α=1 →  w = −1  (uniform downwash)
+    γ = D⁻¹ · (−1)
+
+    ΔCp_j = 2·γ_j / chord_j
+    CL    = (1/S) · Σ_j (ΔCp_j · Area_j)
+    CLα   = CL / α = CL   (since α = 1 rad)
+
+    Parameters
+    ----------
+    bdf_model : BDFModel
+        Parsed BDF model with CAERO panels and AEROS card.
+    mach : float
+        Mach number for Prandtl-Glauert compressibility correction.
+    ref_area : float
+        Reference area to normalise CL.  If 0 (default), uses
+        AEROS REFS from the BDF model.  Specify a value (in model
+        length units squared, e.g. mm²) to obtain CLα referenced to
+        a different wing area — ensures consistency with W/S in the
+        Pratt gust formula.
+
+    Returns
+    -------
+    float
+        Lift-curve slope CLα in per-radian.
+    """
+    from .panel import generate_all_panels
+
+    boxes = generate_all_panels(bdf_model, use_nastran_eid=True)
+    n = len(boxes)
+    if n == 0:
+        return 2.0 * np.pi  # fallback: thin airfoil
+
+    # Reference area
+    if ref_area > 0:
+        S = ref_area
+    else:
+        aeros = getattr(bdf_model, 'aeros', None)
+        if aeros is None:
+            raise ValueError(
+                "BDF model has no AEROS card; cannot determine S_ref. "
+                "Pass ref_area explicitly.")
+        S = aeros.refs if aeros.refs else 1.0
+
+    # Build AIC and solve for unit-α circulation
+    D = build_aic_matrix(boxes, mach=mach)
+    rhs = -np.ones(n)          # w/V = -1 for α = 1 rad
+    gamma = np.linalg.solve(D, rhs)  # normalised circulation
+
+    # Panel geometry
+    areas = np.array([b.area for b in boxes])
+    chords = np.array([b.chord for b in boxes])
+
+    # ΔCp = 2γ/c,  CL = (1/S) Σ(ΔCp · Area)
+    safe_chords = np.maximum(chords, 1e-30)
+    delta_cp = 2.0 * gamma / safe_chords
+    CL = np.sum(delta_cp * areas) / S
+
+    return float(CL)
+
+
 def compute_aero_forces(boxes: List[AeroBox], delta_cp: np.ndarray,
                         q: float) -> np.ndarray:
     """Compute aerodynamic forces from pressure difference coefficients."""

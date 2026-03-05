@@ -7,12 +7,11 @@ for systematic loads analysis. It supports:
 - Load factor sweeps (V-n diagram corners)
 - ISA atmospheric model for dynamic pressure computation
 - CSV import/export for case management
+- TrimCondition → TRIM card conversion (for solver integration)
+- Batch trim case execution via solve_trim_cases()
 
-Future extensions:
-- Maneuver envelope generation (balanced/unbalanced)
-- Gust load cases (1-cosine, continuous turbulence)
-- Landing / ground load conditions
-- Design load selection and enveloping
+Certification load case generation is in:
+  nastaero.loads_analysis.certification.load_case_matrix
 """
 from __future__ import annotations
 import math
@@ -291,3 +290,132 @@ class CaseGenerator:
                     tc.q, tc.velocity,
                     ';'.join(tc.free_vars), tc.label
                 ])
+
+
+# ---------------------------------------------------------------------------
+# TrimCondition → TRIM card bridge
+# ---------------------------------------------------------------------------
+
+def trim_condition_to_trim_card(tc: TrimCondition, tid: int = None):
+    """Convert a TrimCondition to a TRIM card dataclass.
+
+    Creates a TRIM card with:
+    - All fixed_vars as label-value pairs
+    - URDD3 = tc.nz (load factor) if not already in fixed_vars
+    - Free vars are NOT listed (solver determines them from AESTAT labels)
+
+    Parameters
+    ----------
+    tc : TrimCondition
+        The trim condition to convert.
+    tid : int, optional
+        Override TRIM card ID. Default: tc.case_id.
+
+    Returns
+    -------
+    TRIM card dataclass (from nastaero.bdf.cards.aero)
+    """
+    from ..bdf.cards.aero import TRIM
+
+    trim = TRIM()
+    trim.tid = tid if tid is not None else tc.case_id
+    trim.mach = tc.mach
+    trim.q = tc.q
+    trim.aeqr = 1.0
+
+    # Build variables list: all fixed vars + URDD3 for load factor
+    variables = []
+    for label, value in tc.fixed_vars.items():
+        variables.append((label.upper(), value))
+
+    # Add URDD3 = nz if not already specified
+    fixed_labels_upper = {k.upper() for k in tc.fixed_vars}
+    if "URDD3" not in fixed_labels_upper:
+        variables.append(("URDD3", tc.nz))
+
+    trim.variables = variables
+    return trim
+
+
+def trim_conditions_to_model(base_model, cases: List[TrimCondition]):
+    """Inject TrimConditions into a BDF model as TRIM cards and subcases.
+
+    Modifies the model in-place by adding TRIM cards and subcases.
+    Existing subcases and TRIM cards are preserved; new ones are appended
+    with IDs starting after the current maximum.
+
+    Parameters
+    ----------
+    base_model : BDFModel
+        The base BDF model (with structural/aero data).
+    cases : list of TrimCondition
+        Trim conditions to inject.
+
+    Returns
+    -------
+    list of tuple (TRIM, subcase_id)
+        The created TRIM cards and their subcase IDs.
+    """
+    from ..bdf.model import Subcase
+
+    # Determine starting IDs
+    existing_trim_ids = set(base_model.trims.keys()) if base_model.trims else set()
+    existing_sc_ids = {sc.id for sc in base_model.subcases} if base_model.subcases else set()
+
+    max_trim_id = max(existing_trim_ids) if existing_trim_ids else 0
+    max_sc_id = max(existing_sc_ids) if existing_sc_ids else 0
+
+    created = []
+    for i, tc in enumerate(cases):
+        trim_id = max_trim_id + i + 1
+        sc_id = max_sc_id + i + 1
+
+        # Create TRIM card
+        trim_card = trim_condition_to_trim_card(tc, tid=trim_id)
+        base_model.trims[trim_id] = trim_card
+
+        # Create subcase
+        subcase = Subcase()
+        subcase.id = sc_id
+        subcase.trim_id = trim_id
+        subcase.label = tc.label
+        if not base_model.subcases:
+            base_model.subcases = []
+        base_model.subcases.append(subcase)
+
+        created.append((trim_card, sc_id))
+
+    return created
+
+
+def solve_trim_cases(base_model, cases: List[TrimCondition],
+                     n_workers: int = 0, blas_threads: int = 1):
+    """Solve multiple TrimConditions using the SOL 144 solver.
+
+    This is the high-level API for running certification trim cases.
+    It converts TrimConditions to TRIM cards, injects them into the model,
+    and runs the solver.
+
+    Parameters
+    ----------
+    base_model : BDFModel
+        The base BDF model. Will be modified in-place (TRIM cards/subcases added).
+    cases : list of TrimCondition
+        Trim conditions to solve.
+    n_workers : int
+        Parallel workers: 0=sequential, -1=auto, >0=explicit.
+    blas_threads : int
+        BLAS threads per worker.
+
+    Returns
+    -------
+    ResultData
+        Solver results with one SubcaseResult per TrimCondition.
+    """
+    from ..solvers.sol144 import solve_trim
+
+    # Inject cases into model
+    trim_conditions_to_model(base_model, cases)
+
+    # Solve
+    return solve_trim(base_model, n_workers=n_workers, blas_threads=blas_threads)

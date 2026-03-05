@@ -198,6 +198,137 @@ def compute_vmt(
     )
 
 
+def compute_vmt_fuselage_cg(
+    model: Any,
+    nodal_forces: Dict[int, np.ndarray],
+    component: ComponentDef,
+    cg_x: float,
+    n_stations: int = 50,
+    elastic_axis_frac: float = 0.40,
+    load_type: str = 'combined',
+    subcase_id: int = 0,
+) -> VMTCurve:
+    """Compute fuselage VMT by integrating from CG forward and aft.
+
+    Instead of integrating all forces from one end, this splits the
+    fuselage at the CG position and integrates:
+    - Forward of CG: sum forces/moments from nose toward CG
+    - Aft of CG: sum forces/moments from tail toward CG
+
+    This produces a VMT distribution that peaks at the CG and goes to
+    zero at both ends, which is the standard fuselage loads presentation.
+
+    Parameters
+    ----------
+    model : BDFModel or VizModel
+    nodal_forces : Dict[int, ndarray(6)]
+    component : ComponentDef
+        Fuselage component definition (span_axis=0).
+    cg_x : float
+        Aircraft CG position along X axis (mm).
+    n_stations : int
+    elastic_axis_frac : float
+    load_type : str
+    subcase_id : int
+
+    Returns
+    -------
+    VMTCurve
+        Combined forward+aft VMT with stations from nose to tail.
+    """
+    span_ax = component.span_axis
+    shear_ax = component.shear_axis
+    bend_ax = component.bending_axis
+    torsion_ax = component.torsion_axis
+
+    # Collect node data
+    valid_nids = []
+    for nid in component.node_ids:
+        if nid in model.nodes and nid in nodal_forces:
+            valid_nids.append(nid)
+
+    if not valid_nids:
+        return _empty_curve(component, load_type, subcase_id)
+
+    k = len(valid_nids)
+    all_xyz = np.array([model.nodes[nid].xyz_global for nid in valid_nids],
+                        dtype=np.float64)
+    all_f6 = np.array([nodal_forces[nid] for nid in valid_nids],
+                       dtype=np.float64)
+    all_span = all_xyz[:, span_ax]
+
+    span_min, span_max = all_span.min(), all_span.max()
+    if span_max - span_min < 1e-6:
+        return _empty_curve(component, load_type, subcase_id)
+
+    n_stations = min(n_stations, max(k // 2, 10))
+
+    # Create stations from nose to tail (ascending X)
+    stations = np.linspace(span_min, span_max, n_stations)
+
+    # Chord axis for elastic axis computation
+    if span_ax == 1:
+        chord_ax = 0
+    elif span_ax == 2:
+        chord_ax = 0
+    else:
+        chord_ax = 2
+
+    ref_chord = _compute_elastic_axis(all_xyz, all_span, stations,
+                                       chord_ax, elastic_axis_frac)
+
+    V = np.zeros(n_stations)
+    M = np.zeros(n_stations)
+    T = np.zeros(n_stations)
+
+    for i, s_cut in enumerate(stations):
+        if s_cut <= cg_x:
+            # Forward of CG: integrate from nose (nodes with x <= s_cut)
+            mask = all_span <= s_cut
+        else:
+            # Aft of CG: integrate from tail (nodes with x >= s_cut)
+            mask = all_span >= s_cut
+
+        if not np.any(mask):
+            continue
+
+        F_out = all_f6[mask, :3]
+        M_out = all_f6[mask, 3:6]
+        xyz_out = all_xyz[mask]
+
+        cut_point = np.zeros(3)
+        cut_point[span_ax] = s_cut
+        cut_point[chord_ax] = ref_chord[i]
+        third_ax = 3 - span_ax - chord_ax
+        cut_point[third_ax] = xyz_out[:, third_ax].mean()
+
+        r = xyz_out - cut_point
+        sum_F = F_out.sum(axis=0)
+        sum_M = np.cross(r, F_out).sum(axis=0) + M_out.sum(axis=0)
+
+        V[i] = sum_F[shear_ax]
+        M[i] = sum_M[bend_ax]
+        T[i] = sum_M[torsion_ax]
+
+        # Aft side: flip sign so the VMT is consistent from CG perspective
+        if s_cut > cg_x:
+            V[i] = -V[i]
+            M[i] = -M[i]
+            T[i] = -T[i]
+
+    return VMTCurve(
+        component_name=component.name,
+        stations=stations,
+        shear=V,
+        bending_moment=M,
+        torsion=T,
+        span_axis=span_ax,
+        station_label=_AXIS_LABELS.get(span_ax, 'Station'),
+        load_type=load_type,
+        subcase_id=subcase_id,
+    )
+
+
 def compute_vmt_all(
     model: Any,
     nodal_forces: Dict[int, np.ndarray],
@@ -205,6 +336,7 @@ def compute_vmt_all(
     n_stations: int = 50,
     load_type: str = 'combined',
     subcase_id: int = 0,
+    fuselage_cg_x: Optional[float] = None,
 ) -> VMTResult:
     """Compute VMT for all components.
 
@@ -216,6 +348,9 @@ def compute_vmt_all(
     n_stations : int
     load_type : str
     subcase_id : int
+    fuselage_cg_x : float, optional
+        If provided, fuselage components use CG-based forward/aft
+        integration instead of single-direction integration.
 
     Returns
     -------
@@ -223,10 +358,21 @@ def compute_vmt_all(
     """
     result = VMTResult()
     for comp in components.components:
-        curve = compute_vmt(model, nodal_forces, comp,
-                            n_stations=n_stations,
-                            load_type=load_type,
-                            subcase_id=subcase_id)
+        if (fuselage_cg_x is not None
+                and 'fuselage' in comp.name.lower()
+                and comp.span_axis == 0):
+            curve = compute_vmt_fuselage_cg(
+                model, nodal_forces, comp,
+                cg_x=fuselage_cg_x,
+                n_stations=n_stations,
+                load_type=load_type,
+                subcase_id=subcase_id,
+            )
+        else:
+            curve = compute_vmt(model, nodal_forces, comp,
+                                n_stations=n_stations,
+                                load_type=load_type,
+                                subcase_id=subcase_id)
         result.curves.append(curve)
     return result
 

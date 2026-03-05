@@ -18,6 +18,158 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 
+def _handle_cert_visualization(args):
+    """Handle certification-specific visualization commands."""
+    from .cert_plot import (
+        plot_vn_diagram, plot_potato, plot_vmt_envelope,
+        plot_critical_frequency,
+    )
+
+    save_prefix = args.cert_save
+
+    # --- V-n diagram ---
+    if args.cert_vn:
+        if not args.cert_config:
+            print("Error: --cert-vn requires --cert-config CONFIG")
+            sys.exit(1)
+
+        from ..loads_analysis.certification.aircraft_config import AircraftConfig
+        from ..loads_analysis.certification.vn_diagram import VnDiagram
+
+        config_path = args.cert_config
+        if config_path.endswith(('.yaml', '.yml')):
+            import yaml
+            with open(config_path) as f:
+                data = yaml.safe_load(f)
+        else:
+            import json
+            with open(config_path) as f:
+                data = json.load(f)
+
+        config = AircraftConfig.from_dict(data)
+        vn = VnDiagram(config)
+        vn.compute()
+
+        out = f"{save_prefix}_vn.png" if save_prefix else None
+        plot_vn_diagram(vn, output_path=out)
+        print(f"V-n diagram: {len(vn.corners)} corners"
+              + (f" → {out}" if out else ""))
+        return
+
+    # --- Certification envelope, potato, critical ---
+    # These all need batch results; build from cert-dir or load from config
+    if not args.cert_dir and not args.cert_config:
+        print("Error: cert visualization requires --cert-dir DIR "
+              "or --cert-config CONFIG")
+        sys.exit(1)
+
+    # Try to load results from cert directory
+    if args.cert_dir:
+        _cert_plots_from_dir(args, save_prefix)
+    else:
+        # Generate from config (quick: matrix + placeholder batch)
+        _cert_plots_from_config(args, save_prefix)
+
+    print("\nCertification visualization complete.")
+
+
+def _cert_plots_from_config(args, save_prefix):
+    """Generate cert plots from config (placeholder solver mode)."""
+    import json
+    from ..loads_analysis.certification.aircraft_config import AircraftConfig
+    from ..loads_analysis.certification.load_case_matrix import LoadCaseMatrix
+    from ..loads_analysis.certification.batch_runner import BatchRunner
+    from ..loads_analysis.certification.envelope import EnvelopeProcessor
+    from .cert_plot import (
+        plot_potato, plot_vmt_envelope, plot_critical_frequency,
+    )
+    import numpy as np
+
+    config_path = args.cert_config
+    if config_path.endswith(('.yaml', '.yml')):
+        import yaml
+        with open(config_path) as f:
+            data = yaml.safe_load(f)
+    else:
+        with open(config_path) as f:
+            data = json.load(f)
+
+    config = AircraftConfig.from_dict(data)
+    matrix = LoadCaseMatrix(config)
+    matrix.generate_all()
+
+    runner = BatchRunner(matrix, bdf_model=None)
+    batch_result = runner.run()
+
+    # Build synthetic VMT for visualization demo
+    stations = np.array([0, 2500, 5000, 7500, 10000], dtype=float)
+    vmt_data = {}
+    for r in batch_result.case_results:
+        nz = r.nz if r.nz != 0 else 1.0
+        vmt_data[r.case_id] = {
+            "Wing": {
+                "stations": stations,
+                "shear": np.array([50000, 40000, 30000, 15000, 0]) * abs(nz),
+                "bending": np.array([0, 5e7, 8e7, 9e7, 1e8]) * abs(nz),
+                "torsion": np.array([1e6, 8e5, 5e5, 2e5, 0]) * abs(nz),
+            },
+        }
+
+    proc = EnvelopeProcessor(batch_result, vmt_data)
+    proc.compute_envelopes()
+    proc.identify_critical_cases()
+
+    _generate_cert_plots(args, proc, save_prefix)
+
+
+def _cert_plots_from_dir(args, save_prefix):
+    """Generate cert plots from existing certification results directory."""
+    # This would load saved results from a previous --cert-loads run
+    # For now, print guidance
+    print(f"Loading certification results from: {args.cert_dir}")
+    print("Note: Full result loading requires a prior --cert-loads run.")
+    print("Use --cert-config for quick visualization from config.")
+
+
+def _generate_cert_plots(args, proc, save_prefix):
+    """Generate requested cert plots from an EnvelopeProcessor."""
+    from .cert_plot import (
+        plot_potato, plot_vmt_envelope, plot_critical_frequency,
+    )
+
+    component = args.cert_component or "Wing"
+
+    if args.cert_envelope:
+        env = proc.get_envelope(component)
+        if env:
+            out = f"{save_prefix}_{component}_envelope.png" if save_prefix else None
+            plot_vmt_envelope(env, output_path=out)
+            print(f"VMT envelope ({component}): {env.n_cases} cases"
+                  + (f" → {out}" if out else ""))
+        else:
+            print(f"Warning: No envelope data for component '{component}'")
+
+    if args.cert_potato is not None:
+        station = args.cert_potato
+        potato = proc.compute_potato(component, station=station)
+        if potato:
+            out = f"{save_prefix}_{component}_potato_{int(station)}.png" if save_prefix else None
+            plot_potato(potato, output_path=out)
+            print(f"Potato plot ({component} @ {station:.0f}mm): "
+                  f"{potato.n_points} points"
+                  + (f" → {out}" if out else ""))
+        else:
+            print(f"Warning: No potato data for {component} @ {station}")
+
+    if args.cert_critical:
+        freq = proc.critical_case_frequency()
+        if freq:
+            out = f"{save_prefix}_critical_frequency.png" if save_prefix else None
+            plot_critical_frequency(freq, output_path=out)
+            print(f"Critical frequency: {len(freq)} cases"
+                  + (f" → {out}" if out else ""))
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog='nastaero-viz',
@@ -38,6 +190,12 @@ Examples:
   python -m nastaero.visualization --load model.naero --vmt --vmt-loads all
   python -m nastaero.visualization --load model.naero --vmt --vmt-envelope
   python -m nastaero.visualization --load model.naero --vmt --vmt-save vmt_plots
+
+Certification visualization:
+  python -m nastaero.visualization --cert-vn --cert-config config.yaml
+  python -m nastaero.visualization --cert-envelope --cert-config config.yaml
+  python -m nastaero.visualization --cert-potato 5000 --cert-config config.yaml
+  python -m nastaero.visualization --cert-critical --cert-config config.yaml --cert-save out
         """,
     )
 
@@ -104,6 +262,24 @@ Examples:
                         help='Show node ID labels')
     parser.add_argument('--no-arrows', action='store_true',
                         help='Hide aerodynamic force direction arrows')
+
+    # Certification visualization (matplotlib, no PyVista needed)
+    parser.add_argument('--cert-vn', action='store_true',
+                        help='Plot V-n diagram from certification config')
+    parser.add_argument('--cert-envelope', action='store_true',
+                        help='Plot certification VMT envelopes')
+    parser.add_argument('--cert-potato', type=float, default=None, metavar='STATION',
+                        help='Plot potato diagram at given span station (mm)')
+    parser.add_argument('--cert-critical', action='store_true',
+                        help='Plot critical case frequency chart')
+    parser.add_argument('--cert-config', type=str, default=None, metavar='CONFIG',
+                        help='Aircraft config for cert plots (YAML/JSON)')
+    parser.add_argument('--cert-dir', type=str, default=None, metavar='DIR',
+                        help='Directory with certification results')
+    parser.add_argument('--cert-component', type=str, default=None,
+                        help='Component name for cert plots (default: all)')
+    parser.add_argument('--cert-save', type=str, default=None, metavar='PREFIX',
+                        help='Save cert plots to files with this prefix')
 
     # Output
     parser.add_argument('--screenshot', type=str, default=None,
@@ -193,6 +369,13 @@ Examples:
                               label='COMBINED')
             print(f"  FORCE cards written: {base}_aero.bdf, "
                   f"{base}_inertial.bdf, {base}_combined.bdf")
+
+    # --- Certification visualization (matplotlib, early return) ---
+    cert_mode = any([args.cert_vn, args.cert_envelope,
+                     args.cert_potato is not None, args.cert_critical])
+    if cert_mode:
+        _handle_cert_visualization(args)
+        return
 
     # VMT diagrams (matplotlib, no PyVista needed — early return)
     if args.vmt and results and results.subcases:

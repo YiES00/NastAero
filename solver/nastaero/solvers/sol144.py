@@ -293,11 +293,25 @@ def _build_shared_data(bdf_model: BDFModel) -> Optional[TrimSharedData]:
 # ---------------------------------------------------------------------------
 
 def _solve_trim_subcase_from_shared(shared: TrimSharedData,
-                                     trim, subcase_id: int) -> SubcaseResult:
+                                     trim, subcase_id: int,
+                                     nz_override: float = None) -> SubcaseResult:
     """Solve a single trim subcase using pre-computed shared data.
 
     This function is designed to be pickle-safe for multiprocessing.
     All Mach-independent data comes from `shared`.
+
+    Parameters
+    ----------
+    shared : TrimSharedData
+        Pre-computed Mach-independent data.
+    trim : TRIM
+        Trim card for this subcase.
+    subcase_id : int
+        Subcase identifier.
+    nz_override : float, optional
+        If provided, use this load factor instead of extracting from
+        the TRIM card's URDD3 variable.  Default: extract from URDD3
+        or 1.0 if URDD3 is not specified.
     """
     t_start = time.perf_counter()
 
@@ -344,9 +358,19 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
             free_labels.append(label)
 
     n_trim_free = len(free_labels)
-    logger.info("  [SC%d] Trim: %d fixed %s, %d free %s",
+
+    # Determine load factor nz
+    # Priority: nz_override > URDD3 in trim card > default 1.0
+    if nz_override is not None:
+        nz = nz_override
+    else:
+        nz = trim_vars.get("URDD3", 1.0)
+        if nz == 0.0:
+            nz = 1.0   # URDD3=0 means level flight (1g)
+
+    logger.info("  [SC%d] Trim: %d fixed %s, %d free %s, nz=%.3f",
                 subcase_id, len(fixed_labels), list(fixed_labels.keys()),
-                n_trim_free, free_labels)
+                n_trim_free, free_labels, nz)
 
     # 4. Build normalwash vectors for trim variables
     # Forces on structure = G_disp^T @ A_jj @ w  (displacement G for force distribution)
@@ -387,7 +411,7 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
                                             shared.box_id_to_index, shared.bdf_model)
             D_x[0, k] = sum_A @ w_k
         F_z_fixed = sum_A @ w_fixed
-        rhs_trim[0] = shared.total_weight - F_z_fixed
+        rhs_trim[0] = nz * shared.total_weight - F_z_fixed
 
     if n_constraints >= 2:
         moment_arm = np.array([boxes[i].control_point[0] - shared.cg_x
@@ -460,8 +484,8 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
             logger.info("    %s = %.6f", label, val)
     logger.info("  [SC%d] Max displacement = %.6e", subcase_id, np.max(np.abs(u_full)))
     total_lift = np.sum(aero_forces[:, 2])
-    logger.info("  [SC%d] Total aero Fz = %.2f (weight = %.2f)",
-                subcase_id, total_lift, shared.total_weight)
+    logger.info("  [SC%d] Total aero Fz = %.2f (nz*W = %.2f, nz=%.3f)",
+                subcase_id, total_lift, nz * shared.total_weight, nz)
 
     # Pitch moment about CG
     if n_boxes > 0:
@@ -476,7 +500,7 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
 
         aero_nodal, inertial_nodal, combined_nodal = compute_trim_nodal_loads(
             shared.bdf_model, boxes, aero_forces, G_disp, shared.f_dofs, dof_mgr,
-            nz=1.0, g=shared.g)
+            nz=nz, g=shared.g)
 
         sc_result.nodal_aero_forces = aero_nodal
         sc_result.nodal_inertial_forces = inertial_nodal

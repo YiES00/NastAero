@@ -52,6 +52,16 @@ class BDFModel:
     # Spring elements (stored separately from elements dict)
     springs: Dict[int, Any] = field(default_factory=dict)
 
+    @property
+    def conm2s(self) -> Dict[int, Any]:
+        """CONM2 elements filtered from masses dict.
+
+        Returns dict of references to the same objects in self.masses,
+        so attribute writes (e.g., model.conm2s[eid].mass = x) persist.
+        """
+        return {eid: m for eid, m in self.masses.items()
+                if hasattr(m, 'type') and m.type == 'CONM2'}
+
     def cross_reference(self) -> None:
         """Cross-reference elements → properties → materials."""
         for eid, elem in self.elements.items():
