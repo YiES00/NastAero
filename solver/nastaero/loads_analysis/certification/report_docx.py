@@ -698,6 +698,11 @@ class DocxReportWriter:
             "Table 2-1. Aircraft General Parameters"
         ).alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+        # Aircraft configuration figure
+        self._add_image("06_aircraft_model.png", width_inches=6.0,
+                        caption="Figure 2-1. KC-100 Aircraft Configuration "
+                                "(FE Structure + Aerodynamic Panels)")
+
         # Design speeds
         self.doc.add_heading("2.2 Design Speed Schedule", level=2)
         self.doc.add_paragraph(
@@ -877,6 +882,10 @@ class DocxReportWriter:
             self.doc.add_paragraph(
                 "Table 2-5. Structural Model Summary"
             ).alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+            # FE model figure
+            self._add_image("07_fe_model.png", width_inches=5.5,
+                            caption="Figure 2-2. Structural Finite Element Model")
         else:
             self.doc.add_paragraph(
                 "Structural model data was not provided for this report."
@@ -932,6 +941,10 @@ class DocxReportWriter:
             self.doc.add_paragraph(
                 "Table 2-6. Aerodynamic Model Summary"
             ).alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+            # Aero panel figure
+            self._add_image("08_aero_panels.png", width_inches=5.5,
+                            caption="Figure 2-3. DLM Aerodynamic Panel Model")
 
         # VMT Integration
         self.doc.add_heading("2.7 Load Reference Axes and VMT Integration",

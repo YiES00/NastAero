@@ -34,6 +34,64 @@ def main():
           f"{len(model.elements)} elements, "
           f"{len(model.masses)} masses  ({time.time()-t0:.1f}s)")
 
+    # ---- 1b. Generate Model Screenshots ----
+    try:
+        import pyvista as pv
+        from nastaero.visualization.viewer import NastAeroViewer
+        from nastaero.visualization.mesh_builder import (
+            build_structural_mesh, build_beam_tubes, build_rbe_lines,
+        )
+
+        pv.OFF_SCREEN = True
+
+        print(f"\n[1b] Generating model screenshots...")
+
+        viewer = NastAeroViewer(model, off_screen=True)
+
+        # ① Combined FE + aero (aircraft overview)
+        viewer.plot_model(
+            screenshot=os.path.join(output_dir, "06_aircraft_model.png"),
+            title="KC-100 Aircraft Configuration (FE + Aero Model)",
+            window_size=(1400, 900),
+        )
+        print(f"    → 06_aircraft_model.png")
+
+        # ② FE mesh only (shells + beams, NO aero panels)
+        pl = pv.Plotter(off_screen=True, window_size=(1400, 900))
+        shell_mesh = build_structural_mesh(model, include_beams=False)
+        if shell_mesh.n_cells > 0:
+            pl.add_mesh(shell_mesh, color='lightblue', show_edges=True,
+                        edge_color='gray', line_width=1, opacity=1.0,
+                        label='Shells')
+        tubes = build_beam_tubes(model)
+        if tubes is not None:
+            pl.add_mesh(tubes, color='steelblue', opacity=1.0, label='Beams')
+        rbe = build_rbe_lines(model)
+        if rbe is not None:
+            pl.add_mesh(rbe, color='red', line_width=3, label='RBE')
+        n_elem = len(model.elements)
+        n_node = len(model.nodes)
+        pl.add_title(f"Structural FE Model ({n_node:,} nodes, {n_elem:,} elements)",
+                     font_size=14)
+        pl.add_axes()
+        pl.show_bounds(grid=False, location='outer')
+        pl.show(screenshot=os.path.join(output_dir, "07_fe_model.png"))
+        print(f"    → 07_fe_model.png")
+
+        # ③ Aero panels only
+        viewer.plot_aero_model(
+            show_structure=False,
+            show_normals=True,
+            screenshot=os.path.join(output_dir, "08_aero_panels.png"),
+            window_size=(1400, 900),
+        )
+        print(f"    → 08_aero_panels.png")
+
+    except ImportError:
+        print(f"\n[1b] PyVista not available — skipping model screenshots")
+    except Exception as e:
+        print(f"\n[1b] Screenshot generation failed: {e}")
+
     # ---- 2. Aircraft Config ----
     from nastaero.loads_analysis.certification.aircraft_config import (
         AircraftConfig, SpeedSchedule, WeightCGCondition,
