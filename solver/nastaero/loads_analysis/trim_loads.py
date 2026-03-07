@@ -256,13 +256,15 @@ def compute_nodal_inertial_forces(
     bdf_model: BDFModel,
     nz: float,
     g: float,
+    ny: float = 0.0,
 ) -> Dict[int, np.ndarray]:
-    """Compute inertial (gravity) forces at each node for a given load factor.
+    """Compute inertial (gravity) forces at each node for given load factors.
 
-    F_inertia = -m_node * nz * g * k_hat  (negative z-direction for +nz)
+    F_inertia_z = -m_node * nz * g * k_hat  (negative z for +nz)
+    F_inertia_y = -m_node * ny * g * j_hat  (negative y for +ny)
 
-    For 1g level flight: nz = 1.0, so each node gets F_z = -m * g downward,
-    balanced by upward lift.
+    For 1g level flight: nz = 1.0, ny = 0.0.
+    For yaw maneuvers: ny ≠ 0 from lateral acceleration.
 
     Parameters
     ----------
@@ -271,6 +273,8 @@ def compute_nodal_inertial_forces(
         Vertical load factor (1.0 for 1g level flight).
     g : float
         Gravitational acceleration in model units.
+    ny : float
+        Lateral load factor (0.0 for symmetric flight).
 
     Returns
     -------
@@ -286,6 +290,9 @@ def compute_nodal_inertial_forces(
         if m > 0:
             # Inertial load in -z direction for positive nz (upward acceleration)
             f[2] = -m * nz * g
+            # Lateral inertial load for yaw/roll maneuvers
+            if abs(ny) > 1e-6:
+                f[1] = -m * ny * g
         nodal_forces[nid] = f
 
     return nodal_forces
@@ -300,6 +307,7 @@ def compute_trim_nodal_loads(
     dof_mgr,
     nz: float = 1.0,
     g: float = 9810.0,
+    ny: float = 0.0,
 ) -> Tuple[Dict[int, np.ndarray], Dict[int, np.ndarray], Dict[int, np.ndarray]]:
     """Compute all three nodal force sets for a trimmed condition.
 
@@ -315,6 +323,8 @@ def compute_trim_nodal_loads(
         Vertical load factor.
     g : float
         Gravitational acceleration.
+    ny : float
+        Lateral load factor (0.0 for symmetric flight).
 
     Returns
     -------
@@ -327,6 +337,31 @@ def compute_trim_nodal_loads(
     # Aerodynamic forces
     aero_nodal = compute_nodal_aero_forces_fast(
         bdf_model, boxes, aero_forces, G_eff_sparse, f_dofs, dof_mgr)
+
+    # --- Post-spline force conservation ---
+    # The spline transpose G_z.T may not perfectly conserve total force
+    # if the z-DOF interpolation weights don't partition unity (e.g. IPS
+    # spline with non-trivial geometry). Scale each force component
+    # independently so that total nodal force matches total panel force.
+    total_panel = np.zeros(3)
+    for comp in range(3):
+        total_panel[comp] = float(np.sum(np.real(aero_forces[:, comp])))
+
+    total_nodal_raw = np.zeros(3)
+    for f in aero_nodal.values():
+        total_nodal_raw += f[:3]
+
+    for comp in range(3):
+        if abs(total_nodal_raw[comp]) > 1.0 and abs(total_panel[comp]) > 1.0:
+            scale = total_panel[comp] / total_nodal_raw[comp]
+            if abs(scale - 1.0) > 1e-6:
+                logger.info("  Spline force conservation [%s]: "
+                            "panel=%.1f, nodal=%.1f, scale=%.6f",
+                            "XYZ"[comp], total_panel[comp],
+                            total_nodal_raw[comp], scale)
+                for nid in aero_nodal:
+                    aero_nodal[nid][comp] *= scale
+
     total_aero = np.zeros(3)
     for f in aero_nodal.values():
         total_aero += f[:3]
@@ -334,7 +369,7 @@ def compute_trim_nodal_loads(
                 total_aero[0], total_aero[1], total_aero[2])
 
     # Inertial forces
-    inertial_nodal = compute_nodal_inertial_forces(bdf_model, nz, g)
+    inertial_nodal = compute_nodal_inertial_forces(bdf_model, nz, g, ny=ny)
     total_inertial = np.zeros(3)
     for f in inertial_nodal.values():
         total_inertial += f[:3]

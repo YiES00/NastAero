@@ -23,6 +23,7 @@ Usage
 """
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass
 from datetime import datetime
@@ -425,8 +426,214 @@ class DocxReportWriter:
             "along structural components",
             bold_prefix="Loads Integration:",
         )
+        self._add_bullet(
+            "6-DOF rigid-body flight dynamics simulation for "
+            "dynamic maneuver and gust time-domain analysis",
+            bold_prefix="Dynamic Simulation:",
+        )
+
+        # ---- 1.5 Analysis Procedure Flowchart ----
+        self._write_analysis_procedure_flowchart()
 
         self._section_break()
+
+    # ──── Chapter 1.5: Analysis Procedure Flowchart ────────────
+
+    def _write_analysis_procedure_flowchart(self):
+        """Section 1.5: loads analysis procedure as a block-diagram table."""
+        self.doc.add_heading("1.5 Analysis Procedure Overview", level=2)
+        self.doc.add_paragraph(
+            "The following diagram summarises the end-to-end certification "
+            "loads analysis procedure. Static and dynamic load cases are "
+            "generated in parallel, merged into a single envelope, and "
+            "processed through a common internal-loads pipeline."
+        )
+
+        # Build flowchart with tables (works in any docx viewer)
+        # ---- Row 0: Inputs ----
+        t = self.doc.add_table(rows=1, cols=3)
+        t.style = 'Table Grid'
+        t.alignment = WD_TABLE_ALIGNMENT.CENTER
+        boxes_row0 = [
+            ("① FE Model (BDF)\n"
+             "─────────────\n"
+             "• Structural elements\n"
+             "• CONM2 mass dist.\n"
+             "• Aero panels (CAERO)\n"
+             "• Splines (SPLINE)"),
+            ("② Aircraft Config\n"
+             "─────────────\n"
+             "• Weight / CG\n"
+             "• Speed schedule\n"
+             "  (VA, VB, VC, VD)\n"
+             "• Control surface limits"),
+            ("③ FAR 23 Requirements\n"
+             "─────────────\n"
+             "• §23.333 V-n diagram\n"
+             "• §23.337 Load factors\n"
+             "• §23.341 Gust loads\n"
+             "• §23.349/351 Lateral"),
+        ]
+        for i, txt in enumerate(boxes_row0):
+            t.rows[0].cells[i].text = txt
+            _set_cell_shading(t.rows[0].cells[i], "D5E8D4")  # light green
+            for p in t.rows[0].cells[i].paragraphs:
+                for run in p.runs:
+                    run.font.size = Pt(7.5)
+        _set_table_style(t)
+
+        # Arrow
+        p_arrow = self.doc.add_paragraph()
+        p_arrow.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p_arrow.add_run("▼")
+        run.font.size = Pt(14)
+        run.font.color.rgb = RGBColor(0x1A, 0x5C, 0x97)
+        p_arrow.paragraph_format.space_before = Pt(2)
+        p_arrow.paragraph_format.space_after = Pt(2)
+
+        # ---- Row 1: V-n Diagram + VLM Derivatives ----
+        t2 = self.doc.add_table(rows=1, cols=2)
+        t2.style = 'Table Grid'
+        t2.alignment = WD_TABLE_ALIGNMENT.CENTER
+        boxes_row1 = [
+            ("④ V-n Diagram Construction\n"
+             "─────────────────────\n"
+             "• Maneuver envelope  (nz = ±(V/VS1)²)\n"
+             "• Gust envelope  (Pratt formula, Kg alleviation)\n"
+             "• Corner points:  A+, A−, D+, D−, G+, G−, VB±"),
+            ("⑤ VLM Stability Derivatives\n"
+             "─────────────────────\n"
+             "• Perturbation:  CLα, Cmα, CLδe, Cmδe\n"
+             "• Lateral VLM:  CYβ, Clβ, Cnβ, Clδa, CYδr, Cnδr\n"
+             "• Empirical:  Cmq, Clp, Cnr  (damping terms)"),
+        ]
+        for i, txt in enumerate(boxes_row1):
+            t2.rows[0].cells[i].text = txt
+            _set_cell_shading(t2.rows[0].cells[i], "D6EAF8")  # light blue
+            for p in t2.rows[0].cells[i].paragraphs:
+                for run in p.runs:
+                    run.font.size = Pt(7.5)
+        _set_table_style(t2)
+
+        # Split arrow
+        p_arrow2 = self.doc.add_paragraph()
+        p_arrow2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p_arrow2.add_run("▼                                          ▼")
+        run.font.size = Pt(14)
+        run.font.color.rgb = RGBColor(0x1A, 0x5C, 0x97)
+        p_arrow2.paragraph_format.space_before = Pt(2)
+        p_arrow2.paragraph_format.space_after = Pt(2)
+
+        # ---- Row 2: Static + Dynamic paths ----
+        t3 = self.doc.add_table(rows=1, cols=2)
+        t3.style = 'Table Grid'
+        t3.alignment = WD_TABLE_ALIGNMENT.CENTER
+        boxes_row2 = [
+            ("⑥ Static Load Cases\n"
+             "─────────────────────\n"
+             "V-n corner points → trim conditions\n"
+             "\n"
+             "• Symmetric: nz at VA, VD\n"
+             "• Gust:  ΔnG at VB, VC, VD\n"
+             "• Rolling:  δa at VA, VC, VD  (§23.349)\n"
+             "• Yaw:  δr at VA, VC, VD  (§23.351)\n"
+             "• Landing:  gear loads  (§23.471-511)"),
+            ("⑦ Dynamic 6-DOF Simulations\n"
+             "─────────────────────\n"
+             "Time-domain maneuver / gust profiles\n"
+             "\n"
+             "• Elevator pull-up & checked  (§23.331)\n"
+             "• Abrupt roll  (§23.349)\n"
+             "• Yaw maneuver  (§23.351)\n"
+             "• Discrete 1-cos gust  (§23.341)\n"
+             "→ extract critical time points\n"
+             "  (max nz, |q̇|, |ṗ|, |ṙ|, |β|)"),
+        ]
+        for i, txt in enumerate(boxes_row2):
+            t3.rows[0].cells[i].text = txt
+            color = "FFF2CC" if i == 0 else "FCE4D6"  # yellow / orange
+            _set_cell_shading(t3.rows[0].cells[i], color)
+            for p in t3.rows[0].cells[i].paragraphs:
+                for run in p.runs:
+                    run.font.size = Pt(7.5)
+        _set_table_style(t3)
+
+        # Merge arrow
+        p_arrow3 = self.doc.add_paragraph()
+        p_arrow3.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p_arrow3.add_run("▼──────────── merge ────────────▼")
+        run.font.size = Pt(10)
+        run.font.color.rgb = RGBColor(0x1A, 0x5C, 0x97)
+        p_arrow3.paragraph_format.space_before = Pt(2)
+        p_arrow3.paragraph_format.space_after = Pt(2)
+
+        # ---- Row 3: SOL 144 Solver ----
+        t4 = self.doc.add_table(rows=1, cols=1)
+        t4.style = 'Table Grid'
+        t4.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t4.rows[0].cells[0].text = (
+            "⑧ SOL 144 — Static Aeroelastic Trim Solver\n"
+            "───────────────────────────────────────────\n"
+            "All static + dynamic cases solved: "
+            " [K − q·Q_aa] · {u} = {P} + q·[Q_ax]·{u_x}\n"
+            "→ Elastic deformation → Nodal forces "
+            "(aerodynamic + inertial + applied)"
+        )
+        _set_cell_shading(t4.rows[0].cells[0], "E8DAEF")  # light purple
+        for p in t4.rows[0].cells[0].paragraphs:
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for run in p.runs:
+                run.font.size = Pt(7.5)
+        _set_table_style(t4)
+
+        # Arrow
+        p_arrow4 = self.doc.add_paragraph()
+        p_arrow4.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p_arrow4.add_run("▼")
+        run.font.size = Pt(14)
+        run.font.color.rgb = RGBColor(0x1A, 0x5C, 0x97)
+        p_arrow4.paragraph_format.space_before = Pt(2)
+        p_arrow4.paragraph_format.space_after = Pt(2)
+
+        # ---- Row 4: Post-processing ----
+        t5 = self.doc.add_table(rows=1, cols=3)
+        t5.style = 'Table Grid'
+        t5.alignment = WD_TABLE_ALIGNMENT.CENTER
+        boxes_row4 = [
+            ("⑨ VMT Integration\n"
+             "─────────────\n"
+             "Shear, Bending\n"
+             "Moment, Torsion\n"
+             "at monitoring\n"
+             "stations"),
+            ("⑩ Envelope\n"
+             "─────────────\n"
+             "Max/Min over all\n"
+             "cases per station\n"
+             "→ Critical design\n"
+             "loads & cases"),
+            ("⑪ Output\n"
+             "─────────────\n"
+             "• Force cards (BDF)\n"
+             "• Summary CSV\n"
+             "• Certification\n"
+             "  report (.docx)"),
+        ]
+        for i, txt in enumerate(boxes_row4):
+            t5.rows[0].cells[i].text = txt
+            _set_cell_shading(t5.rows[0].cells[i], "DAEEF3")  # light teal
+            for p in t5.rows[0].cells[i].paragraphs:
+                for run in p.runs:
+                    run.font.size = Pt(7.5)
+        _set_table_style(t5)
+
+        self.doc.add_paragraph()
+        cap = self.doc.add_paragraph()
+        cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = cap.add_run("Figure 1-1. Certification Loads Analysis Procedure")
+        run.font.size = Pt(9)
+        run.font.italic = True
+        run.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
 
     # ──── Chapter 2: Aircraft Description ──────────────────────
 
@@ -1609,30 +1816,278 @@ class DocxReportWriter:
         # Critical cases detail
         all_critical = self.proc.get_critical_cases()
         if all_critical:
-            self.doc.add_heading(
-                "7.5 Critical Design Load Conditions Summary", level=2
-            )
+            self._write_critical_conditions_summary(all_critical)
 
-            # Group by component
-            from collections import defaultdict
-            by_comp = defaultdict(list)
-            for cc in all_critical:
-                by_comp[cc.component].append(cc)
-
-            for comp, cases in sorted(by_comp.items()):
-                self.doc.add_heading(comp, level=3)
-                for cc in cases:
-                    cr = self.batch.get_result(cc.case_id)
-                    label = (cr.label if cr and cr.label
-                             else f"Case {cc.case_id}")
-                    nz_str = f"nz={cr.nz:+.2f}" if cr else ""
-                    self._add_bullet(
-                        f"= {cc.value:,.0f} at station {cc.station:.0f} "
-                        f"← {label} ({cc.category}, {nz_str})",
-                        bold_prefix=f"{cc.extreme.upper()} {cc.quantity}",
-                    )
+        # ---- 7.6 Critical Flight Conditions ----
+        self._write_critical_flight_conditions(all_critical)
 
         self._section_break()
+
+    # ──── Chapter 7.5: Critical conditions summary (compact) ──
+
+    def _write_critical_conditions_summary(self, all_critical):
+        """Section 7.5: compact one-page summary of critical design loads.
+
+        Shows a single table per component with max/min V, M, T,
+        controlling case, and load category. The full station-by-station
+        detail is deferred to Appendix B.
+        """
+        from collections import defaultdict
+
+        self.doc.add_heading(
+            "7.5 Critical Design Load Conditions Summary", level=2
+        )
+        self.doc.add_paragraph(
+            "The following tables present the overall critical (envelope-"
+            "defining) design loads for each structural component. Only the "
+            "global extreme values per load quantity are shown; the full "
+            "station-by-station breakdown is provided in Appendix B."
+        )
+
+        # Group by component
+        by_comp = defaultdict(list)
+        for cc in all_critical:
+            by_comp[cc.component].append(cc)
+
+        table_num = len(by_comp) + 2  # after 7-1 (category dist) and 7-2…
+
+        for comp, cases in sorted(by_comp.items()):
+            # Find the overall max/min for each quantity
+            extremes = {}  # (quantity, extreme) -> CriticalCase
+            for cc in cases:
+                key = (cc.quantity, cc.extreme)
+                if key not in extremes:
+                    extremes[key] = cc
+                else:
+                    prev = extremes[key]
+                    if cc.extreme == "max" and cc.value > prev.value:
+                        extremes[key] = cc
+                    elif cc.extreme == "min" and cc.value < prev.value:
+                        extremes[key] = cc
+
+            # Also count unique controlling case IDs for this component
+            unique_case_ids = set(cc.case_id for cc in cases)
+            n_stations = len(set(cc.station for cc in cases))
+
+            self.doc.add_heading(comp, level=3)
+            self.doc.add_paragraph(
+                f"{len(cases)} critical conditions at {n_stations} monitoring "
+                f"stations, driven by {len(unique_case_ids)} unique load cases."
+            )
+
+            # Summary table: Qty | Extreme | Value | Station | Case ID | Category | Label
+            st = self.doc.add_table(rows=1, cols=7)
+            st.style = 'Table Grid'
+            hdr = st.rows[0]
+            for i, h in enumerate([
+                "Qty", "Extreme", "Value", "Station\n(mm)",
+                "Case ID", "Category", "Label",
+            ]):
+                hdr.cells[i].text = h
+            _format_header_row(hdr)
+
+            for qty in ("V", "M", "T"):
+                for ext in ("max", "min"):
+                    cc = extremes.get((qty, ext))
+                    if cc is None:
+                        continue
+                    cr = self.batch.get_result(cc.case_id)
+                    label = (cr.label[:30] if cr and cr.label
+                             else f"Case {cc.case_id}")
+                    row = st.add_row()
+                    row.cells[0].text = qty
+                    row.cells[1].text = ext
+                    row.cells[2].text = f"{cc.value:,.0f}"
+                    row.cells[3].text = f"{cc.station:.0f}"
+                    row.cells[4].text = str(cc.case_id)
+                    cat_short = cc.category.replace("dynamic_", "dyn_")
+                    row.cells[5].text = cat_short
+                    row.cells[6].text = label
+
+                    row.cells[0].paragraphs[0].alignment = \
+                        WD_ALIGN_PARAGRAPH.CENTER
+                    row.cells[1].paragraphs[0].alignment = \
+                        WD_ALIGN_PARAGRAPH.CENTER
+                    for j in (2, 3, 4):
+                        row.cells[j].paragraphs[0].alignment = \
+                            WD_ALIGN_PARAGRAPH.RIGHT
+
+            for row in st.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        for run in p.runs:
+                            run.font.size = Pt(7.5)
+
+            _set_table_style(st)
+            _add_alt_row_shading(st)
+            self.doc.add_paragraph()
+
+        self.doc.add_paragraph(
+            "Note: V = Shear (N), M = Bending Moment (N·mm), "
+            "T = Torsion (N·mm). Complete station-by-station detail "
+            "is in Appendix B."
+        ).runs[0].font.italic = True
+
+    # ──── Chapter 7.6: Critical flight conditions ────────────
+
+    def _write_critical_flight_conditions(self, all_critical):
+        """Section 7.6: flight state at each critical design condition.
+
+        Shows altitude, velocity, load factors, angular rates,
+        control-surface deflections, and AoA/sideslip for every
+        unique critical load case.
+        """
+        if not all_critical:
+            return
+
+        # Collect unique case IDs that drive the envelope
+        seen_ids = set()
+        unique_cases = []
+        for cc in all_critical:
+            if cc.case_id in seen_ids:
+                continue
+            seen_ids.add(cc.case_id)
+            cr = self.batch.get_result(cc.case_id)
+            if cr is None:
+                continue
+            unique_cases.append((cc, cr))
+
+        if not unique_cases:
+            return
+
+        # Switch to landscape for wide table
+        new_section = self.doc.add_section(WD_ORIENT.LANDSCAPE)
+        new_section.orientation = WD_ORIENT.LANDSCAPE
+        new_section.page_width = Cm(29.7)
+        new_section.page_height = Cm(21.0)
+        new_section.left_margin = Cm(1.5)
+        new_section.right_margin = Cm(1.5)
+        new_section.top_margin = Cm(2.0)
+        new_section.bottom_margin = Cm(2.0)
+
+        self.doc.add_heading(
+            "7.6 Critical Flight Conditions", level=2
+        )
+        self.doc.add_paragraph(
+            "The following table documents the flight state at each "
+            "critical design load condition. For cases derived from "
+            "6-DOF dynamic simulations (case IDs ≥ 10000), the values "
+            "correspond to the time instant at which the critical "
+            "response peak occurred. For static trim cases, the values "
+            "are the prescribed trim inputs."
+        )
+
+        # ---------- Table ----------
+        headers = [
+            "Case ID", "Category", "Label",
+            "Alt\n(m)", "V_EAS\n(m/s)", "Mach",
+            "nz\n(g)", "ny\n(g)",
+            "α\n(°)", "β\n(°)",
+            "p\n(°/s)", "q\n(°/s)", "r\n(°/s)",
+            "ṗ\n(°/s²)", "q̇\n(°/s²)", "ṙ\n(°/s²)",
+            "δe\n(°)", "δa\n(°)", "δr\n(°)",
+        ]
+        n_cols = len(headers)
+        tbl = self.doc.add_table(rows=1, cols=n_cols)
+        tbl.style = 'Table Grid'
+        hdr_row = tbl.rows[0]
+        for i, h in enumerate(headers):
+            hdr_row.cells[i].text = h
+        _format_header_row(hdr_row)
+
+        for cc, cr in sorted(unique_cases, key=lambda x: x[1].case_id):
+            fs = cr.flight_state or {}
+            row = tbl.add_row()
+
+            # Identifiers
+            row.cells[0].text = str(cr.case_id)
+            cat_short = cr.category.replace("dynamic_", "dyn_")
+            row.cells[1].text = cat_short
+            label_short = cr.label[:28] if cr.label else ""
+            row.cells[2].text = label_short
+
+            # Flight condition
+            row.cells[3].text = f"{fs.get('altitude_m', cr.altitude_m):.0f}"
+            row.cells[4].text = f"{fs.get('V_eas_m_s', 0):.1f}"
+            row.cells[5].text = f"{fs.get('mach', cr.mach):.3f}"
+
+            # Load factors
+            row.cells[6].text = f"{fs.get('nz', cr.nz):+.2f}"
+            row.cells[7].text = f"{fs.get('ny', 0):+.2f}"
+
+            # Angles
+            row.cells[8].text = f"{fs.get('alpha_deg', 0):.2f}"
+            row.cells[9].text = f"{fs.get('beta_deg', 0):.2f}"
+
+            # Angular rates (convert rad/s → deg/s for readability)
+            p_dps = math.degrees(fs.get('p_rad_s', 0))
+            q_dps = math.degrees(fs.get('q_rad_s', 0))
+            r_dps = math.degrees(fs.get('r_rad_s', 0))
+            row.cells[10].text = f"{p_dps:+.1f}"
+            row.cells[11].text = f"{q_dps:+.1f}"
+            row.cells[12].text = f"{r_dps:+.1f}"
+
+            # Angular accelerations (convert rad/s² → deg/s²)
+            pd_dps2 = math.degrees(fs.get('p_dot_rad_s2', 0))
+            qd_dps2 = math.degrees(fs.get('q_dot_rad_s2', 0))
+            rd_dps2 = math.degrees(fs.get('r_dot_rad_s2', 0))
+            row.cells[13].text = f"{pd_dps2:+.1f}"
+            row.cells[14].text = f"{qd_dps2:+.1f}"
+            row.cells[15].text = f"{rd_dps2:+.1f}"
+
+            # Control surface deflections
+            row.cells[16].text = f"{fs.get('delta_e_deg', 0):+.1f}"
+            row.cells[17].text = f"{fs.get('delta_a_deg', 0):+.1f}"
+            row.cells[18].text = f"{fs.get('delta_r_deg', 0):+.1f}"
+
+            # Right-align numeric cells
+            for j in range(3, n_cols):
+                row.cells[j].paragraphs[0].alignment = \
+                    WD_ALIGN_PARAGRAPH.RIGHT
+
+        # Compact font (19-column table needs tight sizing)
+        for row in tbl.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    for run in p.runs:
+                        run.font.size = Pt(6)
+
+        _set_table_style(tbl)
+        _add_alt_row_shading(tbl)
+        self.doc.add_paragraph()
+        self.doc.add_paragraph(
+            "Table 7-X. Flight State at Critical Design Load Conditions"
+        ).alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Dynamic-only detail: reason for criticality
+        dyn_cases = [(cc, cr) for cc, cr in unique_cases
+                     if cr.case_id >= 10000]
+        if dyn_cases:
+            self.doc.add_paragraph()
+            self.doc.add_paragraph(
+                "For dynamic simulation cases, the critical response "
+                "parameter that triggered each time point extraction:"
+            )
+            for cc, cr in sorted(dyn_cases,
+                                  key=lambda x: x[1].case_id):
+                fs = cr.flight_state or {}
+                reason = fs.get('reason', '')
+                mtype = fs.get('maneuver_type', cr.category)
+                if reason:
+                    self._add_bullet(
+                        f" — {reason} (maneuver: {mtype})",
+                        bold_prefix=f"Case {cr.case_id}",
+                    )
+
+        # Revert to portrait
+        port_section = self.doc.add_section(WD_ORIENT.PORTRAIT)
+        port_section.orientation = WD_ORIENT.PORTRAIT
+        port_section.page_width = Cm(21.0)
+        port_section.page_height = Cm(29.7)
+        port_section.left_margin = Cm(2.0)
+        port_section.right_margin = Cm(2.0)
+        port_section.top_margin = Cm(2.0)
+        port_section.bottom_margin = Cm(2.0)
 
     # ──── Chapter 8: Regulatory Compliance ────────────────────
 
@@ -1916,6 +2371,103 @@ class DocxReportWriter:
                 "Table A-3. Solver Results per Load Case"
             ).alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+    # ──── Appendix B: Full critical condition detail ──────────
+
+    def _write_appendix_b(self):
+        """Appendix B: Full critical design load conditions detail.
+
+        Station-by-station listing of every envelope-defining load case
+        for each structural component. This is the verbose version of
+        Section 7.5 (which shows only the global extremes).
+        """
+        all_critical = self.proc.get_critical_cases()
+        if not all_critical:
+            return
+
+        from collections import defaultdict
+
+        self.doc.add_heading(
+            "APPENDIX B — CRITICAL DESIGN LOAD CONDITIONS (DETAIL)",
+            level=1,
+        )
+        self.doc.add_paragraph(
+            "This appendix provides the complete station-by-station "
+            "critical design load conditions for each structural "
+            "component. At every monitoring station, the maximum and "
+            "minimum values of shear (V), bending moment (M), and "
+            "torsion (T) are listed with the controlling load case."
+        )
+
+        by_comp = defaultdict(list)
+        for cc in all_critical:
+            by_comp[cc.component].append(cc)
+
+        table_num = 1
+        for comp, cases in sorted(by_comp.items()):
+            self.doc.add_heading(f"B.{table_num} {comp}", level=2)
+
+            bt = self.doc.add_table(rows=1, cols=8)
+            bt.style = 'Table Grid'
+            hdr = bt.rows[0]
+            for i, h in enumerate([
+                "Station\n(mm)", "Qty", "Extreme",
+                "Value", "Case ID", "Category",
+                "nz\n(g)", "Label",
+            ]):
+                hdr.cells[i].text = h
+            _format_header_row(hdr)
+
+            # Sort by station, then quantity, then extreme
+            qty_order = {"V": 0, "M": 1, "T": 2}
+            ext_order = {"max": 0, "min": 1}
+            sorted_cases = sorted(
+                cases,
+                key=lambda c: (
+                    c.station,
+                    qty_order.get(c.quantity, 9),
+                    ext_order.get(c.extreme, 9),
+                ),
+            )
+
+            for cc in sorted_cases:
+                cr = self.batch.get_result(cc.case_id)
+                label = (cr.label[:26] if cr and cr.label
+                         else f"Case {cc.case_id}")
+                nz_str = f"{cr.nz:+.2f}" if cr else "—"
+                cat_short = cc.category.replace("dynamic_", "dyn_")
+
+                row = bt.add_row()
+                row.cells[0].text = f"{cc.station:.0f}"
+                row.cells[1].text = cc.quantity
+                row.cells[2].text = cc.extreme
+                row.cells[3].text = f"{cc.value:,.0f}"
+                row.cells[4].text = str(cc.case_id)
+                row.cells[5].text = cat_short
+                row.cells[6].text = nz_str
+                row.cells[7].text = label
+
+                for j in (0, 3, 4, 6):
+                    row.cells[j].paragraphs[0].alignment = \
+                        WD_ALIGN_PARAGRAPH.RIGHT
+                for j in (1, 2, 5):
+                    row.cells[j].paragraphs[0].alignment = \
+                        WD_ALIGN_PARAGRAPH.CENTER
+
+            for row in bt.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        for run in p.runs:
+                            run.font.size = Pt(6.5)
+
+            _set_table_style(bt)
+            _add_alt_row_shading(bt)
+            self.doc.add_paragraph()
+            self.doc.add_paragraph(
+                f"Table B-{table_num}. Critical Design Loads — "
+                f"{comp} (All Stations)"
+            ).alignment = WD_ALIGN_PARAGRAPH.CENTER
+            table_num += 1
+
     # ──────────────────────────────────────────────────────────────
     # Main generate method
     # ──────────────────────────────────────────────────────────────
@@ -1950,6 +2502,7 @@ class DocxReportWriter:
         self._write_ch8_compliance()
         self._write_ch9_conclusions()
         self._write_appendix_a()
+        self._write_appendix_b()
 
         # Footer: page numbers
         self._add_page_numbers()

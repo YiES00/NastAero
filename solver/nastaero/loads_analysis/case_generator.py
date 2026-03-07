@@ -142,8 +142,7 @@ class CaseGenerator:
             free_vars = ["ANGLEA", "ELEV"]
         if fixed_defaults is None:
             fixed_defaults = {
-                "ROLL": 0.0, "YAW": 0.0,
-                "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
+                "ROLL": 0.0, "YAW": 0.0, "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
                 "ARON": 0.0, "RUD": 0.0,
             }
 
@@ -195,8 +194,7 @@ class CaseGenerator:
             free_vars = ["ANGLEA", "ELEV"]
 
         fixed_defaults = {
-            "ROLL": 0.0, "YAW": 0.0,
-            "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
+            "ROLL": 0.0, "YAW": 0.0, "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
             "ARON": 0.0, "RUD": 0.0,
         }
 

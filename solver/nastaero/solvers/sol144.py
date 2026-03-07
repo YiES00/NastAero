@@ -93,6 +93,12 @@ class TrimSharedData:
     G_d_active: Any = None        # G_disp active columns (displacement)
     K_reg: Any = None
 
+    # K_eff factorization cache by (mach, q)
+    # Key: (round(mach, 8), round(q, 8))
+    # Value: {'D_inv': ndarray, 'A_jj': ndarray,
+    #         'solve_fn': callable, 'K_eff_csc': csc_matrix}
+    _solver_cache: Any = None     # initialized to {} in _build_shared_data
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -284,6 +290,7 @@ def _build_shared_data(bdf_model: BDFModel) -> Optional[TrimSharedData]:
         all_trim_labels=all_trim_labels,
         active_cols=active_cols, G_w_active=G_w_active_arr,
         G_d_active=G_d_active_arr, K_reg=K_reg,
+        _solver_cache={},
     )
     return shared
 
@@ -321,25 +328,44 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
     q = trim.q
     mach = trim.mach
 
-    # 1. Build AIC matrix (Mach-dependent)
-    logger.info("  [SC%d] Building AIC matrix (%d x %d, M=%.3f)...",
-                subcase_id, n_boxes, n_boxes, mach)
-    D = build_aic_matrix(boxes, mach, reduced_freq=0.0)
+    # Cache key for (Mach, q)-dependent quantities
+    cache_key = (round(float(mach), 8), round(float(q), 8))
+    cache = shared._solver_cache if shared._solver_cache is not None else {}
 
-    try:
-        D_inv = np.linalg.inv(D)
-    except np.linalg.LinAlgError:
-        logger.warning("  [SC%d] AIC matrix singular, adding regularization", subcase_id)
-        D_inv = np.linalg.inv(D + np.eye(n_boxes) * 1e-10)
+    cached = cache.get(cache_key)
+    if cached is not None and 'A_jj' in cached:
+        # ---- Cache hit: reuse D_inv and A_jj ----
+        D_inv = cached['D_inv']
+        A_jj = cached['A_jj']
+        logger.info("  [SC%d] Reusing cached AIC/A_jj (M=%.3f, q=%.4e)",
+                    subcase_id, mach, q)
+    else:
+        # ---- Cache miss: build AIC and A_jj ----
+        # 1. Build AIC matrix (Mach-dependent)
+        logger.info("  [SC%d] Building AIC matrix (%d x %d, M=%.3f)...",
+                    subcase_id, n_boxes, n_boxes, mach)
+        D = build_aic_matrix(boxes, mach, reduced_freq=0.0)
 
-    # 2. Build force diagonal (Mach + q dependent)
-    f_diag_vec = np.zeros(n_boxes)
-    for j in range(n_boxes):
-        chord_j = boxes[j].chord
-        if chord_j > 1e-12:
-            f_diag_vec[j] = 2.0 * q * boxes[j].area / chord_j
+        try:
+            D_inv = np.linalg.inv(D)
+        except np.linalg.LinAlgError:
+            logger.warning("  [SC%d] AIC matrix singular, adding regularization",
+                           subcase_id)
+            D_inv = np.linalg.inv(D + np.eye(n_boxes) * 1e-10)
 
-    A_jj = np.diag(f_diag_vec) @ D_inv
+        # 2. Build force diagonal (Mach + q dependent)
+        f_diag_vec = np.zeros(n_boxes)
+        for j in range(n_boxes):
+            chord_j = boxes[j].chord
+            if chord_j > 1e-12:
+                f_diag_vec[j] = 2.0 * q * boxes[j].area / chord_j
+
+        A_jj = np.diag(f_diag_vec) @ D_inv
+
+        # Store in cache (K_eff solver will be added by iterative solver)
+        cache[cache_key] = {'D_inv': D_inv, 'A_jj': A_jj}
+        if shared._solver_cache is not None:
+            shared._solver_cache = cache
 
     G_sp = shared.G_sp        # normalwash coupling (slope)
     G_disp = shared.G_disp    # displacement coupling (force distribution)
@@ -435,7 +461,8 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
     if use_iterative:
         u_f, x_trim = _solve_iterative_from_shared(
             shared, A_jj, Q_ax, F_trim_fixed,
-            D_r, D_x, rhs_trim, n_trim_free, n_constraints, subcase_id)
+            D_r, D_x, rhs_trim, n_trim_free, n_constraints, subcase_id,
+            cache_key=cache_key)
     else:
         u_f, x_trim = _solve_dense(shared.K_ff, G_sp, G_disp, A_jj, Q_ax,
                                     shared.F_f, F_trim_fixed, D_r, D_x, rhs_trim,
@@ -458,6 +485,31 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
     gamma = D_inv @ w_total
     delta_cp = circulation_to_delta_cp(boxes, gamma)
     aero_forces = compute_aero_forces(boxes, delta_cp, q)
+
+    # --- Force-balance scaling for fully-constrained cases ---
+    # When n_trim_free == 0 (dynamic cases from 6-DOF simulation), the trim
+    # solver has no free variables to adjust and enforces no force/moment
+    # balance constraints. The VLM-computed total lift may differ from
+    # nz × W because the VLM panel solution uses a different aero model
+    # than the stability-derivative model in the 6-DOF simulator.
+    #
+    # Fix: scale all aero panel forces uniformly so that the total
+    # z-force equals the target lift (nz × W). This preserves the
+    # spanwise and chordwise load distribution shape from VLM while
+    # ensuring global force equilibrium with the inertial loads.
+    if n_constraints == 0 and n_trim_free == 0:
+        total_aero_fz = float(np.sum(aero_forces[:, 2]))
+        target_lift = nz * shared.total_weight
+        if abs(total_aero_fz) > 1.0:
+            lift_scale = target_lift / total_aero_fz
+            aero_forces = aero_forces * lift_scale
+            logger.info("  [SC%d] Force-balance scaling: %.4f "
+                        "(VLM Fz=%.0f → nz*W=%.0f)",
+                        subcase_id, lift_scale, total_aero_fz, target_lift)
+        else:
+            logger.warning("  [SC%d] Near-zero VLM lift (%.2e) — "
+                           "cannot apply force-balance scaling",
+                           subcase_id, total_aero_fz)
 
     # Store results
     sc_result = SubcaseResult(subcase_id=subcase_id)
@@ -498,9 +550,19 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
         from ..loads_analysis.trim_loads import (
             compute_trim_nodal_loads, verify_trim_balance)
 
+        # Lateral load factor: from aero sideforce for dynamic cases
+        ny_val = 0.0
+        if n_constraints == 0 and n_trim_free == 0:
+            total_aero_fy = float(np.sum(aero_forces[:, 1]))
+            if abs(shared.total_weight) > 1.0:
+                ny_val = total_aero_fy / shared.total_weight
+                if abs(ny_val) > 0.01:
+                    logger.info("  [SC%d] Lateral load factor ny=%.3f",
+                                subcase_id, ny_val)
+
         aero_nodal, inertial_nodal, combined_nodal = compute_trim_nodal_loads(
             shared.bdf_model, boxes, aero_forces, G_disp, shared.f_dofs, dof_mgr,
-            nz=nz, g=shared.g)
+            nz=nz, g=shared.g, ny=ny_val)
 
         sc_result.nodal_aero_forces = aero_nodal
         sc_result.nodal_inertial_forces = inertial_nodal
@@ -526,29 +588,40 @@ def _solve_subcases_parallel(shared: TrimSharedData,
                               trim_list: list,
                               n_workers: int,
                               blas_threads: int) -> list:
-    """Solve subcases in parallel using multiprocessing."""
-    import os
-    import multiprocessing as mp
+    """Solve subcases in parallel, grouped by (Mach, q) for cache reuse.
 
-    # Set BLAS threads BEFORE forking (for fork) or in initializer (for spawn)
+    Subcases sharing the same (Mach, q) are dispatched to the same worker
+    so that the expensive K_eff factorization (~80 s for 135 k DOFs) is
+    computed once and reused for all subcases in the group.
+
+    Typically there are 4-10 unique (Mach, q) groups across 100+ subcases,
+    giving ~10-25× speedup from factorization reuse alone.
+    """
+    import os
+    from collections import defaultdict
+
+    # Set BLAS threads BEFORE forking
     os.environ['OPENBLAS_NUM_THREADS'] = str(blas_threads)
     os.environ['MKL_NUM_THREADS'] = str(blas_threads)
     os.environ['OMP_NUM_THREADS'] = str(blas_threads)
 
-    n_workers = min(n_workers, len(trim_list))
+    # Group subcases by (Mach, q) so workers can reuse K_eff factorization
+    groups = defaultdict(list)       # key → [(trim, sc_id, original_index)]
+    for idx, (trim, sc_id) in enumerate(trim_list):
+        key = (round(float(trim.mach), 8), round(float(trim.q), 8))
+        groups[key].append((trim, sc_id, idx))
 
-    # On Windows, multiprocessing uses 'spawn' which requires pickling.
-    # TrimSharedData contains scipy sparse matrices and numpy arrays —
-    # these are pickle-safe. However, bdf_model may have complex references.
-    # We use a process-pool approach with initializer to share data.
+    n_groups = len(groups)
+    n_workers = min(n_workers, n_groups)
 
-    # Simple approach: use concurrent.futures for cleaner API
+    logger.info("Parallel dispatch: %d subcases in %d (Mach,q) groups, "
+                "%d workers", len(trim_list), n_groups, n_workers)
+    for key, items in sorted(groups.items()):
+        logger.info("  Group M=%.3f q=%.4e: %d subcases", key[0], key[1], len(items))
+
     from concurrent.futures import ProcessPoolExecutor, as_completed
 
-    # Package work items: (shared, trim, sc_id)
-    work_items = [(shared, trim, sc_id) for trim, sc_id in trim_list]
-
-    results = [None] * len(work_items)
+    results = [None] * len(trim_list)
 
     try:
         with ProcessPoolExecutor(
@@ -556,23 +629,28 @@ def _solve_subcases_parallel(shared: TrimSharedData,
             initializer=_worker_init,
             initargs=(blas_threads,)
         ) as executor:
-            future_to_idx = {}
-            for idx, (s, trim, sc_id) in enumerate(work_items):
-                future = executor.submit(_solve_worker, s, trim, sc_id)
-                future_to_idx[future] = idx
+            future_to_indices = {}
+            for key, items in groups.items():
+                batch = [(trim, sc_id) for trim, sc_id, _ in items]
+                orig_indices = [idx for _, _, idx in items]
+                future = executor.submit(_solve_batch_worker, shared, batch)
+                future_to_indices[future] = orig_indices
 
-            for future in as_completed(future_to_idx):
-                idx = future_to_idx[future]
+            for future in as_completed(future_to_indices):
+                orig_indices = future_to_indices[future]
                 try:
-                    results[idx] = future.result()
+                    batch_results = future.result()
+                    for i, idx in enumerate(orig_indices):
+                        results[idx] = batch_results[i]
                 except Exception as e:
-                    logger.error("Subcase %d failed: %s",
-                                trim_list[idx][1], e)
-                    # Create a minimal result
-                    results[idx] = SubcaseResult(subcase_id=trim_list[idx][1])
+                    logger.error("Batch failed: %s", e)
+                    for idx in orig_indices:
+                        results[idx] = SubcaseResult(
+                            subcase_id=trim_list[idx][1])
 
     except Exception as e:
-        logger.warning("Parallel execution failed (%s), falling back to sequential", e)
+        logger.warning("Parallel execution failed (%s), "
+                       "falling back to sequential", e)
         results = []
         for trim, sc_id in trim_list:
             logger.info("Solving subcase %d sequentially (fallback)...", sc_id)
@@ -590,8 +668,24 @@ def _worker_init(blas_threads: int):
     os.environ['OMP_NUM_THREADS'] = str(blas_threads)
 
 
+def _solve_batch_worker(shared: TrimSharedData,
+                         batch: list) -> list:
+    """Process a batch of subcases that share the same (Mach, q).
+
+    The first subcase builds and caches the AIC inverse, A_jj, and
+    K_eff factorization.  Subsequent subcases reuse everything via
+    shared._solver_cache, turning an ~80 s factorization into a ~2 s
+    back-substitution.
+    """
+    results = []
+    for trim, sc_id in batch:
+        r = _solve_trim_subcase_from_shared(shared, trim, sc_id)
+        results.append(r)
+    return results
+
+
 def _solve_worker(shared: TrimSharedData, trim, sc_id: int) -> SubcaseResult:
-    """Top-level worker function for parallel execution."""
+    """Top-level worker function for parallel execution (single subcase)."""
     return _solve_trim_subcase_from_shared(shared, trim, sc_id)
 
 
@@ -658,6 +752,7 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
         all_trim_labels=all_trim_labels,
         active_cols=active_cols, G_w_active=G_w_active_arr,
         G_d_active=G_d_active_arr, K_reg=K_reg,
+        _solver_cache={},
     )
 
     return _solve_trim_subcase_from_shared(shared, trim, subcase.id)
@@ -718,118 +813,123 @@ def _solve_iterative_from_shared(shared: TrimSharedData,
                                   D_r: np.ndarray, D_x: np.ndarray,
                                   rhs_trim: np.ndarray,
                                   n_trim_free: int, n_constraints: int,
-                                  subcase_id: int):
+                                  subcase_id: int,
+                                  cache_key=None):
     """Sparse solver using shared pre-computed structural data.
 
     Uses pre-computed K_reg, G_w_active, G_d_active, active_cols from
     TrimSharedData to avoid redundant work across subcases.
 
     Q_aa = G_d^T @ A_jj @ G_w  (asymmetric: displacement forces × normalwash)
+
+    K_eff factorization is cached by (mach, q) via cache_key so that
+    subcases sharing the same flight condition reuse the expensive LU
+    decomposition (~80 s for 135k DOFs).
     """
     t_start = time.perf_counter()
     n_free = len(shared.f_dofs)
 
-    # Use pre-computed active columns
-    active_cols = shared.active_cols
-    G_w_active = shared.G_w_active   # normalwash coupling active cols
-    G_d_active = shared.G_d_active   # displacement coupling active cols
-    n_active = len(active_cols) if active_cols is not None else 0
+    # ---- Check K_eff factorization cache ----
+    cache = shared._solver_cache if shared._solver_cache is not None else {}
+    cached = cache.get(cache_key) if cache_key else None
+    cached_solver = cached.get('solve_fn') if cached else None
 
-    # Build Q_aa (Mach-dependent via A_jj)
-    # Q_aa = G_d^T @ A_jj @ G_w  (asymmetric)
-    logger.info("  [SC%d] Building Q_aa (%d active cols)...", subcase_id, n_active)
-    t_q = time.perf_counter()
+    if cached_solver is not None:
+        # Cache hit — skip Q_aa build + factorization entirely
+        _solve_system = cached_solver
+        logger.info("  [SC%d] Reusing cached K_eff factorization (%.2f s saved)",
+                    subcase_id, cached.get('factor_time', 0))
+    else:
+        # ---- Cache miss — build Q_aa and factorize K_eff ----
+        # Use pre-computed active columns
+        active_cols = shared.active_cols
+        G_w_active = shared.G_w_active   # normalwash coupling active cols
+        G_d_active = shared.G_d_active   # displacement coupling active cols
+        n_active = len(active_cols) if active_cols is not None else 0
 
-    B_active = A_jj @ G_w_active   # (n_boxes x n_active) — Mach-dependent
-    Q_active = G_d_active.T @ B_active  # (n_active x n_active) — asymmetric!
-    logger.info("  [SC%d] Q_active computed in %.2f s", subcase_id, time.perf_counter() - t_q)
+        # Build Q_aa (Mach-dependent via A_jj)
+        # Q_aa = G_d^T @ A_jj @ G_w  (asymmetric)
+        logger.info("  [SC%d] Building Q_aa (%d active cols)...", subcase_id, n_active)
+        t_q = time.perf_counter()
 
-    # Build K_eff = K_reg + Q_aa (K_reg pre-computed)
-    K_eff = shared.K_reg.copy()  # Already has regularization
+        B_active = A_jj @ G_w_active   # (n_boxes x n_active) — Mach-dependent
+        Q_active = G_d_active.T @ B_active  # (n_active x n_active) — asymmetric!
+        logger.info("  [SC%d] Q_active computed in %.2f s",
+                    subcase_id, time.perf_counter() - t_q)
 
-    if n_active > 0 and n_active < 5000:
-        row_idx = np.repeat(active_cols, n_active)
-        col_idx = np.tile(active_cols, n_active)
-        q_vals = Q_active.ravel()
-        mask = np.abs(q_vals) > 1e-30
-        if mask.any():
-            Q_sp = sp.coo_matrix((q_vals[mask], (row_idx[mask], col_idx[mask])),
-                                 shape=(n_free, n_free)).tocsc()
-            K_eff = K_eff + Q_sp
+        # Build K_eff = K_reg + Q_aa (K_reg pre-computed)
+        K_eff = shared.K_reg.copy()  # Already has regularization
 
-    # Factorize K_eff
-    logger.info("  [SC%d] Factorizing K_eff (%d x %d)...", subcase_id, n_free, n_free)
-    t_lu = time.perf_counter()
+        if n_active > 0 and n_active < 5000:
+            row_idx = np.repeat(active_cols, n_active)
+            col_idx = np.tile(active_cols, n_active)
+            q_vals = Q_active.ravel()
+            mask = np.abs(q_vals) > 1e-30
+            if mask.any():
+                Q_sp = sp.coo_matrix((q_vals[mask], (row_idx[mask], col_idx[mask])),
+                                     shape=(n_free, n_free)).tocsc()
+                K_eff = K_eff + Q_sp
 
-    K_eff_csc = K_eff.tocsc()
+        # Factorize K_eff
+        logger.info("  [SC%d] Factorizing K_eff (%d x %d)...",
+                    subcase_id, n_free, n_free)
+        t_lu = time.perf_counter()
 
-    # For free-trim (multiple RHS solves), prefer direct factorization
-    # since we reuse the factorization across trim iterations.
-    # CG is only beneficial for single-RHS (all-fixed trim) cases.
-    use_direct = (n_trim_free > 0)  # Multiple solves needed for trim iteration
+        K_eff_csc = K_eff.tocsc()
 
-    _solver_mode = None
-    _pardiso_solve = None
-    _ilu_pc = None
-    K_lu = None
-    K_sym = None
+        # For free-trim (multiple RHS solves), prefer direct factorization
+        # since we reuse the factorization across trim iterations.
+        use_direct = (n_trim_free > 0)
 
-    # 1. Try pypardiso (MKL PARDISO) — always preferred
-    try:
-        from pypardiso import spsolve as pardiso_solve
-        _solver_mode = 'pardiso'
-        _pardiso_solve = pardiso_solve
-        logger.info("  [SC%d] Using PyPardiso solver", subcase_id)
-    except ImportError:
-        pass
+        _solver_mode = None
+        _pardiso_solve = None
+        K_lu = None
 
-    if _solver_mode is None:
-        if use_direct:
-            # For free-trim: use direct LU (factorize once, solve many)
+        # 1. Try pypardiso (MKL PARDISO) — always preferred
+        try:
+            from pypardiso import spsolve as pardiso_solve
+            _solver_mode = 'pardiso'
+            _pardiso_solve = pardiso_solve
+            logger.info("  [SC%d] Using PyPardiso solver", subcase_id)
+        except ImportError:
+            pass
+
+        if _solver_mode is None:
+            # Use direct LU for both free-trim and all-fixed cases.
+            # CG with ILU preconditioner fails for all-fixed cases because
+            # K_eff = K + Q_aa is asymmetric (Q_aa = G_d^T @ A_jj @ G_sp,
+            # where G_d ≠ G_sp). Direct LU is more reliable and the
+            # factorization is cached for reuse across subcases with the
+            # same (Mach, q).
             try:
                 K_lu = spla.splu(K_eff_csc, permc_spec='COLAMD')
                 _solver_mode = 'splu'
-                logger.info("  [SC%d] Using direct LU (free-trim, %d iterations expected)",
-                           subcase_id, n_trim_free)
+                logger.info("  [SC%d] Using direct LU", subcase_id)
             except Exception as e:
-                logger.error("  [SC%d] LU factorization failed: %s", subcase_id, e)
+                logger.error("  [SC%d] LU factorization failed: %s",
+                            subcase_id, e)
                 return np.zeros(n_free), np.zeros(n_trim_free)
-        else:
-            # For all-fixed trim: try ILU+CG first (single RHS)
-            try:
-                K_sym = ((K_eff_csc + K_eff_csc.T) * 0.5).tocsc()
-                ilu = spla.spilu(K_sym, fill_factor=10)
-                _ilu_pc = spla.LinearOperator(K_sym.shape, matvec=ilu.solve)
-                _solver_mode = 'ilu_cg'
-                logger.info("  [SC%d] Using ILU(10)-preconditioned CG", subcase_id)
-            except Exception as e:
-                logger.info("  [SC%d] ILU failed (%s), falling back to LU", subcase_id, e)
 
-            # Fallback: SuperLU
-            if _solver_mode is None:
-                try:
-                    K_lu = spla.splu(K_eff_csc, permc_spec='COLAMD')
-                    _solver_mode = 'splu'
-                except Exception as e:
-                    logger.error("  [SC%d] All solvers failed: %s", subcase_id, e)
-                    return np.zeros(n_free), np.zeros(n_trim_free)
+        factor_time = time.perf_counter() - t_lu
+        logger.info("  [SC%d] Factorization done in %.2f s",
+                    subcase_id, factor_time)
 
-    logger.info("  [SC%d] Factorization done in %.2f s",
-                subcase_id, time.perf_counter() - t_lu)
-
-    def _solve_system(rhs_vec):
+        # Build solve function
         if _solver_mode == 'pardiso':
-            return _pardiso_solve(K_eff_csc, rhs_vec)
-        elif _solver_mode == 'ilu_cg':
-            x_cg, info = spla.cg(K_sym, rhs_vec, M=_ilu_pc,
-                                  rtol=1e-10, maxiter=500)
-            if info != 0:
-                logger.warning("  [SC%d] CG failed (info=%d), using LU fallback",
-                              subcase_id, info)
-                lu_fb = spla.splu(K_eff_csc, permc_spec='COLAMD')
-                return lu_fb.solve(rhs_vec)
-            return x_cg
-        return K_lu.solve(rhs_vec)
+            _K_eff_csc_ref = K_eff_csc  # prevent GC
+
+            def _solve_system(rhs_vec, _csc=K_eff_csc, _ps=_pardiso_solve):
+                return _ps(_csc, rhs_vec)
+        else:
+            def _solve_system(rhs_vec, _lu=K_lu):
+                return _lu.solve(rhs_vec)
+
+        # ---- Store in cache ----
+        if cache_key is not None and cached is not None:
+            cached['solve_fn'] = _solve_system
+            cached['factor_time'] = factor_time
+            logger.info("  [SC%d] K_eff factorization cached (key=%s)",
+                        subcase_id, cache_key)
 
     # Solve the coupled trim system using Schur complement
     # The full system is:
@@ -1117,7 +1217,19 @@ def _trim_variable_normalwash(label: str, boxes: List[AeroBox],
         w[:] = -1.0
 
     elif label == "SIDES":
-        pass
+        pass  # sideslip: no direct z-normalwash contribution
+
+    elif label == "ROLL":
+        # Roll rate (pb/2V): normalwash w_i = -2*y_i / b_ref
+        # Rolling creates z-velocity proportional to y-position: v_z = -p*y
+        # In nondimensional form: w = -2*y / b_ref  (for unit ROLL = pb/2V = 1)
+        refb = bdf_model.aeros.refb if bdf_model.aeros else 1.0
+        if refb > 1e-12:
+            for i in range(n):
+                w[i] = -2.0 * boxes[i].control_point[1] / refb
+
+    elif label == "YAW":
+        pass  # yaw rate (rb/2V): no direct z-normalwash for planar wings
 
     elif label.startswith("URDD"):
         if label == "URDD5":

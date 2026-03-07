@@ -78,6 +78,7 @@ class CertLoadCase:
     vn_point: Optional[VnPoint] = None
     config_label: str = "Clean"
     solve_type: str = "trim"
+    flight_state: Optional[Dict[str, float]] = None
 
     @property
     def case_id(self) -> int:
@@ -255,8 +256,7 @@ class LoadCaseMatrix:
                     case_id=self._next_case_id(),
                     mach=mach, q=q, nz=1.0,
                     fixed_vars={
-                        "ROLL": 0.0, "YAW": 0.0,
-                        "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
+                        "ROLL": 0.0, "YAW": 0.0, "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
                         "ARON": aron_val, "RUD": 0.0,
                     },
                     free_vars=["ANGLEA", "ELEV"],
@@ -322,8 +322,7 @@ class LoadCaseMatrix:
                     case_id=self._next_case_id(),
                     mach=mach, q=q, nz=1.0,
                     fixed_vars={
-                        "ROLL": 0.0, "YAW": 0.0,
-                        "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
+                        "ROLL": 0.0, "YAW": 0.0, "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
                         "ARON": 0.0, "RUD": rud_val,
                     },
                     free_vars=["ANGLEA", "ELEV"],
@@ -353,8 +352,7 @@ class LoadCaseMatrix:
                     case_id=self._next_case_id(),
                     mach=mach, q=q, nz=1.0,
                     fixed_vars={
-                        "ROLL": 0.0, "YAW": 0.0,
-                        "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
+                        "ROLL": 0.0, "YAW": 0.0, "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
                         "ARON": 0.0, "RUD": rud_val,
                         "SIDES": beta_approx,
                     },
@@ -416,8 +414,7 @@ class LoadCaseMatrix:
                     case_id=self._next_case_id(),
                     mach=mach, q=q, nz=nz,
                     fixed_vars={
-                        "ROLL": 0.0, "YAW": 0.0,
-                        "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
+                        "ROLL": 0.0, "YAW": 0.0, "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
                     },
                     free_vars=["ANGLEA", "ELEV"],
                     label=(f"Checked {speed_label} nz={nz:.2f} "
@@ -459,8 +456,7 @@ class LoadCaseMatrix:
                 case_id=self._next_case_id(),
                 mach=mach, q=q, nz=nz,
                 fixed_vars={
-                    "ROLL": 0.0, "YAW": 0.0,
-                    "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
+                    "ROLL": 0.0, "YAW": 0.0, "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
                 },
                 free_vars=["ANGLEA", "ELEV"],
                 label=f"Flap VF nz={nz:.1f} {wc.label}",
@@ -506,8 +502,7 @@ class LoadCaseMatrix:
             case_id=self._next_case_id(),
             mach=mach, q=q, nz=pt.nz,
             fixed_vars={
-                "ROLL": 0.0, "YAW": 0.0,
-                "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
+                "ROLL": 0.0, "YAW": 0.0, "URDD2": 0.0, "URDD4": 0.0, "URDD6": 0.0,
             },
             free_vars=["ANGLEA", "ELEV"],
             label=f"{pt.label} V={V_eas:.1f}m/s nz={pt.nz:.2f} {wc.label}",

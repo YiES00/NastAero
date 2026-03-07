@@ -25,6 +25,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+import math
+
 from ..case_generator import (
     TrimCondition, trim_condition_to_trim_card, trim_conditions_to_model,
 )
@@ -84,6 +86,63 @@ class CaseResult:
     nz: float = 0.0
     mach: float = 0.0
     label: str = ""
+    flight_state: Optional[Dict] = None
+
+
+def _build_flight_state(case: CertLoadCase,
+                        trim_vars: Optional[Dict[str, float]] = None,
+                        ) -> Dict:
+    """Build flight state dict for a load case.
+
+    For dynamic cases (from 6-DOF sim), uses the pre-populated
+    ``CertLoadCase.flight_state``.  For static cases, extracts state
+    from trim variables and TrimCondition metadata.
+
+    Parameters
+    ----------
+    case : CertLoadCase
+        The load case.
+    trim_vars : dict, optional
+        Solved/fixed trim variables from SOL 144.
+
+    Returns
+    -------
+    dict
+        Flight state snapshot (speeds, angles, rates, controls).
+    """
+    # Dynamic cases already have full flight state
+    if case.flight_state is not None:
+        return dict(case.flight_state)
+
+    # Static cases — reconstruct from trim variables
+    tc = case.trim_condition
+    tv = trim_vars or (tc.fixed_vars if tc else {})
+
+    alpha_rad = tv.get("ANGLEA", 0.0)
+    beta_rad = tv.get("SIDES", 0.0)
+    nz = tv.get("URDD3", tc.nz if tc else 1.0)
+
+    return {
+        "V_eas_m_s": tc.velocity if tc else 0.0,
+        "V_tas_m_s": tc.velocity if tc else 0.0,
+        "altitude_m": case.altitude_m,
+        "mach": tc.mach if tc else 0.0,
+        "alpha_deg": math.degrees(alpha_rad),
+        "beta_deg": math.degrees(beta_rad),
+        "nz": nz,
+        "ny": 0.0,
+        "p_rad_s": 0.0,
+        "q_rad_s": 0.0,
+        "r_rad_s": 0.0,
+        "p_dot_rad_s2": 0.0,
+        "q_dot_rad_s2": 0.0,
+        "r_dot_rad_s2": 0.0,
+        "delta_e_deg": math.degrees(tv.get("ELEV", 0.0)),
+        "delta_a_deg": math.degrees(tv.get("ARON", 0.0)),
+        "delta_r_deg": math.degrees(tv.get("RUD", 0.0)),
+        "reason": "",
+        "maneuver_type": case.category,
+    }
 
 
 @dataclass
@@ -397,6 +456,7 @@ class BatchRunner:
                     nz=tc.nz,
                     mach=tc.mach,
                     label=tc.label,
+                    flight_state=_build_flight_state(c),
                 ))
             return results
 
@@ -476,6 +536,8 @@ class BatchRunner:
                     nz=tc.nz,
                     mach=tc.mach,
                     label=tc.label,
+                    flight_state=_build_flight_state(
+                        c, sc_result.trim_variables),
                 ))
                 solved_case_ids.add(tc.case_id)
 
@@ -494,6 +556,7 @@ class BatchRunner:
                         nz=tc.nz,
                         mach=tc.mach,
                         label=tc.label,
+                        flight_state=_build_flight_state(c),
                     ))
 
         except Exception as e:
@@ -512,6 +575,7 @@ class BatchRunner:
                     nz=tc.nz,
                     mach=tc.mach,
                     label=tc.label,
+                    flight_state=_build_flight_state(c),
                 ))
 
         finally:
