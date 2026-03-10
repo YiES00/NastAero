@@ -148,6 +148,7 @@ def six_dof_derivatives(
     params: AircraftParams,
     control: ControlInput,
     gust_vel: Optional[np.ndarray] = None,
+    external_force_func: Optional[Callable] = None,
 ) -> np.ndarray:
     """Compute dy/dt for the 6-DOF nonlinear rigid-body EOM.
 
@@ -163,6 +164,9 @@ def six_dof_derivatives(
         Current control surface deflections.
     gust_vel : ndarray (3,) or None
         Gust velocity in body axes [w_gx, w_gy, w_gz] (m/s).
+    external_force_func : callable(t, y) -> (F_xyz, M_xyz) or None
+        Optional external force/moment callback (e.g., rotor forces).
+        Returns (ndarray(3), ndarray(3)) = (forces, moments) in body axes.
 
     Returns
     -------
@@ -302,26 +306,43 @@ def six_dof_derivatives(
     gz = _G * ctheta * cphi
 
     # ------------------------------------------------------------------
+    # External forces/moments (e.g., rotor forces for VTOL)
+    # ------------------------------------------------------------------
+    F_ext = np.zeros(3)
+    M_ext = np.zeros(3)
+    if external_force_func is not None:
+        try:
+            ext_result = external_force_func(t, y)
+            F_ext = ext_result[0]
+            M_ext = ext_result[1]
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
     # Force equations (du/dt, dv/dt, dw/dt)
     # ------------------------------------------------------------------
-    X_total = X_aero + params.thrust_N
+    X_total = X_aero + params.thrust_N + F_ext[0]
     du = (X_total / m) + gx + r * v - q * w
-    dv = (Y_aero / m) + gy - r * u + p * w
-    dw = (Z_aero / m) + gz + q * u - p * v
+    dv = ((Y_aero + F_ext[1]) / m) + gy - r * u + p * w
+    dw = ((Z_aero + F_ext[2]) / m) + gz + q * u - p * v
 
     # ------------------------------------------------------------------
     # Moment equations (dp/dt, dq/dt, dr/dt)
     # Including Ixz cross-coupling terms
     # ------------------------------------------------------------------
+    L_total = L_aero + M_ext[0]
+    M_total = M_aero + M_ext[1]
+    N_total = N_aero + M_ext[2]
+
     Gamma = Ixx * Izz - Ixz**2
 
-    dp = (Izz * L_aero + Ixz * N_aero
+    dp = (Izz * L_total + Ixz * N_total
           - (Izz * (Izz - Iyy) + Ixz**2) * q * r
           + Ixz * (Ixx - Iyy + Izz) * p * q) / Gamma
 
-    dq = (M_aero - (Ixx - Izz) * p * r - Ixz * (p**2 - r**2)) / Iyy
+    dq = (M_total - (Ixx - Izz) * p * r - Ixz * (p**2 - r**2)) / Iyy
 
-    dr = (Ixz * L_aero + Ixx * N_aero
+    dr = (Ixz * L_total + Ixx * N_total
           + (Ixx * (Ixx - Iyy) + Ixz**2) * p * q
           - Ixz * (Ixx - Iyy + Izz) * q * r) / Gamma
 
@@ -366,6 +387,7 @@ def integrate_6dof(
     t_span: Tuple[float, float],
     dt: float = 0.005,
     gust_func: Optional[Callable] = None,
+    external_force_func: Optional[Callable] = None,
 ) -> SimTimeHistory:
     """Integrate 6-DOF EOM using RK4 fixed-timestep method.
 
@@ -383,6 +405,9 @@ def integrate_6dof(
         Timestep (s). Default 5ms (sufficient for 0.1-2 Hz dynamics).
     gust_func : callable(t, xe) -> ndarray(3) or None
         Gust velocity in body axes as function of time and position.
+    external_force_func : callable(t, y) -> (F_xyz, M_xyz) or None
+        Optional external force/moment callback (e.g., rotor forces).
+        Returns (ndarray(3), ndarray(3)) = (forces, moments) in body axes.
 
     Returns
     -------
@@ -417,7 +442,8 @@ def integrate_6dof(
                    p_rate, q_rate, r_rate)
     # Initial angular accelerations from EOM
     gust0 = _eval_gust(gust_func, t0, y[9]) if gust_func else None
-    dydt0 = six_dof_derivatives(y, t0, params, ctrl, gust0)
+    dydt0 = six_dof_derivatives(y, t0, params, ctrl, gust0,
+                                external_force_func)
     p_dot_arr[0] = dydt0[3]  # dp/dt
     q_dot_arr[0] = dydt0[4]  # dq/dt
     r_dot_arr[0] = dydt0[5]  # dr/dt
@@ -430,21 +456,25 @@ def integrate_6dof(
         ctrl = control_func(t)
         gust = _eval_gust(gust_func, t, y[9]) if gust_func else None
 
-        k1 = six_dof_derivatives(y, t, params, ctrl, gust)
+        k1 = six_dof_derivatives(y, t, params, ctrl, gust,
+                                 external_force_func)
 
         ctrl_mid = control_func(t + 0.5 * h)
         gust_mid = _eval_gust(gust_func, t + 0.5 * h, y[9] + 0.5 * h * y[0]) if gust_func else None
 
         k2 = six_dof_derivatives(y + 0.5 * h * k1, t + 0.5 * h,
-                                 params, ctrl_mid, gust_mid)
+                                 params, ctrl_mid, gust_mid,
+                                 external_force_func)
         k3 = six_dof_derivatives(y + 0.5 * h * k2, t + 0.5 * h,
-                                 params, ctrl_mid, gust_mid)
+                                 params, ctrl_mid, gust_mid,
+                                 external_force_func)
 
         ctrl_end = control_func(t + h)
         gust_end = _eval_gust(gust_func, t + h, y[9] + h * y[0]) if gust_func else None
 
         k4 = six_dof_derivatives(y + h * k3, t + h,
-                                 params, ctrl_end, gust_end)
+                                 params, ctrl_end, gust_end,
+                                 external_force_func)
 
         y = y + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
@@ -461,7 +491,8 @@ def integrate_6dof(
         ctrl_now = control_func(t_arr[i + 1])
         gust_now = _eval_gust(gust_func, t_arr[i + 1], y[9]) if gust_func else None
         dydt_now = six_dof_derivatives(y, t_arr[i + 1], params,
-                                       ctrl_now, gust_now)
+                                       ctrl_now, gust_now,
+                                       external_force_func)
         p_dot_arr[i + 1] = dydt_now[3]
         q_dot_arr[i + 1] = dydt_now[4]
         r_dot_arr[i + 1] = dydt_now[5]

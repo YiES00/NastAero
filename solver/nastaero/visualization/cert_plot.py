@@ -195,6 +195,9 @@ def plot_case_matrix_summary(cases, output_path: str = None,
             'rolling': '#FF6B6B', 'yaw': '#FFA07A',
             'checked': '#98D8C8', 'flap': '#F7DC6F',
             'landing': '#BB8FCE', 'ground': '#D5DBDB',
+            'vtol_hover': '#00BCD4', 'vtol_oei': '#E91E63',
+            'vtol_transition': '#3F51B5', 'vtol_landing': '#8BC34A',
+            'vtol_rotor_jam': '#FF5722',
         }
         labels = list(categories.keys())
         sizes = list(categories.values())
@@ -283,6 +286,9 @@ def plot_potato(potato_data, output_path: str = None,
         'rolling': '#F44336', 'yaw': '#FF9800',
         'checked': '#009688', 'flap': '#FFC107',
         'landing': '#9C27B0', 'ground': '#607D8B',
+        'vtol_hover': '#00BCD4', 'vtol_oei': '#E91E63',
+        'vtol_transition': '#3F51B5', 'vtol_landing': '#8BC34A',
+        'vtol_rotor_jam': '#FF5722',
     }
 
     # Plot points colored by category
@@ -470,6 +476,194 @@ def plot_vmt_envelope(component_envelope, output_path: str = None,
     return output_path
 
 
+def plot_vtol_model(model, vtol_config, output_path: str = None,
+                    title: str = None, figsize: tuple = (14, 10),
+                    dpi: int = 150, timestamp: str = None) -> str:
+    """Plot aircraft model top-view with rotor disk positions overlaid.
+
+    Draws the structural model planform (XY projection) and overlays
+    rotor disk circles at each hub position with labels.
+
+    Parameters
+    ----------
+    model : BDFModel
+        Parsed structural model.
+    vtol_config : VTOLConfig
+        VTOL rotor configuration.
+    output_path : str, optional
+        PNG save path.
+    title : str, optional
+        Plot title.
+
+    Returns
+    -------
+    str
+        Path to saved PNG.
+    """
+    fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
+
+    # Collect structural node positions
+    xs = [n.xyz_global[0] for n in model.nodes.values()]
+    ys = [n.xyz_global[1] for n in model.nodes.values()]
+
+    # Plot structural outline (scatter of nodes)
+    ax.scatter(xs, ys, s=0.2, c='lightgray', alpha=0.4, zorder=1)
+
+    # Draw structural elements (CQUAD4/CTRIA3 outlines)
+    for eid, elem in model.elements.items():
+        etype = getattr(elem, 'type', '')
+        nids = getattr(elem, 'node_ids', [])
+        if etype in ('CQUAD4', 'CTRIA3') and len(nids) >= 3:
+            ex = []
+            ey = []
+            for nid in nids:
+                if nid in model.nodes:
+                    ex.append(model.nodes[nid].xyz_global[0])
+                    ey.append(model.nodes[nid].xyz_global[1])
+            if len(ex) >= 3:
+                ex.append(ex[0])
+                ey.append(ey[0])
+                ax.plot(ex, ey, 'b-', linewidth=0.15, alpha=0.3, zorder=2)
+
+    # Draw rotor disks
+    from ..rotor.rotor_config import RotorType
+
+    lift_color = '#E91E63'  # Pink for lift rotors
+    cruise_color = '#FF9800'  # Orange for cruise rotors
+
+    for rotor in vtol_config.rotors:
+        hub = rotor.hub_position
+        r_mm = rotor.blade.radius * 1000.0  # Convert m to mm
+
+        color = lift_color if rotor.rotor_type == RotorType.LIFT else cruise_color
+        circle = plt.Circle((hub[0], hub[1]), r_mm,
+                             fill=False, edgecolor=color, linewidth=2.0,
+                             linestyle='-', zorder=5, alpha=0.9)
+        ax.add_patch(circle)
+
+        # Hub center marker
+        ax.plot(hub[0], hub[1], '+', color=color, markersize=8,
+                markeredgewidth=2, zorder=6)
+
+        # Label
+        ax.annotate(rotor.label,
+                     xy=(hub[0], hub[1]),
+                     xytext=(0, r_mm + 80),
+                     textcoords='offset points',
+                     fontsize=7, fontweight='bold', color=color,
+                     ha='center', va='bottom',
+                     bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                               edgecolor=color, alpha=0.85),
+                     zorder=7)
+
+    # Legend
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor='none', edgecolor=lift_color, linewidth=2,
+              label=f'Lift Rotors ({len(vtol_config.lift_rotors)})'),
+        Patch(facecolor='none', edgecolor=cruise_color, linewidth=2,
+              label=f'Cruise Rotors ({len(vtol_config.cruise_rotors)})'),
+        Patch(facecolor='lightgray', edgecolor='blue', alpha=0.3,
+              label='Structure'),
+    ]
+    ax.legend(handles=legend_elements, fontsize=9, loc='upper right',
+              framealpha=0.9)
+
+    ax.set_aspect('equal')
+    ax.set_xlabel('X (mm) — Forward →', fontsize=10)
+    ax.set_ylabel('Y (mm) — Starboard →', fontsize=10)
+
+    if title is None:
+        title = (f"VTOL Configuration — {vtol_config.config_type} "
+                 f"({len(vtol_config.rotors)} rotors)")
+    ax.set_title(title, fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.2)
+
+    plt.tight_layout()
+
+    if timestamp:
+        _add_timestamp(fig, timestamp)
+
+    if output_path is None:
+        output_path = 'vtol_model.png'
+    fig.savefig(output_path, dpi=dpi, bbox_inches='tight')
+    plt.close(fig)
+
+    return output_path
+
+
+def plot_rotor_hub_loads(hub_loads_table, output_path: str = None,
+                          title: str = None, figsize: tuple = (16, 10),
+                          dpi: int = 150, timestamp: str = None) -> str:
+    """Plot rotor hub 6-component loads summary as bar charts.
+
+    Parameters
+    ----------
+    hub_loads_table : list of dict
+        Each dict has keys: rotor_label, Fx, Fy, Fz, Mx, My, Mz,
+        condition, case_id.
+    output_path : str, optional
+        PNG save path.
+    title : str, optional
+        Plot title.
+
+    Returns
+    -------
+    str
+        Path to saved PNG.
+    """
+    fig, axes = plt.subplots(2, 3, figsize=figsize, dpi=dpi)
+
+    # Group by rotor
+    rotors = sorted(set(r['rotor_label'] for r in hub_loads_table))
+    components = ['Fx', 'Fy', 'Fz', 'Mx', 'My', 'Mz']
+    units = ['N', 'N', 'N', 'N-mm', 'N-mm', 'N-mm']
+
+    for idx, (comp, unit) in enumerate(zip(components, units)):
+        ax = axes[idx // 3, idx % 3]
+
+        # For each rotor, find max absolute value across all conditions
+        max_vals = []
+        min_vals = []
+        for rotor in rotors:
+            vals = [r[comp] for r in hub_loads_table
+                    if r['rotor_label'] == rotor]
+            max_vals.append(max(vals) if vals else 0)
+            min_vals.append(min(vals) if vals else 0)
+
+        x = np.arange(len(rotors))
+        width = 0.35
+        ax.bar(x - width / 2, max_vals, width, label='Max',
+               color='#2196F3', alpha=0.8)
+        ax.bar(x + width / 2, min_vals, width, label='Min',
+               color='#F44336', alpha=0.8)
+
+        ax.set_xticks(x)
+        ax.set_xticklabels([r.replace('Lift Rotor ', 'L').replace('Pusher ', 'P')
+                             for r in rotors],
+                            fontsize=7, rotation=45, ha='right')
+        ax.set_ylabel(f'{comp} ({unit})', fontsize=9)
+        ax.set_title(comp, fontsize=11, fontweight='bold')
+        ax.legend(fontsize=7)
+        ax.grid(True, alpha=0.3)
+        ax.axhline(y=0, color='gray', linewidth=0.5)
+
+    if title is None:
+        title = 'Rotor Hub 6-Component Loads Envelope'
+    fig.suptitle(title, fontsize=13, fontweight='bold', y=1.02)
+    plt.tight_layout()
+
+    if timestamp:
+        _add_timestamp(fig, timestamp)
+
+    if output_path is None:
+        output_path = 'rotor_hub_loads.png'
+    fig.savefig(output_path, dpi=dpi, bbox_inches='tight')
+    plt.close(fig)
+
+    return output_path
+
+
 def plot_critical_frequency(frequency_data: dict,
                               batch_result=None,
                               output_path: str = None,
@@ -514,6 +708,9 @@ def plot_critical_frequency(frequency_data: dict,
             'rolling': '#F44336', 'yaw': '#FF9800',
             'checked': '#009688', 'flap': '#FFC107',
             'landing': '#9C27B0',
+            'vtol_hover': '#00BCD4', 'vtol_oei': '#E91E63',
+            'vtol_transition': '#3F51B5', 'vtol_landing': '#8BC34A',
+            'vtol_rotor_jam': '#FF5722',
         }
 
         for cid, count in sorted_items:

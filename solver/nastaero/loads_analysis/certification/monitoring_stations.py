@@ -55,6 +55,7 @@ def identify_monitoring_stations(
     n_equidistant: int = 0,
     mass_threshold_kg: float = 5.0,
     offset_mm: float = 50.0,
+    vtol_config: Any = None,
 ) -> Dict[str, List[MonitoringStation]]:
     """Identify critical monitoring stations for all structural components.
 
@@ -72,6 +73,9 @@ def identify_monitoring_stations(
         Minimum CONM2 mass to consider as a "large mass item" (in kg).
     offset_mm : float
         Offset distance before/after feature locations (mm).
+    vtol_config : VTOLConfig, optional
+        VTOL rotor configuration. If provided, adds monitoring stations
+        at rotor hub span positions on wing components.
 
     Returns
     -------
@@ -149,6 +153,11 @@ def identify_monitoring_stations(
         # ── Large mass items ──
         _add_mass_stations(stations, comp, span_ax, span_min, span_max,
                             model, mass_threshold_kg, offset_mm)
+
+        # ── Rotor hub positions (VTOL) ──
+        if vtol_config is not None:
+            _add_rotor_hub_stations(stations, comp, span_ax, span_min,
+                                     span_max, vtol_config, offset_mm)
 
         # ── Fuselage-specific: wing/tail reference points ──
         if 'fuselage' in comp_name.lower() and span_ax == 0:
@@ -449,6 +458,44 @@ def _add_fuselage_feature_stations(
             ))
 
 
+def _add_rotor_hub_stations(
+    stations: List[MonitoringStation],
+    comp: ComponentDef,
+    span_ax: int,
+    span_min: float,
+    span_max: float,
+    vtol_config: Any,
+    offset_mm: float,
+):
+    """Add monitoring stations at rotor hub positions on this component.
+
+    Rotor hubs mounted on wing components create critical load introduction
+    points. Adds stations inboard and outboard of each hub position.
+    """
+    comp_name = comp.name
+
+    for rotor in vtol_config.rotors:
+        hub_pos = rotor.hub_position[span_ax]
+
+        # Check if this hub falls within this component's span range
+        if span_min + offset_mm < hub_pos < span_max - offset_mm:
+            stations.append(MonitoringStation(
+                position=max(hub_pos - offset_mm, span_min + offset_mm),
+                label=f"Inboard of {rotor.label}",
+                reason="rotor_hub",
+                component=comp_name,
+            ))
+            stations.append(MonitoringStation(
+                position=min(hub_pos + offset_mm, span_max - offset_mm),
+                label=f"Outboard of {rotor.label}",
+                reason="rotor_hub",
+                component=comp_name,
+            ))
+        elif abs(hub_pos) < offset_mm and span_ax == 1:
+            # Hub near centerline on a Y-span component (like fuselage rotor)
+            pass  # Skip, not relevant for wing components
+
+
 def _deduplicate_stations(
     stations: List[MonitoringStation],
     min_spacing: float = 30.0,
@@ -461,6 +508,7 @@ def _deduplicate_stations(
     priority = {
         "root": 0,
         "landing_gear": 1,
+        "rotor_hub": 1,
         "ctrl_surface_boundary": 2,
         "wing_attachment": 3,
         "htp_attachment": 3,

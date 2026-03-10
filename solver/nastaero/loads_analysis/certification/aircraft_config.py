@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from ..case_generator import isa_atmosphere
+from ...rotor.rotor_config import VTOLConfig
 
 
 # ---------------------------------------------------------------------------
@@ -385,6 +386,7 @@ class AircraftConfig:
     landing_gear: LandingGearConfig = field(default_factory=LandingGearConfig)
     gust_Ude_VC_fps: float = 50.0
     gust_Ude_VD_fps: float = 25.0
+    vtol_config: Optional[VTOLConfig] = None
 
     def nz_max(self, weight_N: float) -> float:
         """Part 23 max load factor for given weight."""
@@ -462,6 +464,10 @@ class AircraftConfig:
                 stroke=lg.get('stroke', 0.0),
                 sink_rate_fps=lg.get('sink_rate_fps', 10.0),
             )
+
+        # VTOL configuration
+        if 'vtol' in d:
+            cfg.vtol_config = VTOLConfig.from_dict(d['vtol'])
 
         return cfg
 

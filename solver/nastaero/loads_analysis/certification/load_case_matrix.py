@@ -79,6 +79,7 @@ class CertLoadCase:
     config_label: str = "Clean"
     solve_type: str = "trim"
     flight_state: Optional[Dict[str, float]] = None
+    rotor_forces: Optional[Dict[int, "np.ndarray"]] = None
 
     @property
     def case_id(self) -> int:
@@ -584,6 +585,16 @@ class LoadCaseMatrix:
                     f"{V_eas:.2f}", wc_label,
                     tc.label, c.solve_type,
                 ])
+
+    def merge_vtol_cases(self, vtol_cases: List[CertLoadCase]) -> None:
+        """Merge VTOL load cases into the flight case list.
+
+        Parameters
+        ----------
+        vtol_cases : list of CertLoadCase
+            VTOL-specific load cases (hover, OEI, transition, etc.).
+        """
+        self.flight_cases.extend(vtol_cases)
 
     @classmethod
     def from_csv(cls, filepath: str, config: AircraftConfig
