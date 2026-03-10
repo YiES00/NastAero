@@ -18,12 +18,19 @@ def make_oei_force_func(vtol_config: VTOLConfig,
                          failure_time: float,
                          weight_N: float,
                          rho: float,
+                         cg_position: Optional[np.ndarray] = None,
                          ) -> callable:
     """Create external force callback for OEI simulation.
 
     Before failure_time: all rotors operative, balanced hover forces.
     After failure_time: failed rotor thrust drops to zero, remaining
     rotors maintain their pre-failure thrust (no immediate compensation).
+
+    The moment contribution includes both:
+    1. Torque about the shaft axis (reaction torque)
+    2. Moment arm contribution: r × F where r is the hub position
+       relative to CG. This is the primary source of rolling moment
+       from asymmetric thrust loss.
 
     Parameters
     ----------
@@ -37,6 +44,8 @@ def make_oei_force_func(vtol_config: VTOLConfig,
         Aircraft weight (N) for thrust computation.
     rho : float
         Air density (kg/m³).
+    cg_position : ndarray (3,) or None
+        CG position in model coordinates (mm). If None, uses [0,0,0].
 
     Returns
     -------
@@ -47,13 +56,20 @@ def make_oei_force_func(vtol_config: VTOLConfig,
     n_rotors = len(lift_rotors)
     thrust_per_rotor = weight_N / n_rotors if n_rotors > 0 else 0.0
 
-    # Pre-compute nominal rotor forces for each rotor
+    # CG position (convert mm → m)
+    mm_to_m = 1e-3
+    cg = cg_position * mm_to_m if cg_position is not None else np.zeros(3)
+
+    # Pre-compute nominal rotor forces and hub positions (m) from CG
     nominal_loads: Dict[int, RotorLoads] = {}
+    hub_arms: Dict[int, np.ndarray] = {}  # position relative to CG in meters
     for rotor in lift_rotors:
         solver = BEMTSolver(rotor.blade, rotor.n_blades)
         loads = solver.solve_for_thrust(
             thrust_per_rotor, rotor.rpm_hover, rho)
         nominal_loads[rotor.rotor_id] = loads
+        # Hub position relative to CG (convert mm → m)
+        hub_arms[rotor.rotor_id] = rotor.hub_position * mm_to_m - cg
 
     def oei_force_func(t: float, y: np.ndarray
                        ) -> Tuple[np.ndarray, np.ndarray]:
@@ -72,10 +88,15 @@ def make_oei_force_func(vtol_config: VTOLConfig,
             # Transform to body axes
             shaft = rotor.shaft_axis / np.linalg.norm(rotor.shaft_axis)
 
-            # Thrust along shaft
-            F_total += loads.thrust * shaft
+            # Thrust force along shaft
+            F_thrust = loads.thrust * shaft
+            F_total += F_thrust
 
-            # Torque about shaft
+            # Moment from off-CG thrust application: M = r × F
+            r_hub = hub_arms[rotor.rotor_id]
+            M_total += np.cross(r_hub, F_thrust)
+
+            # Torque about shaft (reaction torque on airframe)
             torque_sign = (1.0 if rotor.rotation_dir == RotationDir.CW
                            else -1.0)
             M_total += -torque_sign * loads.torque * shaft
@@ -90,12 +111,14 @@ def make_rotor_jam_force_func(vtol_config: VTOLConfig,
                                jam_time: float,
                                weight_N: float,
                                rho: float,
+                               cg_position: Optional[np.ndarray] = None,
                                ) -> callable:
     """Create external force callback for rotor jam/seizure.
 
     Before jam_time: all rotors operative.
     At jam_time: one rotor suddenly stops — generates a large
-    asymmetric drag torque as the windmilling rotor decelerates.
+    asymmetric drag torque as the windmilling rotor decelerates,
+    plus loss of thrust creates rolling moment from CG offset.
 
     Parameters
     ----------
@@ -109,6 +132,8 @@ def make_rotor_jam_force_func(vtol_config: VTOLConfig,
         Aircraft weight (N).
     rho : float
         Air density (kg/m³).
+    cg_position : ndarray (3,) or None
+        CG position in model coordinates (mm). If None, uses [0,0,0].
 
     Returns
     -------
@@ -119,13 +144,19 @@ def make_rotor_jam_force_func(vtol_config: VTOLConfig,
     n_rotors = len(lift_rotors)
     thrust_per_rotor = weight_N / n_rotors if n_rotors > 0 else 0.0
 
-    # Pre-compute nominal loads
+    # CG position (convert mm → m)
+    mm_to_m = 1e-3
+    cg = cg_position * mm_to_m if cg_position is not None else np.zeros(3)
+
+    # Pre-compute nominal loads and hub positions
     nominal_loads: Dict[int, RotorLoads] = {}
+    hub_arms: Dict[int, np.ndarray] = {}
     for rotor in lift_rotors:
         solver = BEMTSolver(rotor.blade, rotor.n_blades)
         loads = solver.solve_for_thrust(
             thrust_per_rotor, rotor.rpm_hover, rho)
         nominal_loads[rotor.rotor_id] = loads
+        hub_arms[rotor.rotor_id] = rotor.hub_position * mm_to_m - cg
 
     # Jam torque: sudden brake torque (decelerating rotor)
     jammed_rotor = vtol_config.get_rotor(jammed_rotor_id)
@@ -146,6 +177,7 @@ def make_rotor_jam_force_func(vtol_config: VTOLConfig,
                 continue
 
             shaft = rotor.shaft_axis / np.linalg.norm(rotor.shaft_axis)
+            r_hub = hub_arms[rotor.rotor_id]
 
             if t >= jam_time and rotor.rotor_id == jammed_rotor_id:
                 # Jammed rotor: no thrust, large brake torque decaying
@@ -155,9 +187,12 @@ def make_rotor_jam_force_func(vtol_config: VTOLConfig,
                 torque_sign = (1.0 if rotor.rotation_dir == RotationDir.CW
                                else -1.0)
                 M_total += -torque_sign * jam_torque * decay * shaft
+                # No thrust from jammed rotor → no r×F contribution
             else:
-                # Normal operation
-                F_total += loads.thrust * shaft
+                # Normal operation: thrust + moment arm + reaction torque
+                F_thrust = loads.thrust * shaft
+                F_total += F_thrust
+                M_total += np.cross(r_hub, F_thrust)
                 torque_sign = (1.0 if rotor.rotation_dir == RotationDir.CW
                                else -1.0)
                 M_total += -torque_sign * loads.torque * shaft

@@ -36,9 +36,11 @@ class VTOLSimRunner:
         VTOL rotor configuration.
     """
 
-    def __init__(self, params: AircraftParams, vtol_config: VTOLConfig):
+    def __init__(self, params: AircraftParams, vtol_config: VTOLConfig,
+                 cg_position: Optional[np.ndarray] = None):
         self.params = params
         self.vtol_config = vtol_config
+        self.cg_position = cg_position  # Model coords (mm)
 
     def run_oei_case(self, condition: VTOLCondition,
                       weight_N: float,
@@ -92,6 +94,7 @@ class VTOLSimRunner:
             failure_time=failure_time,
             weight_N=weight_N,
             rho=rho,
+            cg_position=self.cg_position,
         )
 
         # Run simulation
@@ -157,6 +160,7 @@ class VTOLSimRunner:
             jam_time=jam_time,
             weight_N=weight_N,
             rho=rho,
+            cg_position=self.cg_position,
         )
 
         history = integrate_6dof(
