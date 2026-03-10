@@ -545,11 +545,11 @@ def plot_vtol_model(model, vtol_config, output_path: str = None,
         ax.plot(hub[0], hub[1], '+', color=color, markersize=8,
                 markeredgewidth=2, zorder=6)
 
-        # Label
+        # Label — offset in data coordinates (mm), not points
         ax.annotate(rotor.label,
                      xy=(hub[0], hub[1]),
-                     xytext=(0, r_mm + 80),
-                     textcoords='offset points',
+                     xytext=(hub[0], hub[1] + r_mm + 80),
+                     textcoords='data',
                      fontsize=7, fontweight='bold', color=color,
                      ha='center', va='bottom',
                      bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
