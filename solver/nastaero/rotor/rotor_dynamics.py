@@ -22,15 +22,18 @@ def make_oei_force_func(vtol_config: VTOLConfig,
                          ) -> callable:
     """Create external force callback for OEI simulation.
 
-    Before failure_time: all rotors operative, balanced hover forces.
+    Before failure_time: all hover-capable rotors operative, balanced hover.
     After failure_time: failed rotor thrust drops to zero, remaining
     rotors maintain their pre-failure thrust (no immediate compensation).
 
+    Supports LIFT, TILT, and mixed configurations. For TILT rotors,
+    uses effective_shaft_axis to account for tilt angle.
+
     The moment contribution includes both:
     1. Torque about the shaft axis (reaction torque)
-    2. Moment arm contribution: r × F where r is the hub position
-       relative to CG. This is the primary source of rolling moment
-       from asymmetric thrust loss.
+    2. Moment arm contribution: r x F where r is the hub position
+       relative to CG. This is the primary source of rolling/pitching
+       moment from asymmetric thrust loss.
 
     Parameters
     ----------
@@ -43,7 +46,7 @@ def make_oei_force_func(vtol_config: VTOLConfig,
     weight_N : float
         Aircraft weight (N) for thrust computation.
     rho : float
-        Air density (kg/m³).
+        Air density (kg/m^3).
     cg_position : ndarray (3,) or None
         CG position in model coordinates (mm). If None, uses [0,0,0].
 
@@ -52,24 +55,25 @@ def make_oei_force_func(vtol_config: VTOLConfig,
     callable
         external_force_func(t, y) -> (F_body(3), M_body(3))
     """
-    lift_rotors = vtol_config.lift_rotors
-    n_rotors = len(lift_rotors)
+    hover_rotors = vtol_config.hover_rotors
+    n_rotors = len(hover_rotors)
     thrust_per_rotor = weight_N / n_rotors if n_rotors > 0 else 0.0
 
-    # CG position (convert mm → m)
+    # CG position (convert mm -> m)
     mm_to_m = 1e-3
     cg = cg_position * mm_to_m if cg_position is not None else np.zeros(3)
 
     # Pre-compute nominal rotor forces and hub positions (m) from CG
     nominal_loads: Dict[int, RotorLoads] = {}
-    hub_arms: Dict[int, np.ndarray] = {}  # position relative to CG in meters
-    for rotor in lift_rotors:
+    hub_arms: Dict[int, np.ndarray] = {}
+    shaft_axes: Dict[int, np.ndarray] = {}
+    for rotor in hover_rotors:
         solver = BEMTSolver(rotor.blade, rotor.n_blades)
         loads = solver.solve_for_thrust(
             thrust_per_rotor, rotor.rpm_hover, rho)
         nominal_loads[rotor.rotor_id] = loads
-        # Hub position relative to CG (convert mm → m)
         hub_arms[rotor.rotor_id] = rotor.hub_position * mm_to_m - cg
+        shaft_axes[rotor.rotor_id] = rotor.effective_shaft_axis
 
     def oei_force_func(t: float, y: np.ndarray
                        ) -> Tuple[np.ndarray, np.ndarray]:
@@ -77,7 +81,7 @@ def make_oei_force_func(vtol_config: VTOLConfig,
         F_total = np.zeros(3)
         M_total = np.zeros(3)
 
-        for rotor in lift_rotors:
+        for rotor in hover_rotors:
             if t >= failure_time and rotor.rotor_id == failed_rotor_id:
                 continue  # Failed rotor produces no force
 
@@ -85,14 +89,13 @@ def make_oei_force_func(vtol_config: VTOLConfig,
             if loads is None:
                 continue
 
-            # Transform to body axes
-            shaft = rotor.shaft_axis / np.linalg.norm(rotor.shaft_axis)
+            shaft = shaft_axes[rotor.rotor_id]
 
-            # Thrust force along shaft
+            # Thrust force along effective shaft axis
             F_thrust = loads.thrust * shaft
             F_total += F_thrust
 
-            # Moment from off-CG thrust application: M = r × F
+            # Moment from off-CG thrust application: M = r x F
             r_hub = hub_arms[rotor.rotor_id]
             M_total += np.cross(r_hub, F_thrust)
 
@@ -115,10 +118,12 @@ def make_rotor_jam_force_func(vtol_config: VTOLConfig,
                                ) -> callable:
     """Create external force callback for rotor jam/seizure.
 
-    Before jam_time: all rotors operative.
+    Before jam_time: all hover-capable rotors operative.
     At jam_time: one rotor suddenly stops — generates a large
     asymmetric drag torque as the windmilling rotor decelerates,
-    plus loss of thrust creates rolling moment from CG offset.
+    plus loss of thrust creates rolling/pitching moment from CG offset.
+
+    Supports LIFT, TILT, and mixed configurations.
 
     Parameters
     ----------
@@ -131,7 +136,7 @@ def make_rotor_jam_force_func(vtol_config: VTOLConfig,
     weight_N : float
         Aircraft weight (N).
     rho : float
-        Air density (kg/m³).
+        Air density (kg/m^3).
     cg_position : ndarray (3,) or None
         CG position in model coordinates (mm). If None, uses [0,0,0].
 
@@ -140,23 +145,25 @@ def make_rotor_jam_force_func(vtol_config: VTOLConfig,
     callable
         external_force_func(t, y) -> (F_body(3), M_body(3))
     """
-    lift_rotors = vtol_config.lift_rotors
-    n_rotors = len(lift_rotors)
+    hover_rotors = vtol_config.hover_rotors
+    n_rotors = len(hover_rotors)
     thrust_per_rotor = weight_N / n_rotors if n_rotors > 0 else 0.0
 
-    # CG position (convert mm → m)
+    # CG position (convert mm -> m)
     mm_to_m = 1e-3
     cg = cg_position * mm_to_m if cg_position is not None else np.zeros(3)
 
     # Pre-compute nominal loads and hub positions
     nominal_loads: Dict[int, RotorLoads] = {}
     hub_arms: Dict[int, np.ndarray] = {}
-    for rotor in lift_rotors:
+    shaft_axes: Dict[int, np.ndarray] = {}
+    for rotor in hover_rotors:
         solver = BEMTSolver(rotor.blade, rotor.n_blades)
         loads = solver.solve_for_thrust(
             thrust_per_rotor, rotor.rpm_hover, rho)
         nominal_loads[rotor.rotor_id] = loads
         hub_arms[rotor.rotor_id] = rotor.hub_position * mm_to_m - cg
+        shaft_axes[rotor.rotor_id] = rotor.effective_shaft_axis
 
     # Jam torque: sudden brake torque (decelerating rotor)
     jammed_rotor = vtol_config.get_rotor(jammed_rotor_id)
@@ -171,23 +178,21 @@ def make_rotor_jam_force_func(vtol_config: VTOLConfig,
         F_total = np.zeros(3)
         M_total = np.zeros(3)
 
-        for rotor in lift_rotors:
+        for rotor in hover_rotors:
             loads = nominal_loads.get(rotor.rotor_id)
             if loads is None:
                 continue
 
-            shaft = rotor.shaft_axis / np.linalg.norm(rotor.shaft_axis)
+            shaft = shaft_axes[rotor.rotor_id]
             r_hub = hub_arms[rotor.rotor_id]
 
             if t >= jam_time and rotor.rotor_id == jammed_rotor_id:
                 # Jammed rotor: no thrust, large brake torque decaying
                 dt_since_jam = t - jam_time
-                # Exponential decay of brake torque (τ ~ 0.2s)
                 decay = np.exp(-dt_since_jam / 0.2)
                 torque_sign = (1.0 if rotor.rotation_dir == RotationDir.CW
                                else -1.0)
                 M_total += -torque_sign * jam_torque * decay * shaft
-                # No thrust from jammed rotor → no r×F contribution
             else:
                 # Normal operation: thrust + moment arm + reaction torque
                 F_thrust = loads.thrust * shaft

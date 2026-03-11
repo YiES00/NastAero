@@ -528,14 +528,21 @@ def plot_vtol_model(model, vtol_config, output_path: str = None,
     # Draw rotor disks
     from ..rotor.rotor_config import RotorType
 
-    lift_color = '#E91E63'  # Pink for lift rotors
+    lift_color = '#E91E63'    # Pink for lift rotors
     cruise_color = '#FF9800'  # Orange for cruise rotors
+    tilt_color = '#4CAF50'    # Green for tilt rotors
 
     for rotor in vtol_config.rotors:
         hub = rotor.hub_position
         r_mm = rotor.blade.radius * 1000.0  # Convert m to mm
 
-        color = lift_color if rotor.rotor_type == RotorType.LIFT else cruise_color
+        if rotor.rotor_type == RotorType.TILT:
+            color = tilt_color
+        elif rotor.rotor_type == RotorType.CRUISE:
+            color = cruise_color
+        else:
+            color = lift_color
+
         circle = plt.Circle((hub[0], hub[1]), r_mm,
                              fill=False, edgecolor=color, linewidth=2.0,
                              linestyle='-', zorder=5, alpha=0.9)
@@ -545,27 +552,38 @@ def plot_vtol_model(model, vtol_config, output_path: str = None,
         ax.plot(hub[0], hub[1], '+', color=color, markersize=8,
                 markeredgewidth=2, zorder=6)
 
-        # Label — offset in data coordinates (mm), not points
-        ax.annotate(rotor.label,
+        # Label — short name for compact display (12 rotors)
+        short_label = rotor.label.replace("Tilt Rotor ", "").replace(
+            "Lift Rotor ", "").replace("Pusher ", "P")
+        font_size = 6 if len(vtol_config.rotors) > 8 else 7
+        ax.annotate(short_label,
                      xy=(hub[0], hub[1]),
-                     xytext=(hub[0], hub[1] + r_mm + 80),
+                     xytext=(hub[0], hub[1] + r_mm + 60),
                      textcoords='data',
-                     fontsize=7, fontweight='bold', color=color,
+                     fontsize=font_size, fontweight='bold', color=color,
                      ha='center', va='bottom',
-                     bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                     bbox=dict(boxstyle='round,pad=0.15', facecolor='white',
                                edgecolor=color, alpha=0.85),
                      zorder=7)
 
     # Legend
     from matplotlib.patches import Patch
-    legend_elements = [
-        Patch(facecolor='none', edgecolor=lift_color, linewidth=2,
-              label=f'Lift Rotors ({len(vtol_config.lift_rotors)})'),
-        Patch(facecolor='none', edgecolor=cruise_color, linewidth=2,
-              label=f'Cruise Rotors ({len(vtol_config.cruise_rotors)})'),
+    legend_elements = []
+    if vtol_config.lift_rotors:
+        legend_elements.append(
+            Patch(facecolor='none', edgecolor=lift_color, linewidth=2,
+                  label=f'Lift Rotors ({len(vtol_config.lift_rotors)})'))
+    if vtol_config.tilt_rotors:
+        legend_elements.append(
+            Patch(facecolor='none', edgecolor=tilt_color, linewidth=2,
+                  label=f'Tilt Rotors ({len(vtol_config.tilt_rotors)})'))
+    if vtol_config.cruise_rotors:
+        legend_elements.append(
+            Patch(facecolor='none', edgecolor=cruise_color, linewidth=2,
+                  label=f'Cruise Rotors ({len(vtol_config.cruise_rotors)})'))
+    legend_elements.append(
         Patch(facecolor='lightgray', edgecolor='blue', alpha=0.3,
-              label='Structure'),
-    ]
+              label='Structure'))
     ax.legend(handles=legend_elements, fontsize=9, loc='upper right',
               framealpha=0.9)
 

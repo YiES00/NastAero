@@ -71,20 +71,20 @@ def compute_rotor_thrusts_oei(vtol_config, failed_rotor_id, failure_time,
                                 weight_N, rho, cg_xyz, t_arr):
     """Compute per-rotor thrust time history for OEI scenario."""
     mm_to_m = 1e-3
-    lift_rotors = vtol_config.lift_rotors
-    n_rotors = len(lift_rotors)
+    hover_rotors = vtol_config.hover_rotors
+    n_rotors = len(hover_rotors)
     thrust_per = weight_N / n_rotors
 
     # BEMT for nominal thrust
     nominal_T = {}
-    for rotor in lift_rotors:
+    for rotor in hover_rotors:
         solver = BEMTSolver(rotor.blade, rotor.n_blades)
         loads = solver.solve_for_thrust(thrust_per, rotor.rpm_hover, rho)
         nominal_T[rotor.rotor_id] = loads.thrust
 
     N = len(t_arr)
     thrusts = {}
-    for rotor in lift_rotors:
+    for rotor in hover_rotors:
         T_arr = np.full(N, nominal_T[rotor.rotor_id])
         if rotor.rotor_id == failed_rotor_id:
             for i, t in enumerate(t_arr):
@@ -98,19 +98,19 @@ def compute_rotor_thrusts_oei(vtol_config, failed_rotor_id, failure_time,
 def compute_rotor_thrusts_jam(vtol_config, jammed_rotor_id, jam_time,
                                 weight_N, rho, t_arr):
     """Compute per-rotor thrust time history for rotor jam."""
-    lift_rotors = vtol_config.lift_rotors
-    n_rotors = len(lift_rotors)
+    hover_rotors = vtol_config.hover_rotors
+    n_rotors = len(hover_rotors)
     thrust_per = weight_N / n_rotors
 
     nominal_T = {}
-    for rotor in lift_rotors:
+    for rotor in hover_rotors:
         solver = BEMTSolver(rotor.blade, rotor.n_blades)
         loads = solver.solve_for_thrust(thrust_per, rotor.rpm_hover, rho)
         nominal_T[rotor.rotor_id] = loads.thrust
 
     N = len(t_arr)
     thrusts = {}
-    for rotor in lift_rotors:
+    for rotor in hover_rotors:
         T_arr = np.full(N, nominal_T[rotor.rotor_id])
         if rotor.rotor_id == jammed_rotor_id:
             for i, t in enumerate(t_arr):
@@ -393,7 +393,7 @@ def main():
 
     total_mass_kg = sum(m.mass for m in model.masses.values()) * 1000
     weight_N = total_mass_kg * 9.80665
-    vtol_config = VTOLConfig.kc100_lift_cruise()
+    vtol_config = VTOLConfig.kc100_tilt_rotor_12()
 
     wing_area_mm2 = 17.0e6
     mach_vc = 80.0 / 340.3
@@ -447,17 +447,17 @@ def main():
     t_fail = 1.0
     dt = 0.005
 
-    # ---- Worst-case OEI: L3 (outboard left, Y=-4500mm) ----
-    lift_rotors = vtol_config.lift_rotors
-    # Find L3 — the outboard left rotor
+    # ---- Worst-case OEI: outboard rotor (largest |Y|) ----
+    hover_rotors = vtol_config.hover_rotors
+    # Find the outboard left rotor with largest |Y| (worst-case roll)
     worst_rotor = None
-    for rotor in lift_rotors:
-        if 'L3' in rotor.label:
+    for rotor in hover_rotors:
+        if 'FL3' in rotor.label or 'L3' in rotor.label:
             worst_rotor = rotor
             break
     if worst_rotor is None:
         # Fallback: pick rotor with largest |Y|
-        worst_rotor = max(lift_rotors,
+        worst_rotor = max(hover_rotors,
                           key=lambda r: abs(r.hub_position[1]))
 
     print(f"\n[3] OEI worst-case: {worst_rotor.label} "

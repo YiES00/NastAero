@@ -98,10 +98,12 @@ def main():
     # ---- 3. VTOL Configuration ----
     from nastaero.rotor.rotor_config import VTOLConfig
 
-    vtol_config = VTOLConfig.kc100_lift_cruise()
+    vtol_config = VTOLConfig.kc100_tilt_rotor_12()
     config.vtol_config = vtol_config
 
     print(f"\n[2] VTOL Configuration: {vtol_config.config_type}")
+    print(f"    Hover rotors: {vtol_config.n_hover_rotors}")
+    print(f"    Tilt rotors: {len(vtol_config.tilt_rotors)}")
     print(f"    Lift rotors: {vtol_config.n_lift_rotors}")
     print(f"    Cruise rotors: {len(vtol_config.cruise_rotors)}")
     print(f"    Total rotor mass: {vtol_config.total_rotor_mass_kg:.1f} kg")
@@ -117,10 +119,10 @@ def main():
     rho_sl, _, _ = isa_atmosphere(0.0)
     print(f"\n[3] BEMT Rotor Analysis (ρ={rho_sl:.3f} kg/m³)")
 
-    # Test hover thrust for one lift rotor
-    test_rotor = vtol_config.lift_rotors[0]
+    # Test hover thrust for one hover rotor
+    test_rotor = vtol_config.hover_rotors[0]
     solver = BEMTSolver(test_rotor.blade, test_rotor.n_blades)
-    target_per_rotor = weight_N / vtol_config.n_lift_rotors
+    target_per_rotor = weight_N / vtol_config.n_hover_rotors
     hover_loads = solver.solve_for_thrust(
         target_per_rotor, test_rotor.rpm_hover, rho_sl)
 

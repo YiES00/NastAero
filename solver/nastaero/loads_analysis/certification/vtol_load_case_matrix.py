@@ -102,9 +102,9 @@ class VTOLLoadCaseMatrix:
         rho, _, _ = isa_atmosphere(condition.altitude_m)
         total_weight_N = wc.weight_N * condition.nz
 
-        # Identify active lift rotors
-        lift_rotors = self.vtol_config.lift_rotors
-        active_rotors = [r for r in lift_rotors
+        # Identify active hover-capable rotors (LIFT + TILT)
+        hover_rotors = self.vtol_config.hover_rotors
+        active_rotors = [r for r in hover_rotors
                          if r.rotor_id != condition.failed_rotor_id]
         n_active = len(active_rotors)
         if n_active == 0:
@@ -139,15 +139,15 @@ class VTOLLoadCaseMatrix:
         loads_map: Dict[int, RotorLoads] = {}
         all_active = []
 
-        # Lift rotors: partial thrust
-        lift_rotors = [r for r in self.vtol_config.lift_rotors
-                       if r.rotor_id != condition.failed_rotor_id]
-        n_lift = len(lift_rotors)
+        # Hover-capable rotors: partial thrust in transition
+        hover_rotors = [r for r in self.vtol_config.hover_rotors
+                        if r.rotor_id != condition.failed_rotor_id]
+        n_hover = len(hover_rotors)
 
-        if n_lift > 0:
+        if n_hover > 0:
             thrust_per_lift = (total_weight_N * condition.thrust_fraction
-                               / n_lift)
-            for rotor in lift_rotors:
+                               / n_hover)
+            for rotor in hover_rotors:
                 rpm = rotor.rpm_hover * condition.rotor_rpm_factor
                 # Use forward-flight BEMT for non-zero V
                 if condition.V_eas > 1.0:
@@ -242,8 +242,8 @@ class VTOLLoadCaseMatrix:
         self._next_id = VTOL_CASE_ID_START
 
         altitudes = self.aircraft_config.altitudes_m
-        lift_rotor_ids = [r.rotor_id for r in self.vtol_config.lift_rotors
-                          if r.can_fail]
+        hover_rotor_ids = [r.rotor_id for r in self.vtol_config.hover_rotors
+                           if r.can_fail]
         all_rotor_ids = [r.rotor_id for r in self.vtol_config.rotors
                          if r.can_fail]
 
@@ -251,7 +251,7 @@ class VTOLLoadCaseMatrix:
         conditions: List[VTOLCondition] = []
         conditions.extend(generate_hover_conditions(altitudes))
         conditions.extend(generate_oei_conditions(
-            self.vtol_config.n_lift_rotors, lift_rotor_ids, altitudes))
+            self.vtol_config.n_hover_rotors, hover_rotor_ids, altitudes))
         conditions.extend(generate_transition_conditions(
             self.vtol_config.v_mca, self.vtol_config.v_transition_end,
             altitudes))

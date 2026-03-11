@@ -74,6 +74,7 @@ class RotorDef:
     hub_node_id: int = 0
     mass_kg: float = 15.0
     can_fail: bool = True
+    tilt_angle_deg: float = 0.0
 
     @property
     def is_lift_rotor(self) -> bool:
@@ -82,6 +83,31 @@ class RotorDef:
     @property
     def is_cruise_rotor(self) -> bool:
         return self.rotor_type == RotorType.CRUISE
+
+    @property
+    def is_tilt_rotor(self) -> bool:
+        return self.rotor_type == RotorType.TILT
+
+    @property
+    def is_hover_capable(self) -> bool:
+        """Whether this rotor produces vertical thrust in hover."""
+        return self.rotor_type in (RotorType.LIFT, RotorType.TILT)
+
+    @property
+    def effective_shaft_axis(self) -> np.ndarray:
+        """Shaft axis accounting for tilt angle.
+
+        For TILT rotors, tilt rotates in XZ plane:
+          tilt=0deg  -> [0, 0, 1] (vertical, hover)
+          tilt=90deg -> [-1, 0, 0] (horizontal, cruise, aft-facing)
+
+        For non-TILT rotors, returns the fixed shaft_axis.
+        """
+        if self.rotor_type != RotorType.TILT or self.tilt_angle_deg == 0.0:
+            return self.shaft_axis / np.linalg.norm(self.shaft_axis)
+
+        alpha = np.radians(self.tilt_angle_deg)
+        return np.array([-np.sin(alpha), 0.0, np.cos(alpha)])
 
 
 @dataclass
@@ -117,8 +143,21 @@ class VTOLConfig:
         return [r for r in self.rotors if r.is_cruise_rotor]
 
     @property
+    def tilt_rotors(self) -> List[RotorDef]:
+        return [r for r in self.rotors if r.is_tilt_rotor]
+
+    @property
+    def hover_rotors(self) -> List[RotorDef]:
+        """All rotors that produce vertical thrust in hover (LIFT + TILT)."""
+        return [r for r in self.rotors if r.is_hover_capable]
+
+    @property
     def n_lift_rotors(self) -> int:
         return len(self.lift_rotors)
+
+    @property
+    def n_hover_rotors(self) -> int:
+        return len(self.hover_rotors)
 
     @property
     def total_rotor_mass_kg(self) -> float:
@@ -236,6 +275,145 @@ class VTOLConfig:
         )
 
     @classmethod
+    def kc100_tilt_rotor_12(cls) -> VTOLConfig:
+        """Create KC-100 12-Tilt-Rotor configuration.
+
+        12 tilt rotors (6 forward + 6 aft of CG), no pusher.
+        All rotors tilt from vertical (hover) to horizontal (cruise).
+
+        Layout (top view):
+            Forward (X=2800):
+              FL3 (Y=-4500) -- FL2 (Y=-3000) -- FL1 (Y=-1500)
+              FR1 (Y=+1500) -- FR2 (Y=+3000) -- FR3 (Y=+4500)
+
+            Aft (X=5000):
+              RL3 (Y=-4500) -- RL2 (Y=-3000) -- RL1 (Y=-1500)
+              RR1 (Y=+1500) -- RR2 (Y=+3000) -- RR3 (Y=+4500)
+
+        CG at X=3882mm is bracketed:
+          Forward arm = 1082mm, Aft arm = 1118mm
+
+        Design rationale:
+        - Pitch trim via fore/aft differential thrust
+        - Disk loading reduced 50% vs 6-rotor (931 vs 1863 N/m^2)
+        - OEI survival 91.7% vs 83.3%
+        - Cruise thrust by tilting all rotors (no separate pusher)
+        - CT/sigma ~0.20 (vs 0.40 for 6-rotor) — comfortable margin
+        """
+        # Tilt rotor blade: same as L+C lift blade for proven performance
+        # With 12 rotors, each only needs ~1053 N (half of 6-rotor),
+        # so CT/sigma drops from ~0.40 to ~0.20 — well below stall
+        tilt_blade = BladeDef(
+            radius=0.6,      # 0.6 m (same as L+C lift blade)
+            root_cutout=0.15,
+            n_elements=20,
+            mean_chord=0.05,  # 50 mm = 0.05 m
+            twist_root=np.radians(12.0),
+            twist_tip=np.radians(3.0),
+            airfoil=RotorAirfoil.naca0012(),
+        )
+
+        # Span stations (same as L+C for wing structure compatibility)
+        y_stations = [1500.0, 3000.0, 4500.0]
+
+        # X positions: bracket the CG (X=3882mm)
+        x_forward = 2800.0   # 1082mm forward of CG
+        x_aft = 5000.0       # 1118mm aft of CG
+
+        # Z positions: above wing for rotor clearance
+        z_forward = 900.0    # Forward booms/pylons
+        z_aft = 700.0        # Wing-mounted aft
+
+        rotors = []
+        rotor_id = 1
+
+        # ---- Forward rotors (6): 3 left + 3 right ----
+        # Left forward (negative Y)
+        for i, y in enumerate(y_stations):
+            rotors.append(RotorDef(
+                rotor_id=rotor_id,
+                label=f"Tilt Rotor FL{i + 1}",
+                rotor_type=RotorType.TILT,
+                hub_position=np.array([x_forward, -y, z_forward]),
+                shaft_axis=np.array([0., 0., 1.]),  # Hover default
+                blade=tilt_blade,
+                n_blades=4,
+                rotation_dir=RotationDir.CW if i % 2 == 0 else RotationDir.CCW,
+                rpm_hover=3000.0,
+                rpm_cruise=2500.0,  # Reduced RPM for cruise
+                hub_node_id=990000 + rotor_id,
+                mass_kg=14.0,  # R=0.6m rotor + tilt actuator
+                tilt_angle_deg=0.0,  # Set per flight phase
+            ))
+            rotor_id += 1
+
+        # Right forward (positive Y)
+        for i, y in enumerate(y_stations):
+            rotors.append(RotorDef(
+                rotor_id=rotor_id,
+                label=f"Tilt Rotor FR{i + 1}",
+                rotor_type=RotorType.TILT,
+                hub_position=np.array([x_forward, y, z_forward]),
+                shaft_axis=np.array([0., 0., 1.]),
+                blade=tilt_blade,
+                n_blades=4,
+                rotation_dir=RotationDir.CCW if i % 2 == 0 else RotationDir.CW,
+                rpm_hover=3000.0,
+                rpm_cruise=2500.0,
+                hub_node_id=990000 + rotor_id,
+                mass_kg=14.0,  # R=0.6m rotor + tilt actuator
+                tilt_angle_deg=0.0,
+            ))
+            rotor_id += 1
+
+        # ---- Aft rotors (6): 3 left + 3 right ----
+        # Left aft (negative Y)
+        for i, y in enumerate(y_stations):
+            rotors.append(RotorDef(
+                rotor_id=rotor_id,
+                label=f"Tilt Rotor RL{i + 1}",
+                rotor_type=RotorType.TILT,
+                hub_position=np.array([x_aft, -y, z_aft]),
+                shaft_axis=np.array([0., 0., 1.]),
+                blade=tilt_blade,
+                n_blades=4,
+                rotation_dir=RotationDir.CCW if i % 2 == 0 else RotationDir.CW,
+                rpm_hover=3000.0,
+                rpm_cruise=2500.0,
+                hub_node_id=990000 + rotor_id,
+                mass_kg=14.0,  # R=0.6m rotor + tilt actuator
+                tilt_angle_deg=0.0,
+            ))
+            rotor_id += 1
+
+        # Right aft (positive Y)
+        for i, y in enumerate(y_stations):
+            rotors.append(RotorDef(
+                rotor_id=rotor_id,
+                label=f"Tilt Rotor RR{i + 1}",
+                rotor_type=RotorType.TILT,
+                hub_position=np.array([x_aft, y, z_aft]),
+                shaft_axis=np.array([0., 0., 1.]),
+                blade=tilt_blade,
+                n_blades=4,
+                rotation_dir=RotationDir.CW if i % 2 == 0 else RotationDir.CCW,
+                rpm_hover=3000.0,
+                rpm_cruise=2500.0,
+                hub_node_id=990000 + rotor_id,
+                mass_kg=14.0,  # R=0.6m rotor + tilt actuator
+                tilt_angle_deg=0.0,
+            ))
+            rotor_id += 1
+
+        return cls(
+            rotors=rotors,
+            config_type="Tilt-Rotor-12",
+            v_mca=15.0,
+            v_transition_end=35.0,
+            hover_ceiling_m=3000.0,
+        )
+
+    @classmethod
     def from_dict(cls, d: dict) -> VTOLConfig:
         """Create from dictionary (e.g., parsed YAML config).
 
@@ -275,6 +453,7 @@ class VTOLConfig:
                 hub_node_id=rd.get('hub_node_id', 0),
                 mass_kg=rd.get('mass_kg', 15.0),
                 can_fail=rd.get('can_fail', True),
+                tilt_angle_deg=rd.get('tilt_angle_deg', 0.0),
             ))
 
         return cfg
