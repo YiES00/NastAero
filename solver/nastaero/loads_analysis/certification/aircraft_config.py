@@ -80,6 +80,44 @@ def dynamic_pressure_from_eas(V_eas: float) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Altitude-dependent gust velocity — FAR 23.333(c)
+# ---------------------------------------------------------------------------
+
+# Altitude thresholds in meters
+_ALT_20K_FT_M = 20000 * M_PER_FT   # 6,096 m
+_ALT_50K_FT_M = 50000 * M_PER_FT   # 15,240 m
+
+
+def gust_Ude_at_altitude(altitude_m: float, Ude_SL_fps: float) -> float:
+    """Derived gust velocity adjusted for altitude per §23.333(c).
+
+    FAR 23.333(c) prescribes:
+      - Sea level to 20,000 ft: Ude constant (50 fps at VC, 25 fps at VD).
+      - 20,000 ft to 50,000 ft: Ude linearly reduced to half the SL value
+        (25 fps at VC, 12.5 fps at VD).
+
+    Parameters
+    ----------
+    altitude_m : float
+        Geometric altitude in meters.
+    Ude_SL_fps : float
+        Sea-level derived gust velocity (ft/s).
+
+    Returns
+    -------
+    float
+        Altitude-adjusted Ude in ft/s.
+    """
+    if altitude_m <= _ALT_20K_FT_M:
+        return Ude_SL_fps
+    elif altitude_m >= _ALT_50K_FT_M:
+        return Ude_SL_fps * 0.5
+    else:
+        frac = (altitude_m - _ALT_20K_FT_M) / (_ALT_50K_FT_M - _ALT_20K_FT_M)
+        return Ude_SL_fps * (1.0 - 0.5 * frac)
+
+
+# ---------------------------------------------------------------------------
 # Weight / CG condition
 # ---------------------------------------------------------------------------
 
@@ -387,9 +425,16 @@ class AircraftConfig:
     gust_Ude_VC_fps: float = 50.0
     gust_Ude_VD_fps: float = 25.0
     vtol_config: Optional[VTOLConfig] = None
+    nz_max_override: Optional[float] = None
 
     def nz_max(self, weight_N: float) -> float:
-        """Part 23 max load factor for given weight."""
+        """Part 23 max load factor for given weight.
+
+        If nz_max_override is set (e.g., 2.5 for commuter/UAM), uses that
+        instead of the FAR §23.337 formula.
+        """
+        if self.nz_max_override is not None:
+            return self.nz_max_override
         return part23_nz_max(weight_N)
 
     def nz_min(self, weight_N: float) -> float:
@@ -442,6 +487,10 @@ class AircraftConfig:
                       'gust_Ude_VC_fps', 'gust_Ude_VD_fps'):
             if attr in d:
                 setattr(cfg, attr, d[attr])
+
+        # Load factor override
+        if 'nz_max' in d:
+            cfg.nz_max_override = float(d['nz_max'])
 
         # Control limits
         if 'ctrl_limits' in d:

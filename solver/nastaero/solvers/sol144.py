@@ -19,6 +19,7 @@ Full aircraft support:
 - Multiple CAERO1 panels (wing, tail, etc.)
 - Per-spline structural-aero coupling (SPLINE1/SPLINE2 per surface)
 - AESURF/AELIST control surface definition
+- AELINK control surface coupling (V-tail, differential aileron)
 - Control surface normalwash applied only to specific boxes
 - Z-force AND pitch moment trim constraints
 - CG-based moment reference point
@@ -248,12 +249,16 @@ def _build_shared_data(bdf_model: BDFModel) -> Optional[TrimSharedData]:
     cg_x = _compute_cg_x(bdf_model)
     g = _detect_gravity(bdf_model)
 
-    # All trim labels
+    # All trim labels (exclude AELINK-dependent surfaces)
+    aelink_deps = set()
+    for aelink in getattr(bdf_model, 'aelinks', []):
+        aelink_deps.add(aelink.dependent)
     all_trim_labels = []
     for aid, aestat in bdf_model.aestats.items():
         all_trim_labels.append(aestat.label)
     for aid, aesurf in bdf_model.aesurfs.items():
-        all_trim_labels.append(aesurf.label)
+        if aesurf.label not in aelink_deps:
+            all_trim_labels.append(aesurf.label)
 
     # Pre-compute iterative solver helpers for large models
     active_cols = None
@@ -704,11 +709,15 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
     _solve_trim_subcase_from_shared() with pre-built TrimSharedData.
     """
     # Build minimal shared data for this single call
+    aelink_deps = set()
+    for aelink in getattr(bdf_model, 'aelinks', []):
+        aelink_deps.add(aelink.dependent)
     all_trim_labels = []
     for aid, aestat in bdf_model.aestats.items():
         all_trim_labels.append(aestat.label)
     for aid, aesurf in bdf_model.aesurfs.items():
-        all_trim_labels.append(aesurf.label)
+        if aesurf.label not in aelink_deps:
+            all_trim_labels.append(aesurf.label)
 
     K_ff, M_ff, F_f, f_dofs, s_dofs = fe_model.get_partitioned_system(subcase)
     n_free = len(f_dofs)
@@ -1237,6 +1246,7 @@ def _trim_variable_normalwash(label: str, boxes: List[AeroBox],
                 w[i] = -boxes[i].control_point[0]
 
     else:
+        # Try direct AESURF match first
         cs_indices, eff = _get_control_surface_boxes(label, bdf_model,
                                                       box_id_to_index)
         if cs_indices:
@@ -1245,9 +1255,42 @@ def _trim_variable_normalwash(label: str, boxes: List[AeroBox],
             logger.info("    Control surface '%s': %d boxes, eff=%.3f",
                          label, len(cs_indices), eff)
         else:
-            logger.warning("    Control surface '%s' not found", label)
+            # Resolve via AELINK: label is an independent variable linked
+            # to dependent physical surfaces
+            if not _resolve_aelink_normalwash(label, w, bdf_model,
+                                              box_id_to_index):
+                logger.warning("    Control surface '%s' not found", label)
 
     return w
+
+
+def _resolve_aelink_normalwash(label: str, w: np.ndarray,
+                                bdf_model: BDFModel,
+                                box_id_to_index: Dict[int, int]) -> bool:
+    """Resolve AELINK: compute normalwash contribution for an independent
+    variable via its linked dependent physical surfaces.
+
+    For V-tail coupling (ELEVR = ELEV + RUD, ELEVL = ELEV - RUD):
+    - normalwash("ELEV") = 1.0 * w(ELEVR) + 1.0 * w(ELEVL)
+    - normalwash("RUD")  = 1.0 * w(ELEVR) - 1.0 * w(ELEVL)
+    """
+    aelinks = getattr(bdf_model, 'aelinks', [])
+    if not aelinks:
+        return False
+
+    found = False
+    for aelink in aelinks:
+        for ind_label, coeff in aelink.links:
+            if ind_label == label:
+                dep_indices, dep_eff = _get_control_surface_boxes(
+                    aelink.dependent, bdf_model, box_id_to_index)
+                if dep_indices:
+                    for i in dep_indices:
+                        w[i] += -dep_eff * coeff
+                    found = True
+    if found:
+        logger.info("    AELINK: '%s' resolved via linked surfaces", label)
+    return found
 
 
 # ---------------------------------------------------------------------------

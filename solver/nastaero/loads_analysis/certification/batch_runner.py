@@ -590,6 +590,17 @@ class BatchRunner:
     # Landing cases (quasi-static)
     # ---------------------------------------------------------------
 
+    def _detect_gravity(self) -> float:
+        """Detect gravitational acceleration from BDF model unit system."""
+        if self.bdf_model is None:
+            return 9810.0  # Default N-mm-sec
+        refc = 0.0
+        if self.bdf_model.aeros:
+            refc = self.bdf_model.aeros.refc
+        elif self.bdf_model.aero:
+            refc = self.bdf_model.aero.refc
+        return 9810.0 if refc > 100 else 9.81
+
     def _run_landing_cases(self) -> None:
         """Execute landing/ground load cases."""
         for cond in self.matrix.landing_cases:
@@ -633,8 +644,10 @@ class BatchRunner:
                         node_masses[nid] = 0.0
                     node_masses[nid] += conm2.mass
 
+            # Detect gravity from model unit system
+            g = self._detect_gravity()
             inertial = compute_landing_inertial_forces(
-                cond, node_masses)
+                cond, node_masses, g=g)
             nodal_forces = combine_forces(gear_forces, inertial)
 
         return CaseResult(

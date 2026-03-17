@@ -16,7 +16,8 @@ from .cards.rbe import RBE2, RBE3
 from .cards.param import PARAM
 from .cards.sets import SET1
 from .cards.aero import (AERO, AEROS, CAERO1, PAERO1, SPLINE1, SPLINE2,
-                         AESTAT, AESURF, AELIST, AEFACT, TRIM, FLFACT, MKAERO1)
+                         AESTAT, AESURF, AELIST, AEFACT, AELINK,
+                         TRIM, FLFACT, MKAERO1)
 from ..config import logger
 
 def parse_bulk_card(fields: List[str], model: BDFModel) -> None:
@@ -122,6 +123,8 @@ def parse_bulk_card(fields: List[str], model: BDFModel) -> None:
             a = AESURF.from_fields(fields); model.aesurfs[a.id] = a
         elif card_name == "AELIST":
             a = AELIST.from_fields(fields); model.aelists[a.sid] = a
+        elif card_name == "AELINK":
+            a = AELINK.from_fields(fields); model.aelinks.append(a)
         elif card_name == "AEFACT":
             a = AEFACT.from_fields(fields); model.aefacts[a.sid] = a
         elif card_name == "TRIM":

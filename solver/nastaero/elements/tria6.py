@@ -1,6 +1,7 @@
 """CTRIA6: 6-node quadratic triangular shell element (36 DOFs).
 
-Uses 3-point Gauss triangle integration for membrane and bending.
+Uses 3-point Gauss triangle integration for membrane and bending,
+and 1-point reduced integration for transverse shear (prevents shear locking).
 6 DOFs per node: u, v, w, rx, ry, rz.
 """
 from __future__ import annotations
@@ -107,6 +108,12 @@ class CTria6Element(BaseElement):
         return T.T @ m_local @ T
 
     def _local_stiffness(self):
+        """Build 36x36 local stiffness (DOF order: u,v,w,rx,ry,rz per node).
+
+        Uses selective reduced integration:
+        - 3-point Gauss for membrane and bending
+        - 1-point (centroid) for transverse shear (prevents shear locking)
+        """
         E, nu, t = self.E, self.nu, self.t
         xy = self.xy_local
 
@@ -115,24 +122,26 @@ class CTria6Element(BaseElement):
             [[1, nu, 0], [nu, 1, 0], [0, 0, (1 - nu) / 2]])
         Db = (E * t**3 / (12 * (1 - nu**2))) * np.array(
             [[1, nu, 0], [nu, 1, 0], [0, 0, (1 - nu) / 2]])
+        kappa = 5.0 / 6.0
+        Ds = kappa * (E * t / (2 * (1 + nu))) * np.eye(2)
 
         k = np.zeros((36, 36))
 
         # DOF index arrays
         mem_dofs = []
         bend_dofs = []
+        shear_dofs = []
         for nd in range(6):
             mem_dofs.extend([6 * nd, 6 * nd + 1])
             bend_dofs.extend([6 * nd + 3, 6 * nd + 4])
+            shear_dofs.extend([6 * nd + 2, 6 * nd + 3, 6 * nd + 4])
 
-        # 3-point Gauss integration on triangle
+        # 3-point Gauss integration on triangle for membrane and bending
         for gp in range(3):
             L1, L2 = _TRI_GP[gp]
             w = _TRI_GW[gp]
             N, dNdL1, dNdL2 = self.shape_functions(L1, L2)
 
-            # Jacobian: x = sum(N_i * x_i), but derivatives are wrt L1, L2
-            # J = [[dx/dL1, dy/dL1], [dx/dL2, dy/dL2]]
             J = np.zeros((2, 2))
             J[0, 0] = dNdL1 @ xy[:, 0]
             J[0, 1] = dNdL1 @ xy[:, 1]
@@ -153,7 +162,6 @@ class CTria6Element(BaseElement):
                 Bm[2, 2 * nd + 1] = dNdx[nd]
 
             # Triangle integration: integral = sum(w_i * f(L1,L2) * detJ * 0.5)
-            # The 0.5 comes from reference triangle area
             km = Bm.T @ Dm @ Bm * detJ * w * 0.5
             for ii in range(12):
                 for jj in range(12):
@@ -171,6 +179,35 @@ class CTria6Element(BaseElement):
             for ii in range(12):
                 for jj in range(12):
                     k[bend_dofs[ii], bend_dofs[jj]] += kb[ii, jj]
+
+        # 1-point reduced integration for transverse shear (centroid)
+        # gamma_xz = dw/dx - ry, gamma_yz = dw/dy + rx
+        L1_c, L2_c = 1.0 / 3.0, 1.0 / 3.0
+        w_c = 1.0  # weight for single centroid rule
+        N_c, dNdL1_c, dNdL2_c = self.shape_functions(L1_c, L2_c)
+
+        J_c = np.zeros((2, 2))
+        J_c[0, 0] = dNdL1_c @ xy[:, 0]
+        J_c[0, 1] = dNdL1_c @ xy[:, 1]
+        J_c[1, 0] = dNdL2_c @ xy[:, 0]
+        J_c[1, 1] = dNdL2_c @ xy[:, 1]
+        detJ_c = np.linalg.det(J_c)
+        Jinv_c = np.linalg.inv(J_c)
+
+        dNdx_c = Jinv_c[0, 0] * dNdL1_c + Jinv_c[0, 1] * dNdL2_c
+        dNdy_c = Jinv_c[1, 0] * dNdL1_c + Jinv_c[1, 1] * dNdL2_c
+
+        Bs = np.zeros((2, 18))
+        for nd in range(6):
+            Bs[0, 3 * nd] = dNdx_c[nd]        # dw/dx
+            Bs[0, 3 * nd + 2] = -N_c[nd]      # -ry
+            Bs[1, 3 * nd] = dNdy_c[nd]         # dw/dy
+            Bs[1, 3 * nd + 1] = N_c[nd]        # +rx
+
+        ks = Bs.T @ Ds @ Bs * detJ_c * w_c * 0.5
+        for ii in range(18):
+            for jj in range(18):
+                k[shear_dofs[ii], shear_dofs[jj]] += ks[ii, jj]
 
         # Drilling DOF stabilization
         area = self._compute_area()

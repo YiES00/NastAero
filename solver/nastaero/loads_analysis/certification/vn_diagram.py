@@ -19,6 +19,7 @@ from .aircraft_config import (
     AircraftConfig, SpeedSchedule, WeightCGCondition,
     part23_nz_max, part23_nz_min,
     eas_to_tas, eas_to_mach, dynamic_pressure_from_eas,
+    gust_Ude_at_altitude,
     RHO_0, G_MPS2, KG_PER_LB, FPS_TO_MPS,
 )
 from ..case_generator import isa_atmosphere
@@ -56,13 +57,18 @@ class VnPoint:
 def pratt_gust_delta_nz(V_eas: float, Ude_fps: float,
                          wing_loading_pa: float, CLalpha: float,
                          mean_chord_m: float, weight_N: float,
-                         wing_area_m2: float) -> float:
+                         wing_area_m2: float,
+                         altitude_m: float = 0.0) -> float:
     """Compute gust-induced incremental load factor (Pratt formula).
 
-    Δn = (ρ₀ × V × CLα × Kg × Ude) / (2 × W/S)
+    Δn = (ρ₀ × V_EAS × CLα × Kg × Ude) / (2 × W/S)
 
     where Kg = 0.88 × μg / (5.3 + μg)  (gust alleviation factor)
-          μg = 2 × (W/S) / (ρ₀ × c̄ × CLα × g)
+          μg = 2 × (W/S) / (ρ(h) × c̄ × CLα × g)
+
+    The numerator uses ρ₀ because V is in EAS (q = ½ρ₀V²_EAS).
+    The mass ratio μg uses the actual density ρ(h) at altitude per
+    FAR 23.341 ("ρ = density of air").
 
     Parameters
     ----------
@@ -80,6 +86,8 @@ def pratt_gust_delta_nz(V_eas: float, Ude_fps: float,
         Aircraft weight (N).
     wing_area_m2 : float
         Wing area (m^2).
+    altitude_m : float
+        Altitude in meters (default 0.0 = sea level).
 
     Returns
     -------
@@ -91,13 +99,16 @@ def pratt_gust_delta_nz(V_eas: float, Ude_fps: float,
 
     Ude_mps = Ude_fps * FPS_TO_MPS
 
-    # Mass ratio (airplane mass parameter)
-    mu_g = 2.0 * wing_loading_pa / (RHO_0 * mean_chord_m * CLalpha * G_MPS2)
+    # Density at altitude for mass ratio (FAR 23.341)
+    rho_h, _, _ = isa_atmosphere(altitude_m)
+
+    # Mass ratio (airplane mass parameter) — uses ρ(h), not ρ₀
+    mu_g = 2.0 * wing_loading_pa / (rho_h * mean_chord_m * CLalpha * G_MPS2)
 
     # Gust alleviation factor (Pratt)
     Kg = 0.88 * mu_g / (5.3 + mu_g)
 
-    # Incremental load factor
+    # Incremental load factor — numerator uses ρ₀ (V is EAS)
     delta_n = (RHO_0 * V_eas * CLalpha * Kg * Ude_mps) / (2.0 * wing_loading_pa)
 
     return abs(delta_n)
@@ -173,9 +184,9 @@ def compute_vn_diagram(config: AircraftConfig,
     S = config.wing_area_m2
     WS = W / S if S > 0 else 0.0
 
-    # Part 23 load factors
-    nz_max = part23_nz_max(W)
-    nz_min = part23_nz_min(nz_max)
+    # Part 23 load factors (use config override if set)
+    nz_max = config.nz_max(W)
+    nz_min = config.nz_min(W)
 
     # Compute VA if not specified
     VA = speeds.VA
@@ -255,8 +266,9 @@ def compute_vn_diagram(config: AircraftConfig,
     # ---------------------------------------------------------------
     CLalpha = config.CLalpha
     cbar = config.mean_chord_m
-    Ude_VC = config.gust_Ude_VC_fps
-    Ude_VD = config.gust_Ude_VD_fps
+    # Altitude-dependent gust velocities per FAR 23.333(c)
+    Ude_VC = gust_Ude_at_altitude(altitude_m, config.gust_Ude_VC_fps)
+    Ude_VD = gust_Ude_at_altitude(altitude_m, config.gust_Ude_VD_fps)
 
     # Gust Ude varies linearly between VB, VC, VD
     # At VB: Ude from §23.333(c) — linearly extrapolated from VC value
@@ -278,7 +290,8 @@ def compute_vn_diagram(config: AircraftConfig,
     for V, Ude in gust_speeds_ude:
         if V <= 0 or WS <= 0:
             continue
-        dn = pratt_gust_delta_nz(V, Ude, WS, CLalpha, cbar, W, S)
+        dn = pratt_gust_delta_nz(V, Ude, WS, CLalpha, cbar, W, S,
+                                  altitude_m=altitude_m)
 
         nz_gust_pos = 1.0 + dn
         nz_gust_neg = 1.0 - dn
@@ -309,7 +322,8 @@ def compute_vn_diagram(config: AircraftConfig,
             frac = (V - VC) / (VD - VC) if VD > VC else 0.0
             Ude = Ude_VC + (Ude_VD - Ude_VC) * frac
 
-        dn = pratt_gust_delta_nz(V, Ude, WS, CLalpha, cbar, W, S)
+        dn = pratt_gust_delta_nz(V, Ude, WS, CLalpha, cbar, W, S,
+                                  altitude_m=altitude_m)
         gust_curve_pos.append((V, 1.0 + dn))
         gust_curve_neg.append((V, 1.0 - dn))
 

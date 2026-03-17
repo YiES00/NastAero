@@ -31,6 +31,8 @@ from .mesh_builder import (
     build_beam_tubes,
     build_deformed_beam_tubes,
     add_displacement_data,
+    build_rotor_blades,
+    build_rotor_disks,
 )
 
 
@@ -62,12 +64,17 @@ class NastAeroViewer:
         Analysis results (from SOL 101/103/144).
     off_screen : bool
         If True, render off-screen (for saving screenshots).
+    vtol_config : VTOLConfig, optional
+        VTOL rotor configuration. If provided, rotor blades and disks
+        are rendered in 3D alongside the structural model.
     """
 
-    def __init__(self, bdf_model, results=None, off_screen: bool = False):
+    def __init__(self, bdf_model, results=None, off_screen: bool = False,
+                 vtol_config=None):
         self.bdf_model = bdf_model
         self.results = results
         self.off_screen = off_screen
+        self.vtol_config = vtol_config
 
         # Pre-compute mesh
         self._struct_mesh = None
@@ -188,6 +195,34 @@ class NastAeroViewer:
         except Exception:
             pass
 
+    def _add_rotors(self, pl, blade_opacity: float = 0.9,
+                     disk_opacity: float = 0.15) -> None:
+        """Add rotor blades and disks to plotter if VTOLConfig is provided.
+
+        CW blades are shown in darkorange, CCW in steelblue.
+        Disks are semi-transparent gray annuli.
+        """
+        if self.vtol_config is None:
+            return
+        try:
+            from ..rotor.rotor_config import RotationDir
+            cw = build_rotor_blades(self.vtol_config,
+                                    rotation_filter=RotationDir.CW)
+            ccw = build_rotor_blades(self.vtol_config,
+                                     rotation_filter=RotationDir.CCW)
+            disks = build_rotor_disks(self.vtol_config)
+            if cw is not None:
+                pl.add_mesh(cw, color='darkorange', opacity=blade_opacity,
+                            label='CW Blades')
+            if ccw is not None:
+                pl.add_mesh(ccw, color='steelblue', opacity=blade_opacity,
+                            label='CCW Blades')
+            if disks is not None:
+                pl.add_mesh(disks, color='gray', opacity=disk_opacity,
+                            show_edges=False, label='Rotor Disks')
+        except Exception:
+            pass
+
     def plot_model(
         self,
         show_edges: bool = True,
@@ -265,6 +300,9 @@ class NastAeroViewer:
         # Auto-detect and show aero panels
         self._add_aero_panels(pl)
 
+        # Show rotor blades and disks if VTOLConfig provided
+        self._add_rotors(pl)
+
         if title:
             pl.add_title(title, font_size=14)
         else:
@@ -275,6 +313,10 @@ class NastAeroViewer:
                 n_panels = sum(max(c.nspan,1) * max(c.nchord,1)
                                for c in self.bdf_model.caero_panels.values())
                 parts.append(f"{n_panels} aero panels")
+            if self.vtol_config:
+                n_rotors = len(self.vtol_config.rotors)
+                n_blades = sum(r.n_blades for r in self.vtol_config.rotors)
+                parts.append(f"{n_rotors} rotors ({n_blades} blades)")
             pl.add_title(f"NastAero Model ({', '.join(parts)})", font_size=14)
 
         pl.add_axes()

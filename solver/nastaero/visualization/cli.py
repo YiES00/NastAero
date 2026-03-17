@@ -281,6 +281,11 @@ Certification visualization:
     parser.add_argument('--cert-save', type=str, default=None, metavar='PREFIX',
                         help='Save cert plots to files with this prefix')
 
+    # VTOL
+    parser.add_argument('--vtol', type=str, nargs='?', const='kc100-tilt12',
+                        default=None, metavar='CONFIG',
+                        help='Show rotor blades (kc100-tilt12 | kc100-lc | JSON path)')
+
     # Output
     parser.add_argument('--screenshot', type=str, default=None,
                         help='Save screenshot to file (PNG)')
@@ -475,9 +480,23 @@ Certification visualization:
         print("\nVMT diagram complete.")
         return
 
+    # Resolve VTOL configuration if requested
+    vtol_config = None
+    if args.vtol:
+        from ..rotor.rotor_config import VTOLConfig
+        if args.vtol == 'kc100-tilt12':
+            vtol_config = VTOLConfig.kc100_tilt_rotor_12()
+        elif args.vtol == 'kc100-lc':
+            vtol_config = VTOLConfig.kc100_lift_cruise()
+        else:
+            import json
+            with open(args.vtol) as f:
+                vtol_config = VTOLConfig.from_dict(json.load(f))
+
     # Create PyVista viewer (only for 3D visualization modes)
     from .viewer import NastAeroViewer
-    viewer = NastAeroViewer(bdf_model, results, off_screen=off_screen)
+    viewer = NastAeroViewer(bdf_model, results, off_screen=off_screen,
+                            vtol_config=vtol_config)
 
     # Export VTK if requested
     if args.export:

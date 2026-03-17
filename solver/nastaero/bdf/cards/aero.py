@@ -283,6 +283,39 @@ class AESURF:
 
 
 @dataclass
+class AELINK:
+    """Aerodynamic control surface linkage.
+
+    AELINK  ID  LABDEP  LABIND1  C1  LABIND2  C2  ...
+
+    Links a dependent surface to independent trim variables:
+        LABDEP = C1 * LABIND1 + C2 * LABIND2 + ...
+
+    Used for V-tail coupling (ELEVR = ELEV + RUD, ELEVL = ELEV - RUD)
+    and differential ailerons (ARONR = ARON, ARONL = -ARON).
+    """
+    id: int = 0
+    dependent: str = ""
+    links: List[Tuple[str, float]] = field(default_factory=list)
+
+    @classmethod
+    def from_fields(cls, fields: List[str]) -> AELINK:
+        a = cls()
+        a.id = nastran_int(fields[1])
+        a.dependent = fields[2].strip().upper() if len(fields) > 2 else ""
+        i = 3
+        while i + 1 < len(fields):
+            label = fields[i].strip().upper()
+            if not label:
+                i += 1
+                continue
+            coeff = nastran_float(fields[i + 1])
+            a.links.append((label, coeff))
+            i += 2
+        return a
+
+
+@dataclass
 class TRIM:
     """Static aeroelastic trim condition.
     TRIM  ID  MACH  Q  LABEL1 UX1  LABEL2 UX2  ...

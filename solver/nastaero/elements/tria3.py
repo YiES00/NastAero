@@ -1,6 +1,9 @@
 """CTRIA3: 3-node triangular plate element (18 DOFs).
 
-CST (Constant Strain Triangle) membrane + discrete plate bending.
+CST (Constant Strain Triangle) membrane + Mindlin-Reissner plate bending.
+
+Uses constant-strain membrane, constant-curvature bending, and
+1-point reduced integration for transverse shear (prevents shear locking).
 """
 from __future__ import annotations
 import numpy as np
@@ -45,6 +48,13 @@ class CTria3Element(BaseElement):
         return T.T @ m_local @ T
 
     def _local_stiffness(self):
+        """Build 18x18 local stiffness (DOF order: u,v,w,rx,ry,rz per node).
+
+        Uses selective reduced integration:
+        - Full integration for membrane (CST, constant B-matrix)
+        - Full integration for bending (constant curvature)
+        - 1-point (centroid) for transverse shear (prevents shear locking)
+        """
         E, nu, t = self.E, self.nu, self.t
         xy = self.xy_local
         x1, y1 = xy[0]; x2, y2 = xy[1]; x3, y3 = xy[2]
@@ -61,15 +71,28 @@ class CTria3Element(BaseElement):
             [c1, b1, c2, b2, c3, b3]])
         km = self.area * Bm.T @ Dm @ Bm
 
-        # Simple plate bending (constant curvature triangle)
+        # Plate bending (constant curvature triangle)
         Db = (E * t**3 / (12 * (1 - nu**2))) * np.array([[1, nu, 0], [nu, 1, 0], [0, 0, (1-nu)/2]])
-        # For a simple flat plate bending triangle with 3 DOFs per node (w, rx, ry):
-        # Use area coordinate approach
         Bb = (1/A2) * np.array([
             [0, 0, -b1, 0, 0, -b2, 0, 0, -b3],
             [0, c1, 0, 0, c2, 0, 0, c3, 0],
             [0, b1, -c1, 0, b2, -c2, 0, b3, -c3]])
         kb = self.area * Bb.T @ Db @ Bb
+
+        # Transverse shear (Mindlin-Reissner, 1-point at centroid)
+        # gamma_xz = dw/dx - ry, gamma_yz = dw/dy + rx
+        kappa = 5.0 / 6.0
+        Ds = kappa * (E * t / (2 * (1 + nu))) * np.eye(2)
+        dNdx = np.array([b1, b2, b3]) / A2
+        dNdy = np.array([c1, c2, c3]) / A2
+        N_c = np.array([1.0/3.0, 1.0/3.0, 1.0/3.0])  # centroid
+        Bs = np.zeros((2, 9))
+        for i in range(3):
+            Bs[0, 3*i] = dNdx[i]       # dw/dx
+            Bs[0, 3*i+2] = -N_c[i]     # -ry
+            Bs[1, 3*i] = dNdy[i]       # dw/dy
+            Bs[1, 3*i+1] = N_c[i]      # +rx
+        ks = self.area * Bs.T @ Ds @ Bs
 
         # Assemble into 18x18
         k = np.zeros((18, 18))
@@ -79,11 +102,11 @@ class CTria3Element(BaseElement):
             for j in range(6):
                 k[mem_dofs[i], mem_dofs[j]] += km[i, j]
 
-        # Bending: w,rx,ry -> DOFs 2,3,4, 8,9,10, 14,15,16
+        # Bending + shear: w,rx,ry -> DOFs 2,3,4, 8,9,10, 14,15,16
         bend_dofs = [2,3,4, 8,9,10, 14,15,16]
         for i in range(9):
             for j in range(9):
-                k[bend_dofs[i], bend_dofs[j]] += kb[i, j]
+                k[bend_dofs[i], bend_dofs[j]] += kb[i, j] + ks[i, j]
 
         # Drilling DOF (rz): small penalty
         alpha = E * t * self.area * 1e-6

@@ -870,3 +870,216 @@ def add_displacement_data(
     grid.point_data['R1'] = r1
     grid.point_data['R2'] = r2
     grid.point_data['R3'] = r3
+
+
+# ---------------------------------------------------------------------------
+# Rotor blade and disk meshes for VTOL visualization
+# ---------------------------------------------------------------------------
+
+def _rotor_shaft_frame(shaft_axis: np.ndarray) -> np.ndarray:
+    """Build orthonormal rotation matrix from shaft frame to model coords.
+
+    Same convention as rotor_loads_applicator.py:39-51.
+
+    Returns
+    -------
+    R : ndarray (3, 3)
+        Columns are [x_shaft, y_shaft, z_shaft] in model coords.
+        z_shaft = normalised shaft_axis.
+    """
+    z = shaft_axis / np.linalg.norm(shaft_axis)
+    v = np.array([1., 0., 0.]) if abs(z[0]) < 0.9 else np.array([0., 1., 0.])
+    x = np.cross(z, v)
+    x /= np.linalg.norm(x)
+    y = np.cross(z, x)
+    return np.column_stack([x, y, z])
+
+
+def build_rotor_blades(
+    vtol_config,
+    n_radial: int = 15,
+    n_profile: int = 12,
+    rotation_filter=None,
+) -> Optional[pv.PolyData]:
+    """Build 3D blade surface meshes for VTOL rotors.
+
+    Each blade is a lofted surface through NACA 0012 cross-sections
+    at each radial station, with chord and twist distribution applied.
+
+    Parameters
+    ----------
+    vtol_config : VTOLConfig
+    n_radial : int
+        Radial stations per blade.
+    n_profile : int
+        Airfoil points per side (total ~2*n_profile - 1).
+    rotation_filter : RotationDir or None
+        If set, only build blades for rotors matching this direction.
+
+    Returns
+    -------
+    pv.PolyData or None
+    """
+    from ..rotor.airfoil import RotorAirfoil
+
+    rotors = vtol_config.rotors
+    if rotation_filter is not None:
+        rotors = [r for r in rotors if r.rotation_dir == rotation_filter]
+    if not rotors:
+        return None
+
+    # Base airfoil profile (chord-normalised)
+    profile = RotorAirfoil.naca_4digit_profile(t=0.12, n_pts=n_profile)
+    n_prof = len(profile)  # 2*n_profile - 1
+
+    all_grids = []
+
+    for rotor in rotors:
+        blade = rotor.blade
+        R_mm = blade.radius * 1000.0
+        root_r = blade.root_cutout
+        r_stations = np.linspace(root_r, 1.0, n_radial)
+
+        shaft = rotor.effective_shaft_axis
+        R_mat = _rotor_shaft_frame(shaft)
+        hub = rotor.hub_position  # mm
+
+        for k in range(rotor.n_blades):
+            psi = k * 2.0 * np.pi / rotor.n_blades
+
+            # Rotation matrix for azimuth about z_shaft (in shaft frame)
+            cos_p, sin_p = np.cos(psi), np.sin(psi)
+
+            points = np.zeros((n_radial, n_prof, 3))
+
+            for i, r_frac in enumerate(r_stations):
+                chord_mm = blade.chord_at(r_frac) * 1000.0
+                twist = blade.twist_at(r_frac)
+                r_mm = r_frac * R_mm
+
+                for j in range(n_prof):
+                    # Airfoil in local blade section coords
+                    # x = chordwise (positive TE), y = thickness
+                    x_af = (profile[j, 0] - 0.25) * chord_mm
+                    y_af = profile[j, 1] * chord_mm
+
+                    # Apply twist (rotation about span axis)
+                    cos_t, sin_t = np.cos(twist), np.sin(twist)
+                    x_tw = x_af * cos_t + y_af * sin_t
+                    y_tw = -x_af * sin_t + y_af * cos_t
+
+                    # In shaft frame: x_s = chordwise, y_s = thickness,
+                    # z_s = radial (along shaft axis for lift rotor)
+                    # Blade extends in x-y plane at radius r
+                    # Position before azimuth: (x_tw, r_mm + y_tw, 0)
+                    # Wait — need to think about this more carefully.
+                    #
+                    # Blade span is radial from hub (perpendicular to shaft).
+                    # In shaft frame, z=shaft direction (up for hover).
+                    # Blade extends radially outward from hub in x-y plane.
+                    # At azimuth=0, blade spans along x_shaft direction.
+                    #
+                    # Local blade coords:
+                    #   span = radial direction (blade long axis)
+                    #   chord = perpendicular to span in x-y plane
+                    #   thickness = along z_shaft
+                    #
+                    # At azimuth=0, span is along x_shaft:
+                    #   p_shaft = (r_mm, x_tw_rotated, y_tw_rotated)
+                    # Actually simpler:
+                    #   span direction = x_shaft (at psi=0)
+                    #   chordwise = y_shaft
+                    #   thickness = z_shaft (along shaft axis)
+                    #
+                    # So in shaft frame before azimuth rotation:
+                    #   p = (r_mm, x_tw, y_tw)  where x_tw is chord, y_tw is thickness
+
+                    p_shaft = np.array([
+                        r_mm * cos_p - x_tw * sin_p,
+                        r_mm * sin_p + x_tw * cos_p,
+                        y_tw,
+                    ])
+
+                    # Transform to model coordinates
+                    p_model = R_mat @ p_shaft + hub
+                    points[i, j, :] = p_model
+
+            # Build structured grid for this blade
+            X = points[:, :, 0]
+            Y = points[:, :, 1]
+            Z = points[:, :, 2]
+            grid = pv.StructuredGrid(X, Y, Z)
+            all_grids.append(grid.extract_surface())
+
+    if not all_grids:
+        return None
+
+    combined = all_grids[0]
+    for g in all_grids[1:]:
+        combined = combined.merge(g)
+    return combined
+
+
+def build_rotor_disks(
+    vtol_config,
+    n_circle: int = 48,
+) -> Optional[pv.PolyData]:
+    """Build semi-transparent rotor disk annuli for all rotors.
+
+    Parameters
+    ----------
+    vtol_config : VTOLConfig
+    n_circle : int
+        Points around the disk perimeter.
+
+    Returns
+    -------
+    pv.PolyData or None
+    """
+    rotors = vtol_config.rotors
+    if not rotors:
+        return None
+
+    all_disks = []
+    theta = np.linspace(0, 2.0 * np.pi, n_circle, endpoint=False)
+
+    for rotor in rotors:
+        R_mm = rotor.blade.radius * 1000.0
+        r_inner = rotor.blade.root_cutout * R_mm
+        r_outer = R_mm
+
+        shaft = rotor.effective_shaft_axis
+        R_mat = _rotor_shaft_frame(shaft)
+        hub = rotor.hub_position
+
+        # Annulus: outer ring + inner ring
+        pts_outer = np.zeros((n_circle, 3))
+        pts_inner = np.zeros((n_circle, 3))
+
+        for i in range(n_circle):
+            cos_t, sin_t = np.cos(theta[i]), np.sin(theta[i])
+            # In shaft frame: circle in x-y plane
+            p_out = np.array([r_outer * cos_t, r_outer * sin_t, 0.0])
+            p_in = np.array([r_inner * cos_t, r_inner * sin_t, 0.0])
+            pts_outer[i] = R_mat @ p_out + hub
+            pts_inner[i] = R_mat @ p_in + hub
+
+        # Build annulus as quad strip
+        n = n_circle
+        points = np.vstack([pts_outer, pts_inner])  # 2*n points
+        faces = []
+        for i in range(n):
+            i_next = (i + 1) % n
+            # Quad: outer[i], outer[i+1], inner[i+1], inner[i]
+            faces.extend([4, i, i_next, n + i_next, n + i])
+
+        disk = pv.PolyData(points, np.array(faces))
+        all_disks.append(disk)
+
+    if not all_disks:
+        return None
+
+    combined = all_disks[0]
+    for d in all_disks[1:]:
+        combined = combined.merge(d)
+    return combined

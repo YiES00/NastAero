@@ -166,11 +166,16 @@ class VTOLLoadCaseMatrix:
         # Cruise rotor: forward thrust (if V > 0)
         for rotor in self.vtol_config.cruise_rotors:
             if condition.V_eas > 1.0 and rotor.rpm_cruise > 0:
-                # Simple thrust estimate for pusher
                 solver = self._get_bemt_solver(rotor)
-                # Cruise thrust ~ drag at this speed (simplified)
-                # Use a fraction of weight as drag estimate
-                drag_est = total_weight_N * 0.05  # L/D ~ 20
+                # Speed-dependent drag: D = CD0*S * q
+                # Estimate CD0*S from cruise L/D~20:
+                #   D_cruise = W / 20 at V_cruise
+                #   CD0*S = D_cruise / q_cruise
+                q_eas = 0.5 * rho * condition.V_eas ** 2
+                # Use W/(L/D) as cruise drag reference, scale by q ratio
+                wt_ref = total_weight_N / condition.nz  # Remove nz scaling
+                drag_est = wt_ref * 0.05 * (q_eas / (0.5 * rho * 35.0 ** 2))
+                drag_est = max(drag_est, wt_ref * 0.01)  # Minimum drag floor
                 loads = solver.solve_for_thrust(
                     drag_est, rotor.rpm_cruise, rho,
                     V_inf=condition.V_eas)
@@ -252,9 +257,15 @@ class VTOLLoadCaseMatrix:
         conditions.extend(generate_hover_conditions(altitudes))
         conditions.extend(generate_oei_conditions(
             self.vtol_config.n_hover_rotors, hover_rotor_ids, altitudes))
+        # Pass wing parameters for capability-based thrust fraction
+        cfg = self.aircraft_config
         conditions.extend(generate_transition_conditions(
             self.vtol_config.v_mca, self.vtol_config.v_transition_end,
-            altitudes))
+            altitudes,
+            wing_area_m2=getattr(cfg, 'wing_area_m2', 0.0),
+            CL_transition=1.0,
+            weight_N=cfg.weight_cg_conditions[0].weight_N if cfg.weight_cg_conditions else 0.0,
+        ))
         conditions.extend(generate_vtol_landing_conditions(altitudes))
         conditions.extend(generate_rotor_jam_conditions(
             all_rotor_ids, altitudes))

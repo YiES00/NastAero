@@ -26,6 +26,7 @@ from .flight_sim import ControlInput
 from .aircraft_config import (
     AircraftConfig, WeightCGCondition, SpeedSchedule,
     ControlSurfaceLimits, eas_to_tas, dynamic_pressure_from_eas,
+    gust_Ude_at_altitude,
     RHO_0, G_MPS2,
 )
 
@@ -82,6 +83,48 @@ class _RampControl:
         da = self.da_target * frac
         dr = self.dr_target * frac
         return ControlInput(delta_e=de, delta_a=da, delta_r=dr)
+
+
+class _RampHoldReleaseControl:
+    """Ramp up → hold at peak → ramp back to zero → free response.
+
+    Implements a trapezoidal control pulse for yaw-type maneuvers where
+    the critical structural loads occur during the initial transient,
+    and holding full deflection indefinitely would saturate the linear
+    aero model.
+
+    Timeline: 0→t_ramp_up→(+t_hold)→(+t_ramp_down)→free
+
+    Pickle-safe for ProcessPoolExecutor.
+    """
+    __slots__ = ('de_trim', 'dr_target', 't_up', 't_hold_end', 't_down_end')
+
+    def __init__(self, de_trim: float, dr_target: float,
+                 t_ramp_up: float = 0.15, t_hold: float = 0.1,
+                 t_ramp_down: float = 0.15):
+        self.de_trim = de_trim
+        self.dr_target = dr_target
+        self.t_up = t_ramp_up
+        self.t_hold_end = t_ramp_up + t_hold
+        self.t_down_end = t_ramp_up + t_hold + t_ramp_down
+
+    def __call__(self, t):
+        if t < 0:
+            frac = 0.0
+        elif t < self.t_up:
+            # Ramp up
+            frac = t / self.t_up
+        elif t < self.t_hold_end:
+            # Hold at peak
+            frac = 1.0
+        elif t < self.t_down_end:
+            # Ramp back to zero
+            frac = 1.0 - (t - self.t_hold_end) / (self.t_down_end - self.t_hold_end)
+        else:
+            # Free response — no rudder input
+            frac = 0.0
+        return ControlInput(delta_e=self.de_trim, delta_a=0.0,
+                            delta_r=self.dr_target * frac)
 
 
 class _CheckedControl:
@@ -378,9 +421,16 @@ def abrupt_roll(
     delta_a: float,
     delta_e_trim: float = 0.0,
     t_ramp: float = 0.1,
-    t_hold: float = 2.0,
+    t_hold: float = 1.0,
 ) -> ManeuverProfile:
-    """§23.349: Abrupt aileron roll input."""
+    """§23.349: Abrupt aileron roll input.
+
+    t_hold=1.0 s captures the peak wing-root load during the initial
+    rolling acceleration phase (roll-subsidence time constant ~0.3–0.5 s).
+    Longer holds cause the aircraft to exceed 90° bank, generating
+    secondary yaw–roll coupling loads that are unrealistic for structural
+    certification.
+    """
     t_end = t_ramp + t_hold + 0.5
 
     return ManeuverProfile(
@@ -398,17 +448,33 @@ def yaw_maneuver(
     delta_r: float,
     delta_e_trim: float = 0.0,
     t_ramp: float = 0.15,
-    t_hold: float = 2.0,
+    t_hold: float = 0.1,
+    t_release: float = 0.15,
+    t_free: float = 0.3,
 ) -> ManeuverProfile:
-    """§23.351: Rudder yaw maneuver."""
-    t_end = t_ramp + t_hold + 0.5
+    """§23.351: Rudder yaw maneuver — trapezoidal pulse.
+
+    Uses a ramp-hold-release-free profile instead of sustained deflection.
+    The critical VTP and fuselage lateral shear loads occur during the
+    initial sideslip transient (t ≈ 0.1–0.3 s after application).
+    Sustained full-rudder input beyond 0.3 s drives β past the linear
+    aero model validity range (~25°), producing non-physical results.
+
+    Default timing (total 0.7 s):
+      0–0.15 s  : ramp up to full rudder
+      0.15–0.25 s: hold at peak (captures max VTP shear)
+      0.25–0.40 s: ramp back to zero (pilot releases rudder)
+      0.40–0.70 s: free response (verify directional stability)
+    """
+    t_end = t_ramp + t_hold + t_release + t_free
 
     return ManeuverProfile(
         maneuver_type="yaw",
         far_section="§23.351",
         t_end=t_end,
-        control_func=_RampControl(
-            de_trim=delta_e_trim, dr_target=delta_r, t_ramp=t_ramp),
+        control_func=_RampHoldReleaseControl(
+            de_trim=delta_e_trim, dr_target=delta_r,
+            t_ramp_up=t_ramp, t_hold=t_hold, t_ramp_down=t_release),
         description=f"Yaw: δr={math.degrees(delta_r):.1f}°",
         delta_e_trim=delta_e_trim,
     )
@@ -449,12 +515,19 @@ def discrete_gust_lateral(
     V_tas: float,
     delta_e_trim: float = 0.0,
 ) -> ManeuverProfile:
-    """Lateral discrete 1-cosine gust for VTP loads."""
+    """Lateral discrete 1-cosine gust for VTP loads.
+
+    Post-gust buffer reduced to 0.5 s to capture the peak sideslip
+    response immediately after the gust passage.  The critical VTP
+    loads occur during and just after the gust (t ≈ t_gust ± 0.2 s).
+    Longer free-response periods allow uncorrected yaw divergence
+    to accumulate past the linear aero model validity range (β > 25°).
+    """
     Ude_ms = Ude_fps * 0.3048
     H = 12.5 * c_bar_m
     gust_length = 2.0 * H
     t_gust = gust_length / V_tas
-    t_end = t_gust + 2.0
+    t_end = t_gust + 0.5
 
     return ManeuverProfile(
         maneuver_type="gust_lat",
@@ -591,14 +664,17 @@ def generate_all_maneuver_profiles(
             yaw_maneuver(-dr, delta_e_trim),
             V_eas, f"Yaw-_{sp_label}_{wc.label}"))
 
-    # 5. Vertical gusts (§23.341)
+    # 5. Vertical gusts (§23.341) — altitude-dependent Ude per §23.333(c)
+    Ude_VC_alt = gust_Ude_at_altitude(alt_m, config.gust_Ude_VC_fps)
+    Ude_VD_alt = gust_Ude_at_altitude(alt_m, config.gust_Ude_VD_fps)
+
     gust_speeds = {}
     if sp.VB > 0:
-        gust_speeds["VB"] = (sp.VB, config.gust_Ude_VC_fps)
+        gust_speeds["VB"] = (sp.VB, Ude_VC_alt)
     if sp.VC > 0:
-        gust_speeds["VC"] = (sp.VC, config.gust_Ude_VC_fps)
+        gust_speeds["VC"] = (sp.VC, Ude_VC_alt)
     if sp.VD > 0:
-        gust_speeds["VD"] = (sp.VD, config.gust_Ude_VD_fps)
+        gust_speeds["VD"] = (sp.VD, Ude_VD_alt)
 
     for sp_label, (V_eas, Ude_fps) in gust_speeds.items():
         V_tas = eas_to_tas(V_eas, alt_m)
@@ -609,10 +685,10 @@ def generate_all_maneuver_profiles(
             discrete_gust_vertical(-Ude_fps, c_bar_m, V_tas, delta_e_trim),
             V_eas, f"GustVert-_{sp_label}_{wc.label}"))
 
-    # 6. Lateral gusts — at VC
+    # 6. Lateral gusts — at VC (altitude-adjusted Ude)
     if sp.VC > 0:
         V_tas_vc = eas_to_tas(sp.VC, alt_m)
-        Ude_lat = config.gust_Ude_VC_fps
+        Ude_lat = Ude_VC_alt
         profiles.append((
             discrete_gust_lateral(Ude_lat, c_bar_m, V_tas_vc, delta_e_trim),
             sp.VC, f"GustLat+_VC_{wc.label}"))

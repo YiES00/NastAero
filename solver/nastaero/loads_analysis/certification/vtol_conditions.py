@@ -170,13 +170,18 @@ def generate_oei_conditions(n_lift_rotors: int,
 def generate_transition_conditions(v_mca: float,
                                     v_transition_end: float,
                                     altitudes_m: List[float],
-                                    n_speed_steps: int = 4,
+                                    n_speed_steps: int = 8,
+                                    wing_area_m2: float = 0.0,
+                                    CL_transition: float = 1.0,
+                                    weight_N: float = 0.0,
                                     ) -> List[VTOLCondition]:
     """Generate transition corridor conditions.
 
-    In transition, both rotors and wings provide lift. The thrust
-    fraction decreases linearly from 1.0 at V=0 to 0.0 at
-    v_transition_end.
+    Thrust fraction is based on wing lift capability at each speed:
+    the wing carries what it can (up to CL_transition), and rotors
+    supplement the remainder. This avoids the unrealistic linear
+    model that would reduce rotor thrust at speeds where the wing
+    cannot yet provide sufficient lift.
 
     Parameters
     ----------
@@ -188,6 +193,14 @@ def generate_transition_conditions(v_mca: float,
         Analysis altitudes.
     n_speed_steps : int
         Number of speed points in transition corridor.
+    wing_area_m2 : float
+        Wing reference area (m²). If 0, falls back to linear model.
+    CL_transition : float
+        Maximum CL used during transition (conservative, below CLmax
+        to maintain stall margin). Default 1.0.
+    weight_N : float
+        Aircraft weight (N) for wing lift fraction calculation.
+        If 0, falls back to linear model.
 
     Returns
     -------
@@ -196,15 +209,32 @@ def generate_transition_conditions(v_mca: float,
     import numpy as np
 
     conditions = []
-    speeds = np.linspace(v_mca, v_transition_end, n_speed_steps)
+    # Extend speed range: start from low speed (just above hover)
+    # to v_transition_end, with finer spacing
+    v_start = max(1.0, v_mca * 0.5)  # Start below V_MCA
+    speeds = np.linspace(v_start, v_transition_end, n_speed_steps)
+
+    use_wing_capability = (wing_area_m2 > 0 and weight_N > 0)
 
     for alt in altitudes_m:
+        from ..case_generator import isa_atmosphere
+        rho, _, _ = isa_atmosphere(alt)
+
         for V in speeds:
-            # Thrust fraction decreases linearly in transition
-            if v_transition_end > 0:
-                tf = max(0.0, 1.0 - V / v_transition_end)
+            if use_wing_capability:
+                # Wing-capability-based thrust fraction
+                q = 0.5 * rho * V ** 2
+                L_wing_max = CL_transition * q * wing_area_m2
+                if L_wing_max >= weight_N:
+                    tf = 0.0  # Wing carries full weight
+                else:
+                    tf = 1.0 - L_wing_max / weight_N
             else:
-                tf = 1.0
+                # Fallback: linear model
+                if v_transition_end > 0:
+                    tf = max(0.0, 1.0 - V / v_transition_end)
+                else:
+                    tf = 1.0
 
             # nz = 1.0 (level flight) and nz_max for maneuvering
             for nz in [1.0, 1.5]:

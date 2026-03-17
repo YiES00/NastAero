@@ -114,3 +114,38 @@ class RotorAirfoil:
             Cm_0=0.0,
             alpha_stall=np.radians(12.0),
         )
+
+    @staticmethod
+    def naca_4digit_profile(t: float = 0.12, n_pts: int = 20) -> np.ndarray:
+        """Generate NACA 4-digit symmetric airfoil profile coordinates.
+
+        Parameters
+        ----------
+        t : float
+            Maximum thickness as fraction of chord (0.12 for NACA 0012).
+        n_pts : int
+            Number of points per side. Total profile = 2*n_pts - 1 points.
+
+        Returns
+        -------
+        np.ndarray, shape (2*n_pts - 1, 2)
+            Airfoil coordinates (x/c, y/c) from TE upper surface, around
+            the leading edge, to TE lower surface. Chord-normalized [0, 1].
+        """
+        # Cosine spacing — clusters points near LE
+        theta = np.linspace(0.0, np.pi, n_pts)
+        x = 0.5 * (1.0 - np.cos(theta))
+
+        # NACA 4-digit thickness distribution
+        y_t = 5.0 * t * (
+            0.2969 * np.sqrt(x)
+            - 0.1260 * x
+            - 0.3516 * x ** 2
+            + 0.2843 * x ** 3
+            - 0.1015 * x ** 4
+        )
+
+        # Upper surface (TE → LE) + Lower surface (LE → TE)
+        upper = np.column_stack([x[::-1], y_t[::-1]])      # TE to LE
+        lower = np.column_stack([x[1:], -y_t[1:]])          # LE+1 to TE
+        return np.vstack([upper, lower])

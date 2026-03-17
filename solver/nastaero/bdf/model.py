@@ -49,6 +49,7 @@ class BDFModel:
     aesurfs: Dict[int, Any] = field(default_factory=dict)
     aelists: Dict[int, Any] = field(default_factory=dict)
     aefacts: Dict[int, Any] = field(default_factory=dict)
+    aelinks: List[Any] = field(default_factory=list)
     # Spring elements (stored separately from elements dict)
     springs: Dict[int, Any] = field(default_factory=dict)
 
