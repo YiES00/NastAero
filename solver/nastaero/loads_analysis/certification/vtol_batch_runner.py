@@ -87,8 +87,67 @@ class VTOLBatchRunner:
         vtol_static_results = self._run_vtol_static_cases()
         self._results.extend(vtol_static_results)
 
-        # 4. VTOL dynamic cases handled separately by VTOLSimRunner
-        # (OEI and rotor jam produce CriticalTimePoints → CertLoadCases)
+        # 4. VTOL dynamic transient cases (OEI/jam → structural peak loads)
+        logger.info("=== Phase 4: VTOL dynamic transient cases ===")
+        self._transient_results = []
+        if self.vtol_config is not None and self.bdf_model is not None:
+            try:
+                from .vtol_transient_loads import (
+                    VTOLTransientLoadsRunner, summarize_transient_results,
+                )
+                transient_runner = VTOLTransientLoadsRunner(
+                    self.bdf_model, self.vtol_config,
+                    self.conv_matrix.config,
+                    airfoil_config=self.airfoil_config,
+                    n_workers=self.n_workers,
+                )
+                oei_results = transient_runner.run_all_oei(
+                    t_sim=5.0, dt=0.005,
+                    t_recognition_list=[0.15, 0.5, 1.0],
+                )
+                jam_results = transient_runner.run_all_jam(
+                    t_sim=3.0, dt=0.005,
+                )
+                self._transient_results = oei_results + jam_results
+                logger.info(summarize_transient_results(self._transient_results))
+
+                # Add peak critical cases to the batch result
+                case_id = 30000
+                for tr in self._transient_results:
+                    # Create a CaseResult for the peak transient condition
+                    label_parts = [tr.event_type.upper(), tr.failed_rotor_label]
+                    if tr.with_recovery:
+                        label_parts.append(f"t_rec={tr.t_recognition:.2f}s")
+                    label_parts.append(f"DAF={tr.daf_wing_Mx:.2f}")
+                    peak_result = CaseResult(
+                        case_id=case_id,
+                        category=f"vtol_{tr.event_type}_transient",
+                        far_section="SC-VTOL.2140" if tr.event_type == "oei"
+                                    else "SC-VTOL.2150",
+                        converged=True,
+                        weight_label="MTOW",
+                        altitude_m=0.0,
+                        nz=1.0,
+                        mach=0.0,
+                        label=" ".join(label_parts),
+                        flight_state={
+                            "peak_wing_Mx": tr.peak_wing_Mx,
+                            "peak_time": tr.peak_wing_Mx_time,
+                            "daf_wing_Mx": tr.daf_wing_Mx,
+                            "daf_wing_Vy": tr.daf_wing_Vy,
+                            "daf_boom_Mx": tr.daf_boom_Mx,
+                            "event_type": tr.event_type,
+                            "failed_rotor": tr.failed_rotor_label,
+                            "with_recovery": tr.with_recovery,
+                            "t_recognition": tr.t_recognition,
+                        },
+                    )
+                    self._results.append(peak_result)
+                    case_id += 1
+            except Exception as e:
+                logger.warning("Phase 4 transient loads failed: %s", e)
+                import traceback
+                traceback.print_exc()
 
         wall_time = time.time() - t0
         logger.info("VTOL batch complete: %d total cases in %.1fs",

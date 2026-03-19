@@ -213,18 +213,18 @@ class VTOLSimRunner:
         for idx, label_suffix in [(idx_nz_max, "nz_max"),
                                    (idx_nz_min, "nz_min")]:
             criticals.append(CriticalTimePoint(
-                time=float(history.t[idx]),
+                t=float(history.t[idx]),
                 nz=float(history.nz[idx]),
                 ny=float(history.ny[idx]) if len(history.ny) > idx else 0.0,
                 alpha_deg=float(history.alpha_deg[idx]),
                 beta_deg=float(history.beta_deg[idx]),
-                p_rate=float(history.p_rate[idx]),
-                q_rate=float(history.q_rate[idx]),
-                r_rate=float(history.r_rate[idx]),
+                p=float(history.p_rate[idx]),
+                q=float(history.q_rate[idx]),
+                r=float(history.r_rate[idx]),
                 p_dot=float(history.p_dot[idx]),
                 q_dot=float(history.q_dot[idx]),
                 r_dot=float(history.r_dot[idx]),
-                label=f"VTOL_{condition.label}_{label_suffix}",
+                reason=f"VTOL_{condition.label}_{label_suffix}",
             ))
 
         # Max roll rate (asymmetric OEI/jam)
