@@ -48,12 +48,14 @@ class VTOLBatchRunner:
                  vtol_matrix: VTOLLoadCaseMatrix,
                  bdf_model=None,
                  vtol_config: Optional[VTOLConfig] = None,
-                 n_workers: int = 0):
+                 n_workers: int = 0,
+                 airfoil_config=None):
         self.conv_matrix = conv_matrix
         self.vtol_matrix = vtol_matrix
         self.bdf_model = bdf_model
         self.vtol_config = vtol_config
         self.n_workers = n_workers
+        self.airfoil_config = airfoil_config
         self._results: List[CaseResult] = []
 
     def run(self) -> BatchResult:
@@ -70,7 +72,8 @@ class VTOLBatchRunner:
         logger.info("=== Phase 1: Conventional load cases ===")
         conv_runner = BatchRunner(
             self.conv_matrix, self.bdf_model,
-            n_workers=self.n_workers)
+            n_workers=self.n_workers,
+            airfoil_config=self.airfoil_config)
         conv_result = conv_runner.run()
         self._results.extend(conv_result.case_results)
 

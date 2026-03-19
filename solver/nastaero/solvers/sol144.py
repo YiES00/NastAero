@@ -100,13 +100,17 @@ class TrimSharedData:
     #         'solve_fn': callable, 'K_eff_csc': csc_matrix}
     _solver_cache: Any = None     # initialized to {} in _build_shared_data
 
+    # Camber normalwash correction (from airfoil profiles)
+    w_camber: Any = None          # ndarray (n_boxes,) or None
+
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 def solve_trim(bdf_model: BDFModel, n_workers: int = 0,
-               blas_threads: int = 1) -> ResultData:
+               blas_threads: int = 1,
+               airfoil_config=None) -> ResultData:
     """Run SOL 144 static aeroelastic trim analysis.
 
     Parameters
@@ -118,6 +122,10 @@ def solve_trim(bdf_model: BDFModel, n_workers: int = 0,
         0 = sequential (default), -1 = auto, >0 = explicit.
     blas_threads : int
         BLAS threads per worker (default 1 to avoid oversubscription).
+    airfoil_config : PanelAirfoilConfig, optional
+        Airfoil camber assignment for DLM panels.  When provided,
+        camber normalwash corrections (dz_c/dx) are applied to each
+        panel's boundary condition, equivalent to NASTRAN's W2GJ.
 
     Returns
     -------
@@ -128,7 +136,7 @@ def solve_trim(bdf_model: BDFModel, n_workers: int = 0,
     # ---------------------------------------------------------------
     # Phase 1: Build shared (Mach-independent) data — computed ONCE
     # ---------------------------------------------------------------
-    shared = _build_shared_data(bdf_model)
+    shared = _build_shared_data(bdf_model, airfoil_config=airfoil_config)
     if shared is None:
         return ResultData(title="NastAero SOL 144 - Static Aeroelastic Trim")
 
@@ -191,8 +199,19 @@ def solve_trim(bdf_model: BDFModel, n_workers: int = 0,
 # Phase 1: Shared data construction
 # ---------------------------------------------------------------------------
 
-def _build_shared_data(bdf_model: BDFModel) -> Optional[TrimSharedData]:
-    """Build all Mach-independent data (computed once)."""
+def _build_shared_data(bdf_model: BDFModel,
+                       airfoil_config=None) -> Optional[TrimSharedData]:
+    """Build all Mach-independent data (computed once).
+
+    Parameters
+    ----------
+    bdf_model : BDFModel
+        Parsed BDF model.
+    airfoil_config : PanelAirfoilConfig, optional
+        Airfoil camber assignment for DLM panels.  If provided, camber
+        normalwash correction (dz_c/dx at each panel 3/4-chord) is
+        added to the VLM boundary condition.  Equivalent to NASTRAN W2GJ.
+    """
     bdf_model.cross_reference()
     fe_model = FEModel(bdf_model)
 
@@ -286,6 +305,21 @@ def _build_shared_data(bdf_model: BDFModel) -> Optional[TrimSharedData]:
         K_reg = K_sparse + sp.eye(n_free, format='csc') * eps_reg
         logger.info("  K_reg pre-computed: eps = %.2e", eps_reg)
 
+    # Camber normalwash correction (equivalent to NASTRAN W2GJ)
+    w_camber = None
+    if airfoil_config is not None and airfoil_config.panel_airfoils:
+        from ..aero.airfoil_camber import compute_camber_normalwash
+        w_camber = compute_camber_normalwash(boxes, bdf_model.caero_panels,
+                                              airfoil_config)
+        n_nonzero = np.count_nonzero(w_camber)
+        if n_nonzero > 0:
+            logger.info("  Camber normalwash: %d/%d boxes with correction "
+                        "(max=%.4f, min=%.4f)",
+                        n_nonzero, n_boxes,
+                        np.max(w_camber), np.min(w_camber))
+        else:
+            w_camber = None  # all symmetric, no correction needed
+
     shared = TrimSharedData(
         K_ff=K_ff, F_f=F_f, f_dofs=f_dofs, s_dofs=s_dofs,
         G_sp=G_sp, G_disp=G_disp, boxes=boxes, box_id_to_index=box_id_to_index,
@@ -296,6 +330,7 @@ def _build_shared_data(bdf_model: BDFModel) -> Optional[TrimSharedData]:
         active_cols=active_cols, G_w_active=G_w_active_arr,
         G_d_active=G_d_active_arr, K_reg=K_reg,
         _solver_cache={},
+        w_camber=w_camber,
     )
     return shared
 
@@ -406,6 +441,11 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
     # 4. Build normalwash vectors for trim variables
     # Forces on structure = G_disp^T @ A_jj @ w  (displacement G for force distribution)
     w_fixed = np.zeros(n_boxes)
+
+    # Add camber normalwash correction (equivalent to NASTRAN W2GJ)
+    if shared.w_camber is not None:
+        w_fixed += shared.w_camber
+
     for label, value in fixed_labels.items():
         w_contrib = _trim_variable_normalwash(label, boxes, shared.box_id_to_index,
                                               shared.bdf_model)

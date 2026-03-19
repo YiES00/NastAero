@@ -237,12 +237,14 @@ class BatchRunner:
                  bdf_model=None,
                  n_workers: int = 0,
                  batch_size: int = 50,
-                 checkpoint_dir: Optional[str] = None):
+                 checkpoint_dir: Optional[str] = None,
+                 airfoil_config=None):
         self.matrix = matrix
         self.bdf_model = bdf_model
         self.n_workers = n_workers
         self.batch_size = batch_size
         self.checkpoint_dir = checkpoint_dir
+        self.airfoil_config = airfoil_config
         self._batch_result = BatchResult(config=matrix.config)
         self._q_scale = self._detect_q_scale()
 
@@ -501,6 +503,7 @@ class BatchRunner:
                 result_data = solve_trim(
                     self.bdf_model,
                     n_workers=self.n_workers,
+                    airfoil_config=self.airfoil_config,
                 )
             finally:
                 # Restore subcases list (outer _run_flight_cases
