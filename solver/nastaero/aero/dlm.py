@@ -1,15 +1,31 @@
 """Doublet-Lattice Method (DLM) kernel and AIC matrix computation.
 
-Implements the steady (k=0) DLM for SOL 144 static aeroelastic analysis.
-The kernel is based on the Landahl planar lifting surface theory.
+Implements the steady (k=0) and oscillatory (k>0) DLM for SOL 144/145
+aeroelastic analysis. The steady kernel is based on the Landahl planar
+lifting surface theory. The oscillatory kernel implements Rodden, Taylor
+& McIntosh (1998) with Desmarais 12-term exponential approximation.
 
-Performance: AIC build is fully vectorized using NumPy broadcasting —
+Performance: Steady AIC build is fully vectorized using NumPy broadcasting —
 all n×n Biot-Savart interactions computed in a single pass with no Python loops.
 """
 from __future__ import annotations
-from typing import List
+from typing import List, Tuple
+from math import sqrt, cos, sin, atan2
 import numpy as np
 from .panel import AeroBox
+
+
+# ============================================================
+# Desmarais 12-term exponential approximation coefficients
+# (validated coefficients from PanelAero / Rodden 1998)
+# ============================================================
+_DESMARAIS_A = np.array([
+    0.000319759140, -0.000055461471, 0.002726074362, 0.005749551566,
+    0.031455895072, 0.106031126212, 0.406838011567, 0.798112357155,
+    -0.417749229098, 0.077480713894, -0.012677284771, 0.001787032960
+])
+_DESMARAIS_B_BASE = 0.009054814793
+_DESMARAIS_B = np.array([2**n * _DESMARAIS_B_BASE for n in range(12)])
 
 
 def build_aic_matrix(boxes: List[AeroBox], mach: float = 0.0,
@@ -61,12 +77,17 @@ def build_aic_matrix(boxes: List[AeroBox], mach: float = 0.0,
         D = _build_steady_aic_vectorized(boxes, beta)
     else:
         # Oscillatory case: full DLM kernel with complex AIC
-        # (DLM and VLM differ fundamentally at k > 0)
-        D = _build_dlm_oscillatory_aic(boxes, beta, reduced_freq)
+        # Rodden, Taylor & McIntosh (1998) kernel
+        D = _build_dlm_oscillatory_aic(boxes, mach, beta, reduced_freq)
 
     # Add image panel contributions for XZ symmetry
     if sym_xz != 0:
-        D_image = _build_steady_aic_image_xz(boxes, beta)
+        if reduced_freq < 1e-10:
+            D_image = _build_steady_aic_image_xz(boxes, beta)
+        else:
+            # For oscillatory, mirror sending panels and recompute
+            D_image = _build_dlm_oscillatory_aic_image_xz(
+                boxes, mach, beta, reduced_freq)
         if sym_xz == 1:
             D += D_image
         else:
@@ -186,35 +207,422 @@ def _build_steady_aic_image_xz(boxes: List[AeroBox], beta: float) -> np.ndarray:
 
 
 # ============================================================
-# Oscillatory DLM Kernel (k > 0, Rodden 1972b)
+# Oscillatory DLM Kernel (k > 0, Rodden, Taylor & McIntosh 1998)
 # ============================================================
 
-def _build_dlm_oscillatory_aic(boxes: List[AeroBox], beta: float,
-                                reduced_freq: float) -> np.ndarray:
-    """Oscillatory DLM kernel for k > 0 (complex-valued AIC).
+def _desmarais_I1_I2(u1: float, k1: float) -> Tuple[complex, complex]:
+    """Desmarais 12-term exponential approximation for kernel integrals I1, I2.
 
-    Implements the Albano & Rodden (1969) / Giesing, Kalman & Rodden
-    (1972b) kernel for unsteady subsonic flow. Returns a complex AIC
-    matrix where the imaginary part captures phase lag effects.
+    Computes the oscillatory kernel integrals using the validated
+    12-term approximation from PanelAero / Rodden (1998).
 
-    This is the kernel that distinguishes DLM from VLM — at k=0
-    both methods are identical, but at k>0 the DLM accounts for
-    the wake oscillation and time-dependent pressure distribution.
+    Parameters
+    ----------
+    u1 : float
+        Non-dimensional parameter (M*R - x0) / (beta^2 * r1).
+    k1 : float
+        Reduced frequency parameter k * r1.
 
-    Currently a placeholder that falls back to steady VLM.
-    Full implementation requires the Desmarais exponential
-    approximation (11-term) for the kernel integration.
+    Returns
+    -------
+    I1, I2 : complex
+        Kernel integrals.
 
     References
     ----------
-    - Albano & Rodden (1969), AIAA J., Vol. 7, No. 2
-    - Rodden, Giesing & Kalman (1972b)
-    - MSC Nastran Aeroelastic User Guide, Eq. 2-1 to 2-4
+    - Desmarais (1982), NASA TM-83210
+    - Rodden, Taylor & McIntosh (1998), J. Aircraft, Vol. 35, No. 4
     """
-    from ..config import logger
-    logger.warning("  DLM oscillatory kernel (k=%.4f) not yet implemented; "
-                   "using steady VLM approximation", reduced_freq)
-    return _build_steady_aic_vectorized(boxes, beta)
+    if u1 >= 0:
+        # Direct computation for u1 >= 0
+        I0 = 0.0 + 0.0j
+        J0 = 0.0 + 0.0j
+        for n in range(12):
+            a_n = _DESMARAIS_A[n]
+            b_n = _DESMARAIS_B[n]
+            denom = b_n + 1j * k1
+            exp_bu = np.exp(-b_n * u1)
+            I0 += a_n / denom * exp_bu
+            J0 += a_n * b_n / (denom * denom) * exp_bu
+
+        exp_iku = np.exp(1j * k1 * u1)
+        I1 = I0 * exp_iku - 1.0
+        I2 = 2.0 * u1 * I1 - (I0 + J0) * exp_iku + 1.0
+    else:
+        # Negative u1: use symmetry relation (Rodden 1971 Appendix A)
+        I1_pos, I2_pos = _desmarais_I1_I2(-u1, k1)
+        exp_neg = np.exp(-2j * k1 * u1)  # u1 is negative, so -u1 > 0
+        I1 = -(I1_pos + 2.0) * exp_neg
+        I2 = (I2_pos + 2.0 * (-u1) * (I1_pos + 2.0)) * exp_neg
+
+    return I1, I2
+
+
+def _dlm_kernel_incremental(x0: float, r1: float, R: float,
+                            u1: float, k: float, k1: float,
+                            M: float, beta2: float) -> Tuple[complex, complex]:
+    """Compute incremental oscillatory kernel dK1, dK2.
+
+    Returns the difference (oscillatory - steady) for the planar (K1)
+    and non-planar (K2) kernel functions. This incremental formulation
+    ensures that when k -> 0 the increments vanish, giving exact
+    recovery of the steady VLM result.
+
+    Parameters
+    ----------
+    x0 : float
+        Streamwise separation.
+    r1 : float
+        Lateral distance sqrt(y^2 + z^2).
+    R : float
+        Subsonic distance sqrt(x0^2 + beta2 * r1^2).
+    u1 : float
+        Kernel parameter (M*R - x0) / (beta2 * r1).
+    k : float
+        Reduced frequency.
+    k1 : float
+        Local reduced frequency k * r1.
+    M : float
+        Mach number.
+    beta2 : float
+        1 - M^2.
+
+    Returns
+    -------
+    dK1, dK2 : complex
+        Incremental kernel values (oscillatory minus steady).
+    """
+    # Handle singularity: r1 -> 0
+    if r1 < 1e-12:
+        return 0.0 + 0j, 0.0 + 0j
+
+    I1, I2 = _desmarais_I1_I2(u1, k1)
+
+    sqrt_1uu = sqrt(1.0 + u1 * u1)
+    Mr1_R = M * r1 / R if R > 1e-30 else 0.0
+    exp_iku = np.exp(-1j * k1 * u1)
+
+    # Oscillatory kernel
+    K1 = -I1 - exp_iku * Mr1_R / sqrt_1uu
+    K2 = (3.0 * I2
+          + 1j * k1 * exp_iku * Mr1_R * Mr1_R / sqrt_1uu
+          + exp_iku * Mr1_R / (sqrt_1uu * sqrt_1uu * sqrt_1uu))
+
+    # Steady kernel (k=0 limit)
+    x0_R = x0 / R if R > 1e-30 else 0.0
+    K10 = -1.0 - x0_R
+    K20 = 2.0 + x0_R * (2.0 + beta2 * r1 * r1 / (R * R) if R > 1e-30 else 0.0)
+
+    # Incremental: multiply oscillatory by exp(-ik*x0) phase and subtract steady
+    phase = np.exp(-1j * k * x0)
+    dK1 = K1 * phase - K10
+    dK2 = K2 * phase - K20
+
+    return dK1, dK2
+
+
+def _sending_panel_geom(corners: np.ndarray) -> Tuple:
+    """Extract sending panel geometry for DLM kernel integration.
+
+    Computes semiwidth e, sweep tangent tan(Lambda), dihedral angle
+    gamma, and midpoint Pm from the panel's four corner points.
+
+    Parameters
+    ----------
+    corners : ndarray (4, 3)
+        Panel corner points [c0, c1, c2, c3] where:
+        c0=inboard LE, c1=inboard TE, c2=outboard TE, c3=outboard LE.
+
+    Returns
+    -------
+    e : float
+        Panel semiwidth (half-span in y-z plane).
+    tan_lambda : float
+        Tangent of sweep angle.
+    gamma : float
+        Dihedral angle (radians).
+    Pm : ndarray (3,)
+        Midpoint of 1/4 chord line.
+    P1 : ndarray (3,)
+        Inboard 1/4 chord point.
+    P3 : ndarray (3,)
+        Outboard 1/4 chord point.
+    """
+    c0, c1, c2, c3 = corners
+    P1 = c0 + 0.25 * (c1 - c0)  # inboard 1/4 chord
+    P3 = c3 + 0.25 * (c2 - c3)  # outboard 1/4 chord
+    Pm = 0.5 * (P1 + P3)
+
+    dy = P3[1] - P1[1]
+    dz = P3[2] - P1[2]
+    dx = P3[0] - P1[0]
+
+    e = 0.5 * sqrt(dy * dy + dz * dz)  # semiwidth (in y-z plane)
+    if e < 1e-12:
+        return e, 0.0, 0.0, Pm, P1, P3
+
+    tan_lambda = dx / (2.0 * e)  # sweep tangent
+    gamma = np.arcsin(np.clip(dz / (2.0 * e), -1.0, 1.0))  # dihedral
+
+    return e, tan_lambda, gamma, Pm, P1, P3
+
+
+def _recv_to_local(recv_pt: np.ndarray, Pm: np.ndarray,
+                   gamma: float) -> Tuple[float, float, float]:
+    """Transform receiving control point to sending panel local coordinates.
+
+    Rotates the displacement vector (recv - Pm) by the dihedral angle
+    so that the kernel integration operates in the panel's local frame.
+
+    Parameters
+    ----------
+    recv_pt : ndarray (3,)
+        Receiving panel control point.
+    Pm : ndarray (3,)
+        Sending panel 1/4-chord midpoint.
+    gamma : float
+        Sending panel dihedral angle (radians).
+
+    Returns
+    -------
+    xbar, ybar, zbar : float
+        Local coordinates.
+    """
+    dx = recv_pt[0] - Pm[0]
+    dy = recv_pt[1] - Pm[1]
+    dz = recv_pt[2] - Pm[2]
+
+    cos_g = cos(gamma)
+    sin_g = sin(gamma)
+
+    xbar = dx
+    ybar = dy * cos_g + dz * sin_g
+    zbar = -dy * sin_g + dz * cos_g
+
+    return xbar, ybar, zbar
+
+
+def _quartic_integration(xbar: float, ybar: float, zbar: float,
+                         cos_dgamma: float, tan_lambda: float,
+                         e: float, k: float, M: float,
+                         beta2: float) -> Tuple[complex, complex]:
+    """5-point quartic spanwise integration of the incremental kernel.
+
+    Evaluates the kernel at 5 equally spaced points across the sending
+    panel span, fits a quartic polynomial, and integrates analytically.
+    This is the Rodden, Taylor & McIntosh (1998) approach.
+
+    Parameters
+    ----------
+    xbar, ybar, zbar : float
+        Receiving point in sending panel local coordinates.
+    cos_dgamma : float
+        Cosine of dihedral angle difference (recv - send).
+    tan_lambda : float
+        Tangent of sending panel sweep angle.
+    e : float
+        Sending panel semiwidth.
+    k : float
+        Reduced frequency.
+    M : float
+        Mach number.
+    beta2 : float
+        1 - M^2.
+
+    Returns
+    -------
+    D_total : complex
+        Integrated normalwash influence coefficient increment.
+    D_dummy : complex
+        Unused (reserved for non-planar separation).
+    """
+    # 5 evaluation points: eta/e = -1, -0.5, 0, 0.5, 1
+    eta_frac = np.array([-1.0, -0.5, 0.0, 0.5, 1.0])
+    eta_vals = eta_frac * e
+
+    f = np.zeros(5, dtype=complex)
+
+    for p in range(5):
+        eta = eta_vals[p]
+        y_eta = ybar - eta
+        r1_sq = y_eta * y_eta + zbar * zbar
+        r1 = sqrt(r1_sq) if r1_sq > 0 else 0.0
+
+        x0 = xbar - eta * tan_lambda
+        R_sq = x0 * x0 + beta2 * r1_sq
+        R = sqrt(R_sq) if R_sq > 0 else 0.0
+
+        if r1 < 1e-12 or R < 1e-12:
+            f[p] = 0.0
+            continue
+
+        u1 = (M * R - x0) / (beta2 * r1)
+        k1 = k * r1
+
+        dK1, dK2 = _dlm_kernel_incremental(x0, r1, R, u1, k, k1, M, beta2)
+
+        # Planar contribution: T1 = cos(gamma_recv - gamma_send)
+        T1 = cos_dgamma
+
+        # Non-planar factors
+        e1 = y_eta / r1_sq if r1_sq > 1e-20 else 0.0
+        e2 = zbar / r1_sq if r1_sq > 1e-20 else 0.0
+
+        # Combined kernel: planar (dK1) + non-planar (dK2)
+        # F = dK1 * T1 / r1 + dK2 * (T1 * e1 + e2_term) / r1
+        inv_r1 = 1.0 / max(r1, 1e-30)
+        F1_val = dK1 * T1 * inv_r1
+        F2_val = dK2 * cos_dgamma * e1 * inv_r1
+
+        f[p] = F1_val + F2_val
+
+    # Quartic polynomial fit from 5 equally-spaced evaluations
+    # F(eta) = A + B*(eta/e) + C*(eta/e)^2 + D*(eta/e)^3 + E*(eta/e)^4
+    A = f[2]  # eta = 0
+    B = 2.0 / 3.0 * (f[3] - f[1]) - 1.0 / 12.0 * (f[4] - f[0])
+    C = 0.5 * (f[3] + f[1]) - f[2]
+    D_coeff = 1.0 / 6.0 * (f[4] - f[0]) - 1.0 / 3.0 * (f[3] - f[1])
+    E = 0.25 * f[2] - 1.0 / 6.0 * (f[3] + f[1]) + 1.0 / 24.0 * (f[4] + f[0])
+
+    # Analytical integral of quartic over [-e, e]:
+    # integral = 2*e*A + (2/3)*e*C + (2/5)*e*E
+    # (B and D terms vanish for symmetric limits)
+    D_total = 2.0 * e * (A + C / 3.0 + E / 5.0)
+
+    # Scale by 1/(8*pi) per DLM normalwash convention
+    D_total *= 1.0 / (8.0 * np.pi)
+
+    return D_total, 0.0 + 0j
+
+
+def _build_dlm_oscillatory_aic(boxes: List[AeroBox], mach: float,
+                                beta: float,
+                                reduced_freq: float) -> np.ndarray:
+    """Oscillatory DLM kernel for k > 0 (complex-valued AIC).
+
+    Builds the oscillatory AIC matrix as the sum of the steady VLM
+    result (k=0) plus the incremental oscillatory contribution from
+    the Rodden, Taylor & McIntosh (1998) DLM kernel.
+
+    D_osc = D_steady + Delta_D
+
+    where Delta_D captures the phase lag and wake oscillation effects.
+    This ensures exact recovery of the steady result as k -> 0.
+
+    Parameters
+    ----------
+    boxes : list of AeroBox
+        Aerodynamic boxes from panel mesh generation.
+    mach : float
+        Freestream Mach number.
+    beta : float
+        Prandtl-Glauert factor sqrt(1 - M^2).
+    reduced_freq : float
+        Reduced frequency k = omega * c_ref / (2 * V).
+
+    Returns
+    -------
+    D : ndarray (n, n), complex
+        Complex AIC matrix.
+
+    References
+    ----------
+    - Rodden, Taylor & McIntosh (1998), J. Aircraft, Vol. 35, No. 4
+    - Albano & Rodden (1969), AIAA J., Vol. 7, No. 2
+    """
+    n = len(boxes)
+    beta2 = beta * beta
+
+    # Steady part (real-valued)
+    D_steady = _build_steady_aic_vectorized(boxes, beta)
+
+    # Incremental oscillatory part (complex-valued)
+    Delta_D = np.zeros((n, n), dtype=complex)
+
+    corners_all = np.array([b.corners for b in boxes])
+    cp_all = np.array([b.control_point for b in boxes])
+
+    # Pre-compute sending panel geometry
+    send_geom = []
+    for j in range(n):
+        e, tanL, gamma, Pm, P1, P3 = _sending_panel_geom(corners_all[j])
+        send_geom.append((e, tanL, gamma, Pm))
+
+    for j in range(n):  # sending
+        e_j, tanL_j, gamma_j, Pm_j = send_geom[j]
+        if e_j < 1e-12:
+            continue
+
+        for i in range(n):  # receiving
+            # Local coordinates
+            xbar, ybar, zbar = _recv_to_local(cp_all[i], Pm_j, gamma_j)
+
+            # Dihedral angle difference (for non-planar)
+            _, _, gamma_i, _ = send_geom[i]
+            cos_dgamma = cos(gamma_i - gamma_j)
+
+            # Quartic integration
+            d_total, _ = _quartic_integration(
+                xbar, ybar, zbar, cos_dgamma, tanL_j, e_j,
+                reduced_freq, mach, beta2)
+
+            Delta_D[i, j] = d_total
+
+    return D_steady.astype(complex) + Delta_D
+
+
+def _build_dlm_oscillatory_aic_image_xz(boxes: List[AeroBox], mach: float,
+                                         beta: float,
+                                         reduced_freq: float) -> np.ndarray:
+    """Oscillatory AIC from XZ-plane image panels.
+
+    Mirrors sending panels across the XZ plane (y -> -y) and computes
+    the oscillatory AIC contribution using the same Rodden 1998 kernel.
+
+    Parameters
+    ----------
+    boxes : list of AeroBox
+        Aerodynamic boxes.
+    mach : float
+        Freestream Mach number.
+    beta : float
+        Prandtl-Glauert factor.
+    reduced_freq : float
+        Reduced frequency.
+
+    Returns
+    -------
+    D_image : ndarray (n, n), complex
+        Image panel AIC contribution.
+    """
+    n = len(boxes)
+    beta2 = beta * beta
+
+    D_steady_image = _build_steady_aic_image_xz(boxes, beta)
+
+    Delta_D = np.zeros((n, n), dtype=complex)
+    corners_all = np.array([b.corners for b in boxes])
+    cp_all = np.array([b.control_point for b in boxes])
+    mirror = np.array([1.0, -1.0, 1.0])
+
+    for j in range(n):
+        mirrored_corners = corners_all[j] * mirror
+        e_j, tanL_j, gamma_j, Pm_j, _, _ = _sending_panel_geom(mirrored_corners)
+        if e_j < 1e-12:
+            continue
+
+        for i in range(n):
+            xbar, ybar, zbar = _recv_to_local(cp_all[i], Pm_j, gamma_j)
+            _, _, gamma_i, _, _, _ = _sending_panel_geom(corners_all[i])
+            cos_dgamma = cos(gamma_i - gamma_j)
+
+            d_total, _ = _quartic_integration(
+                xbar, ybar, zbar, cos_dgamma, tanL_j, e_j,
+                reduced_freq, mach, beta2)
+
+            Delta_D[i, j] = d_total
+
+    return D_steady_image.astype(complex) + Delta_D
 
 
 # ============================================================
