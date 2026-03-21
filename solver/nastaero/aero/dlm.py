@@ -158,12 +158,14 @@ def _build_steady_aic_image_xz(boxes: List[AeroBox], beta: float) -> np.ndarray:
 
     For SYMXZ=1, each sending panel j has an image at y_mirror = -y_j.
     The image horseshoe vortex induces additional normalwash at each
-    receiving panel i. The image bound vortex endpoints are reflected
-    in y, and the trailing legs also reflect.
+    receiving panel i.
 
-    For planar wings in the XZ plane, the image effect generally
-    reduces the effective lift coefficient by accounting for the
-    mutual downwash between real and image vortices.
+    The image represents the left wing, whose horseshoe bound vortex
+    goes from the image outboard tip (most negative y) to the image
+    inboard root (y ~ 0).  This is the REVERSE of the mirrored A->B
+    direction. Swapping A and B for the image ensures the correct
+    circulation sense so that the trailing vortex at the symmetry
+    plane (y=0) partially cancels rather than reinforces the original.
     """
     n = len(boxes)
 
@@ -181,8 +183,8 @@ def _build_steady_aic_image_xz(boxes: List[AeroBox], beta: float) -> np.ndarray:
 
     # Mirror the sending vortex points in y: (x, y, z) -> (x, -y, z)
     mirror = np.array([1.0, -1.0, 1.0])
-    a_mirror = a_pts * mirror
-    b_mirror = b_pts * mirror
+    a_mirror = a_pts * mirror  # original inboard → still near y=0
+    b_mirror = b_pts * mirror  # original outboard → now at negative y
 
     # Prandtl-Glauert
     pg_scale = np.array([1.0, 1.0 / beta, 1.0 / beta])
@@ -679,7 +681,11 @@ def _build_dlm_steady_aic(boxes: List[AeroBox], beta: float) -> np.ndarray:
 
 
 def _build_dlm_steady_aic_image_xz(boxes: List[AeroBox], beta: float) -> np.ndarray:
-    """DLM steady kernel contribution from XZ-plane image vortices."""
+    """DLM steady kernel contribution from XZ-plane image vortices.
+
+    Swap A and B for the image horseshoe (same fix as the VLM image)
+    to get the correct circulation sense for the mirrored left wing.
+    """
     n = len(boxes)
 
     corners = np.array([b.corners for b in boxes])

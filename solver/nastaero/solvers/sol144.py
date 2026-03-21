@@ -1303,6 +1303,18 @@ def _trim_variable_normalwash(label: str, boxes: List[AeroBox],
             for i in range(n):
                 w[i] = -2.0 * boxes[i].control_point[1] / refb
 
+    elif label == "PITCH":
+        # Pitch rate (qc/2V): rotation about CG creates normalwash
+        # proportional to distance from CG.
+        # v_z = q * (x - x_cg), normalwash w/V = q*(x-x_cg)/V
+        # For unit PITCH = qc/(2V): q = 2V/c, so w = 2*(x-x_cg)/c
+        # With sign (nose-up positive): w = -2*(x - x_cg) / c_ref
+        refc = bdf_model.aeros.refc if bdf_model.aeros else 1.0
+        x_cg = _compute_cg_x(bdf_model)
+        if refc > 1e-12:
+            for i in range(n):
+                w[i] = -2.0 * (boxes[i].control_point[0] - x_cg) / refc
+
     elif label == "YAW":
         pass  # yaw rate (rb/2V): no direct z-normalwash for planar wings
 
