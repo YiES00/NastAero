@@ -87,6 +87,7 @@ class TrimSharedData:
     dof_mgr: Any = None
     bdf_model: Any = None
     all_trim_labels: Any = None
+    kernel: str = 'dlm'
 
     # Pre-computed for iterative solver (large models)
     active_cols: Any = None
@@ -110,7 +111,8 @@ class TrimSharedData:
 
 def solve_trim(bdf_model: BDFModel, n_workers: int = 0,
                blas_threads: int = 1,
-               airfoil_config=None) -> ResultData:
+               airfoil_config=None,
+               kernel: str = 'dlm') -> ResultData:
     """Run SOL 144 static aeroelastic trim analysis.
 
     Parameters
@@ -136,7 +138,8 @@ def solve_trim(bdf_model: BDFModel, n_workers: int = 0,
     # ---------------------------------------------------------------
     # Phase 1: Build shared (Mach-independent) data — computed ONCE
     # ---------------------------------------------------------------
-    shared = _build_shared_data(bdf_model, airfoil_config=airfoil_config)
+    shared = _build_shared_data(bdf_model, airfoil_config=airfoil_config,
+                                kernel=kernel)
     if shared is None:
         return ResultData(title="NastAero SOL 144 - Static Aeroelastic Trim")
 
@@ -200,7 +203,8 @@ def solve_trim(bdf_model: BDFModel, n_workers: int = 0,
 # ---------------------------------------------------------------------------
 
 def _build_shared_data(bdf_model: BDFModel,
-                       airfoil_config=None) -> Optional[TrimSharedData]:
+                       airfoil_config=None,
+                       kernel: str = 'dlm') -> Optional[TrimSharedData]:
     """Build all Mach-independent data (computed once).
 
     Parameters
@@ -331,6 +335,7 @@ def _build_shared_data(bdf_model: BDFModel,
         G_d_active=G_d_active_arr, K_reg=K_reg,
         _solver_cache={},
         w_camber=w_camber,
+        kernel=kernel,
     )
     return shared
 
@@ -368,6 +373,13 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
     q = trim.q
     mach = trim.mach
 
+    # Detect XZ symmetry from AEROS card (needed for AIC and constraints)
+    sym_xz = 0
+    if shared.bdf_model.aeros and hasattr(shared.bdf_model.aeros, 'symxz'):
+        sym_xz = shared.bdf_model.aeros.symxz
+    elif shared.bdf_model.aero and hasattr(shared.bdf_model.aero, 'symxz'):
+        sym_xz = shared.bdf_model.aero.symxz
+
     # Cache key for (Mach, q)-dependent quantities
     cache_key = (round(float(mach), 8), round(float(q), 8))
     cache = shared._solver_cache if shared._solver_cache is not None else {}
@@ -382,9 +394,10 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
     else:
         # ---- Cache miss: build AIC and A_jj ----
         # 1. Build AIC matrix (Mach-dependent)
-        logger.info("  [SC%d] Building AIC matrix (%d x %d, M=%.3f)...",
-                    subcase_id, n_boxes, n_boxes, mach)
-        D = build_aic_matrix(boxes, mach, reduced_freq=0.0)
+        logger.info("  [SC%d] Building AIC matrix (%d x %d, M=%.3f, symxz=%d)...",
+                    subcase_id, n_boxes, n_boxes, mach, sym_xz)
+        D = build_aic_matrix(boxes, mach, reduced_freq=0.0, sym_xz=sym_xz,
+                             kernel=shared.kernel)
 
         try:
             D_inv = np.linalg.inv(D)
@@ -464,6 +477,18 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
     # Normalwash from deformation = G_sp @ u_f (slope coupling)
     # D_r: contribution of structural deformation to aero force constraint
     # D_r[i,:] @ u_f = (constraint_vector @ A_jj @ G_sp) @ u_f
+    #
+    # SYMXZ symmetry: half-model panels produce half the full-aircraft forces.
+    # The AIC already includes image vortex interference, so the panel forces
+    # are correct for each half. The trim constraints must account for the
+    # full aircraft: 2 * sum(half_forces) = nz * W_full.
+    # We apply a sym_aero_factor to the constraint equations.
+    sym_aero_factor = 1.0
+    if sym_xz == 1 or sym_xz == -1:
+        sym_aero_factor = 2.0
+        logger.info("  [SC%d] SYMXZ=%d: constraint aero force factor = %.1f",
+                    subcase_id, sym_xz, sym_aero_factor)
+
     n_constraints = min(n_trim_free, 2)
     if n_constraints < 1:
         n_constraints = 0
@@ -476,24 +501,24 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
 
     if n_constraints >= 1:
         sum_A = sum_force @ A_jj
-        D_r[0, :] = (sum_A @ G_sp).ravel()   # note: sum_A is row vec @ A_jj, then @ G_sp
+        D_r[0, :] = sym_aero_factor * (sum_A @ G_sp).ravel()
         for k in range(n_trim_free):
             w_k = _trim_variable_normalwash(free_labels[k], boxes,
                                             shared.box_id_to_index, shared.bdf_model)
-            D_x[0, k] = sum_A @ w_k
-        F_z_fixed = sum_A @ w_fixed
+            D_x[0, k] = sym_aero_factor * (sum_A @ w_k)
+        F_z_fixed = sym_aero_factor * (sum_A @ w_fixed)
         rhs_trim[0] = nz * shared.total_weight - F_z_fixed
 
     if n_constraints >= 2:
         moment_arm = np.array([boxes[i].control_point[0] - shared.cg_x
                                for i in range(n_boxes)])
         mom_A = moment_arm @ A_jj
-        D_r[1, :] = (mom_A @ G_sp).ravel()
+        D_r[1, :] = sym_aero_factor * (mom_A @ G_sp).ravel()
         for k in range(n_trim_free):
             w_k = _trim_variable_normalwash(free_labels[k], boxes,
                                             shared.box_id_to_index, shared.bdf_model)
-            D_x[1, k] = mom_A @ w_k
-        M_y_fixed = mom_A @ w_fixed
+            D_x[1, k] = sym_aero_factor * (mom_A @ w_k)
+        M_y_fixed = sym_aero_factor * (mom_A @ w_fixed)
         rhs_trim[1] = -M_y_fixed
         logger.info("  [SC%d] Moment ref (CG_x) = %.4f", subcase_id, shared.cg_x)
 
@@ -802,6 +827,7 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
         active_cols=active_cols, G_w_active=G_w_active_arr,
         G_d_active=G_d_active_arr, K_reg=K_reg,
         _solver_cache={},
+        kernel=kernel,
     )
 
     return _solve_trim_subcase_from_shared(shared, trim, subcase.id)
