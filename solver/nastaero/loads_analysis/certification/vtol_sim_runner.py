@@ -231,36 +231,36 @@ class VTOLSimRunner:
         idx_p_max = np.argmax(np.abs(history.p_rate))
         if abs(history.p_rate[idx_p_max]) > 0.01:
             criticals.append(CriticalTimePoint(
-                time=float(history.t[idx_p_max]),
+                t=float(history.t[idx_p_max]),
                 nz=float(history.nz[idx_p_max]),
                 ny=float(history.ny[idx_p_max]) if len(history.ny) > idx_p_max else 0.0,
                 alpha_deg=float(history.alpha_deg[idx_p_max]),
                 beta_deg=float(history.beta_deg[idx_p_max]),
-                p_rate=float(history.p_rate[idx_p_max]),
-                q_rate=float(history.q_rate[idx_p_max]),
-                r_rate=float(history.r_rate[idx_p_max]),
+                p=float(history.p_rate[idx_p_max]),
+                q=float(history.q_rate[idx_p_max]),
+                r=float(history.r_rate[idx_p_max]),
                 p_dot=float(history.p_dot[idx_p_max]),
                 q_dot=float(history.q_dot[idx_p_max]),
                 r_dot=float(history.r_dot[idx_p_max]),
-                label=f"VTOL_{condition.label}_p_max",
+                reason=f"VTOL_{condition.label}_p_max",
             ))
 
         # Max yaw rate (rotor torque asymmetry)
         idx_r_max = np.argmax(np.abs(history.r_rate))
         if abs(history.r_rate[idx_r_max]) > 0.01:
             criticals.append(CriticalTimePoint(
-                time=float(history.t[idx_r_max]),
+                t=float(history.t[idx_r_max]),
                 nz=float(history.nz[idx_r_max]),
                 ny=float(history.ny[idx_r_max]) if len(history.ny) > idx_r_max else 0.0,
                 alpha_deg=float(history.alpha_deg[idx_r_max]),
                 beta_deg=float(history.beta_deg[idx_r_max]),
-                p_rate=float(history.p_rate[idx_r_max]),
-                q_rate=float(history.q_rate[idx_r_max]),
-                r_rate=float(history.r_rate[idx_r_max]),
+                p=float(history.p_rate[idx_r_max]),
+                q=float(history.q_rate[idx_r_max]),
+                r=float(history.r_rate[idx_r_max]),
                 p_dot=float(history.p_dot[idx_r_max]),
                 q_dot=float(history.q_dot[idx_r_max]),
                 r_dot=float(history.r_dot[idx_r_max]),
-                label=f"VTOL_{condition.label}_r_max",
+                reason=f"VTOL_{condition.label}_r_max",
             ))
 
         return criticals

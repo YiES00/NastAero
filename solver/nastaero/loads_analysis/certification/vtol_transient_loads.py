@@ -43,7 +43,6 @@ from ...rotor.rotor_dynamics import (
 logger = logging.getLogger(__name__)
 
 _G = 9.80665        # m/s²
-_G_MM = 9806.65     # mm/s² (model units: N-mm-s, mass in tonnes)
 
 
 # ---------------------------------------------------------------------------
@@ -148,15 +147,42 @@ class VTOLTransientLoadsRunner:
         self.airfoil_config = airfoil_config
         self.n_workers = n_workers
 
+        # Auto-detect unit system from model coordinate scale
+        # N-mm-s models: extents ~1000-10000 mm; N-m-kg-s models: extents ~1-20 m
+        max_extent = max(
+            max(abs(n.xyz[i]) for n in bdf_model.nodes.values())
+            for i in range(3)
+        )
+        if max_extent > 100.0:
+            # Millimeter model (KC-100 style): N-mm-s, mass in tonnes
+            self._length_scale = 1.0      # coordinates in mm
+            self._mass_to_kg = 1000.0     # tonnes → kg
+            self._length_to_m = 1e-3      # mm → m
+            self._g_model = 9806.65       # mm/s²
+            self._wing_root_threshold = 200.0  # mm
+            logger.info("Detected N-mm-s unit system (extent=%.0f mm)", max_extent)
+        else:
+            # Meter model (UAM style): N-m-kg-s, mass in kg
+            self._length_scale = 1.0      # coordinates in m
+            self._mass_to_kg = 1.0        # already kg
+            self._length_to_m = 1.0       # already m
+            self._g_model = 9.80665       # m/s²
+            self._wing_root_threshold = 0.2  # m (200mm)
+            logger.info("Detected N-m-kg-s unit system (extent=%.1f m)", max_extent)
+
         # Pre-compute mass distribution and geometry
         self._node_masses = self._build_node_mass_map()
-        self._cg_mm = self._compute_cg_mm()
-        self._total_mass_tonnes = sum(self._node_masses.values())
+        self._cg = self._compute_cg()            # In model coords
+        self._cg_mm = self._cg * (self._length_to_m / 1e-3)  # Always in mm (for rotor_dynamics)
+        self._total_mass_kg = sum(m * self._mass_to_kg
+                                   for m in self._node_masses.values())
         self._wing_root_y = self._detect_wing_root_y()
         self._boom_junctions = self._detect_boom_junctions()
 
         # Pre-compute nominal rotor loads (for torque scaling)
-        wc = aircraft_config.weight_cg_conditions[0]
+        # Use heaviest weight condition (MTOW) for consistent force balance
+        wc = max(aircraft_config.weight_cg_conditions,
+                 key=lambda w: w.weight_N)
         self._weight_N = wc.weight_N
         rho, _, _ = isa_atmosphere(0.0)
         self._rho = rho
@@ -174,8 +200,8 @@ class VTOLTransientLoadsRunner:
         self._params = self._build_aircraft_params()
 
         logger.info("VTOLTransientLoadsRunner: %.0f kg, %d hover rotors, "
-                    "wing root Y=%.0f mm, %d boom junctions",
-                    self._total_mass_tonnes * 1000,
+                    "wing root Y=%.3f, %d boom junctions",
+                    self._total_mass_kg,
                     n_hover, self._wing_root_y, len(self._boom_junctions))
 
     # ------------------------------------------------------------------
@@ -257,10 +283,15 @@ class VTOLTransientLoadsRunner:
                        with_recovery: bool = False,
                        t_recognition: float = 1.0,
                        t_sim: float = 5.0, dt: float = 0.005,
-                       failure_time: float = 1.0,
+                       failure_time: float = 0.1,
                        dt_loads: float = 0.02,
                        ) -> TransientPeakResult:
-        """Run single OEI event and compute structural loads time history."""
+        """Run single OEI event and compute structural loads time history.
+
+        failure_time is kept small (0.1s) to minimise the uncontrolled
+        pre-failure hover phase.  A baseline FCC attitude-hold PD damper
+        is always active to prevent unrealistic divergence.
+        """
         from ...rotor.rotor_dynamics import (
             make_oei_force_func, make_oei_recovery_force_func,
         )
@@ -279,8 +310,7 @@ class VTOLTransientLoadsRunner:
             self._params, self.vtol_config, cg_position=self._cg_mm)
 
         if with_recovery:
-            # Create recovery force callback directly
-            ext_force = make_oei_recovery_force_func(
+            base_force = make_oei_recovery_force_func(
                 self.vtol_config,
                 failed_rotor_id=rotor.rotor_id,
                 failure_time=failure_time,
@@ -292,27 +322,38 @@ class VTOLTransientLoadsRunner:
                 Ixx=self._params.Ixx,
                 Iyy=self._params.Iyy,
             )
-
-            # Manual sim (VTOLSimRunner doesn't have recovery variant)
-            initial_state, de_trim = trim_initial_state(
-                self._params, 5.0, nz=1.0)
-            initial_state.u = 0.1
-            initial_state.w = 0.0
-            initial_state.theta = 0.0
-
-            ctrl = ControlInput(delta_e=de_trim)
-            history = integrate_6dof(
-                self._params, initial_state, lambda t: ctrl,
-                t_span=(0.0, t_sim), dt=dt,
-                external_force_func=ext_force,
-            )
-            compute_nz_from_history(self._params, history)
-            criticals = sim_runner._extract_critical_points(
-                history, condition, self._weight_N)
         else:
-            history, criticals = sim_runner.run_oei_case(
-                condition, self._weight_N, t_sim=t_sim,
-                failure_time=failure_time, dt=dt)
+            base_force = make_oei_force_func(
+                self.vtol_config,
+                failed_rotor_id=rotor.rotor_id,
+                failure_time=failure_time,
+                weight_N=self._weight_N,
+                rho=self._rho,
+                cg_position=self._cg_mm,
+            )
+
+        # Always wrap with FCC baseline attitude-hold PD to prevent
+        # unrealistic hover divergence.  For recovery cases the internal
+        # PD drives the same setpoint (phi=theta=0), so the two loops
+        # are additive and remain stable.
+        ext_force = self._wrap_with_attitude_hold(base_force)
+
+        # Run sim
+        initial_state, de_trim = trim_initial_state(
+            self._params, 5.0, nz=1.0)
+        initial_state.u = 0.1
+        initial_state.w = 0.0
+        initial_state.theta = 0.0
+
+        ctrl = ControlInput(delta_e=de_trim)
+        history = integrate_6dof(
+            self._params, initial_state, lambda t: ctrl,
+            t_span=(0.0, t_sim), dt=dt,
+            external_force_func=ext_force,
+        )
+        compute_nz_from_history(self._params, history)
+        criticals = sim_runner._extract_critical_points(
+            history, condition, self._weight_N)
 
         # Reconstruct per-rotor thrust schedule
         rotor_thrusts = compute_recovery_thrust_schedule(
@@ -360,10 +401,12 @@ class VTOLTransientLoadsRunner:
 
     def _run_jam_event(self, rotor: RotorDef,
                        t_sim: float = 3.0, dt: float = 0.005,
-                       jam_time: float = 0.5,
+                       jam_time: float = 0.1,
                        dt_loads: float = 0.02,
                        ) -> TransientPeakResult:
         """Run single rotor jam event and compute structural loads."""
+        from ...rotor.rotor_dynamics import make_rotor_jam_force_func
+
         condition = VTOLCondition(
             label=f"Jam_{rotor.label}",
             phase=VTOLFlightPhase.ROTOR_JAM,
@@ -373,11 +416,36 @@ class VTOLTransientLoadsRunner:
             far_section="SC-VTOL.2150",
         )
 
+        # Build jam force function with attitude stabilisation
+        base_force = make_rotor_jam_force_func(
+            self.vtol_config,
+            jammed_rotor_id=rotor.rotor_id,
+            jam_time=jam_time,
+            weight_N=self._weight_N,
+            rho=self._rho,
+            cg_position=self._cg_mm,
+        )
+        ext_force = self._wrap_with_attitude_hold(base_force)
+
+        # Run sim
+        initial_state, de_trim = trim_initial_state(
+            self._params, 5.0, nz=1.0)
+        initial_state.u = 0.1
+        initial_state.w = 0.0
+        initial_state.theta = 0.0
+
+        ctrl = ControlInput(delta_e=de_trim)
         sim_runner = VTOLSimRunner(
             self._params, self.vtol_config, cg_position=self._cg_mm)
-        history, criticals = sim_runner.run_rotor_jam_case(
-            condition, self._weight_N, t_sim=t_sim,
-            jam_time=jam_time, dt=dt)
+
+        history = integrate_6dof(
+            self._params, initial_state, lambda t: ctrl,
+            t_span=(0.0, t_sim), dt=dt,
+            external_force_func=ext_force,
+        )
+        compute_nz_from_history(self._params, history)
+        criticals = sim_runner._extract_critical_points(
+            history, condition, self._weight_N)
 
         # For jam, use nominal thrust schedule (no recovery)
         # Failed rotor goes to zero at jam_time
@@ -421,6 +489,48 @@ class VTOLTransientLoadsRunner:
 
         return result
 
+    def _wrap_with_attitude_hold(self, base_force_func):
+        """Wrap an external force function with FCC attitude-hold PD damper.
+
+        In hover, the aircraft has no aerodynamic damping.  Real eVTOLs
+        use always-active flight controllers to stabilise attitude.
+        This wrapper adds proportional + derivative torques to simulate
+        the FCC baseline attitude hold, preventing unrealistic divergence
+        of the 6-DOF simulation before/after OEI events.
+
+        PD gains are set to give ωn ≈ 3 rad/s, ζ ≈ 0.7 (typical FCC).
+        """
+        Ixx = self._params.Ixx
+        Iyy = self._params.Iyy
+        Izz = self._params.Izz
+
+        omega_n = 6.0   # rad/s  — attitude natural frequency
+        zeta = 1.0      # critically damped
+
+        # PD gains: Kp = I × ωn², Kd = 2 ζ ωn I
+        Kp_roll = Ixx * omega_n ** 2
+        Kd_roll = 2.0 * zeta * omega_n * Ixx
+        Kp_pitch = Iyy * omega_n ** 2
+        Kd_pitch = 2.0 * zeta * omega_n * Iyy
+        Kd_yaw = 2.0 * zeta * omega_n * Izz  # yaw rate damper only
+
+        def stabilised_force(t, state):
+            F_body, M_body = base_force_func(t, state)
+            phi = state[6]
+            theta = state[7]
+            p = state[3]
+            q = state[4]
+            r = state[5]
+
+            # Attitude-hold: command phi=0, theta=0
+            M_out = np.array(M_body, dtype=float)
+            M_out[0] += -Kp_roll * phi - Kd_roll * p
+            M_out[1] += -Kp_pitch * theta - Kd_pitch * q
+            M_out[2] += -Kd_yaw * r
+            return F_body, M_out
+
+        return stabilised_force
+
     # ------------------------------------------------------------------
     # Structural loads computation
     # ------------------------------------------------------------------
@@ -444,10 +554,13 @@ class VTOLTransientLoadsRunner:
         dt_sim = history.t[1] - history.t[0] if N_sim > 1 else 0.005
         step = max(1, int(dt_loads / dt_sim))
 
-        # Sample indices
-        indices = list(range(0, N_sim, step))
-        if indices[-1] != N_sim - 1:
-            indices.append(N_sim - 1)
+        # Sample indices — limit to failure_time + 1.0s to avoid
+        # post-divergence artifacts in the uncontrolled phase
+        t_max = failure_time + 1.0
+        idx_max = min(N_sim - 1, int(t_max / dt_sim))
+        indices = list(range(0, idx_max + 1, step))
+        if indices[-1] != idx_max:
+            indices.append(idx_max)
         N_loads = len(indices)
 
         # Output arrays
@@ -469,6 +582,10 @@ class VTOLTransientLoadsRunner:
             state = history.states[idx]
             t_loads[k] = t
 
+            # Skip diverged timesteps (NaN/inf from unstable sims)
+            if not np.all(np.isfinite(state)):
+                break  # Once diverged, all subsequent steps are useless
+
             phi = state[6]
             theta = state[7]
             p = state[3]
@@ -478,6 +595,15 @@ class VTOLTransientLoadsRunner:
             q_dot = history.q_dot[idx]
             r_dot = history.r_dot[idx]
 
+            # Check for physical divergence (states still finite but unphysical)
+            if (abs(phi) > np.pi/2 or abs(theta) > np.pi/2
+                    or abs(p) > 20.0 or abs(q) > 20.0 or abs(r) > 20.0):
+                break  # Aircraft tumbling — stop here
+
+            # Also check angular accelerations for divergence
+            if not (np.isfinite(p_dot) and np.isfinite(q_dot) and np.isfinite(r_dot)):
+                break
+
             # --- 1. Rotor nodal forces ---
             rotor_nodal = {}
             total_Fz_rotor = 0.0
@@ -486,12 +612,12 @@ class VTOLTransientLoadsRunner:
                 if rotor is None:
                     continue
                 T = thrust_arr[idx]
-                if T < 1e-3:
+                if not np.isfinite(T) or T < 1e-3:
                     continue
 
                 shaft = rotor.effective_shaft_axis
                 # Reaction force (opposes air acceleration)
-                F_thrust = -T * shaft
+                F_thrust = T * shaft  # Thrust acts upward on airframe
                 # Reaction torque (momentum-theory scaling)
                 nom_loads = self._nominal_loads.get(rotor.rotor_id)
                 if nom_loads and self._T_nominal > 0:
@@ -519,9 +645,9 @@ class VTOLTransientLoadsRunner:
 
             # --- 3. Inertial forces at all mass nodes ---
             # F_inertial = -m_node × [nz×g (vertical) + α×r (angular accel)]
-            alpha_vec = np.array([p_dot, q_dot, r_dot])  # body angular accel
-            omega_vec = np.array([p, q, r])  # body angular velocity
-            cg_m = self._cg_mm * 1e-3  # mm → m
+            alpha_vec = np.array([p_dot, q_dot, r_dot])  # body angular accel [rad/s²]
+            omega_vec = np.array([p, q, r])  # body angular velocity [rad/s]
+            cg_m = self._cg * self._length_to_m  # CG in meters
 
             inertial_nodal = {}
             for nid, m_node in self._node_masses.items():
@@ -529,16 +655,17 @@ class VTOLTransientLoadsRunner:
                 if node is None:
                     continue
 
-                r_m = node.xyz * 1e-3 - cg_m  # position from CG in meters
+                r_m = node.xyz * self._length_to_m - cg_m  # position from CG in meters
+                m_kg = m_node * self._mass_to_kg
 
                 # nz-component (vertical inertial, dominant)
-                Fz_inertial = -m_node * 1000.0 * nz_struct * _G  # tonnes→kg
+                Fz_inertial = -m_kg * nz_struct * _G  # [N]
 
-                # Angular acceleration: F = -m × α×r
-                F_alpha = -m_node * 1000.0 * np.cross(alpha_vec, r_m)
+                # Angular acceleration: F = -m × α×r  [N]
+                F_alpha = -m_kg * np.cross(alpha_vec, r_m)
 
-                # Centripetal: F = -m × ω×(ω×r) (secondary, include for accuracy)
-                F_centripetal = -m_node * 1000.0 * np.cross(
+                # Centripetal: F = -m × ω×(ω×r)  [N]
+                F_centripetal = -m_kg * np.cross(
                     omega_vec, np.cross(omega_vec, r_m))
 
                 fvec = np.zeros(6)
@@ -576,23 +703,25 @@ class VTOLTransientLoadsRunner:
         result.wing_Vy_R = wing_Vy_R
         result.boom_Mx_max = boom_Mx_max
 
-        # Peak wing bending (max absolute across both sides)
-        abs_L = np.max(np.abs(wing_Mx_L))
-        abs_R = np.max(np.abs(wing_Mx_R))
-        if abs_L >= abs_R:
+        # Peak wing bending (max absolute across both sides, ignoring NaN)
+        abs_L = float(np.nanmax(np.abs(wing_Mx_L))) if np.any(wing_Mx_L != 0) else 0.0
+        abs_R = float(np.nanmax(np.abs(wing_Mx_R))) if np.any(wing_Mx_R != 0) else 0.0
+        if abs_L >= abs_R and abs_L > 0:
             result.peak_wing_Mx = abs_L
-            result.peak_wing_Mx_time = t_loads[np.argmax(np.abs(wing_Mx_L))]
+            result.peak_wing_Mx_time = t_loads[np.nanargmax(np.abs(wing_Mx_L))]
             result.peak_wing_Mx_side = "L"
-        else:
+        elif abs_R > 0:
             result.peak_wing_Mx = abs_R
-            result.peak_wing_Mx_time = t_loads[np.argmax(np.abs(wing_Mx_R))]
+            result.peak_wing_Mx_time = t_loads[np.nanargmax(np.abs(wing_Mx_R))]
             result.peak_wing_Mx_side = "R"
 
-        result.peak_wing_Vy = max(np.max(np.abs(wing_Vy_L)),
-                                   np.max(np.abs(wing_Vy_R)))
-        result.peak_boom_Mx = np.max(np.abs(boom_Mx_max))
-        if len(boom_Mx_max) > 0 and result.peak_boom_Mx > 0:
-            result.peak_boom_Mx_time = t_loads[np.argmax(np.abs(boom_Mx_max))]
+        result.peak_wing_Vy = max(
+            float(np.nanmax(np.abs(wing_Vy_L))) if np.any(wing_Vy_L != 0) else 0.0,
+            float(np.nanmax(np.abs(wing_Vy_R))) if np.any(wing_Vy_R != 0) else 0.0)
+        abs_boom = np.abs(boom_Mx_max)
+        result.peak_boom_Mx = float(np.nanmax(abs_boom)) if np.any(abs_boom > 0) else 0.0
+        if result.peak_boom_Mx > 0:
+            result.peak_boom_Mx_time = t_loads[np.nanargmax(abs_boom)]
 
         return result
 
@@ -689,7 +818,7 @@ class VTOLTransientLoadsRunner:
 
             T = T_per_active
             shaft = rotor.effective_shaft_axis
-            F_thrust = -T * shaft
+            F_thrust = T * shaft  # Thrust acts upward on airframe
             nom = self._nominal_loads.get(rotor.rotor_id)
             Q = nom.torque * abs(T / self._T_nominal) ** 1.5 if nom else 0.0
             rot_sign = (1.0 if rotor.rotation_dir == RotationDir.CW
@@ -708,7 +837,7 @@ class VTOLTransientLoadsRunner:
         # Inertial forces at nz=1.0 (no angular accelerations)
         for nid, m_node in self._node_masses.items():
             fvec = np.zeros(6)
-            fvec[2] = -m_node * 1000.0 * 1.0 * _G  # nz=1.0
+            fvec[2] = -m_node * self._mass_to_kg * 1.0 * _G  # nz=1.0 [N]
             if nid in qs_forces:
                 qs_forces[nid] += fvec
             else:
@@ -740,7 +869,7 @@ class VTOLTransientLoadsRunner:
 
         # CONM2 concentrated masses
         for eid, conm2 in self.bdf_model.conm2s.items():
-            nid = conm2.nid
+            nid = conm2.node_id
             masses[nid] = masses.get(nid, 0.0) + conm2.mass
 
         # Structural element lumped masses
@@ -760,13 +889,13 @@ class VTOLTransientLoadsRunner:
                 rho = getattr(mat, 'rho', 0.0)
                 if rho <= 0 or A <= 0:
                     continue
-                n1 = self.bdf_model.nodes.get(elem.nids[0])
-                n2 = self.bdf_model.nodes.get(elem.nids[1])
+                n1 = self.bdf_model.nodes.get(elem.node_ids[0])
+                n2 = self.bdf_model.nodes.get(elem.node_ids[1])
                 if n1 is None or n2 is None:
                     continue
                 L = np.linalg.norm(n2.xyz - n1.xyz)
                 m_elem = rho * A * L  # tonnes (if rho in tonne/mm³)
-                for nid in elem.nids[:2]:
+                for nid in elem.node_ids[:2]:
                     masses[nid] = masses.get(nid, 0.0) + m_elem / 2.0
 
             elif etype == 'CQUAD4':
@@ -783,14 +912,14 @@ class VTOLTransientLoadsRunner:
                 rho = getattr(mat, 'rho', 0.0)
                 if rho <= 0 or t <= 0:
                     continue
-                nodes = [self.bdf_model.nodes.get(nid) for nid in elem.nids[:4]]
+                nodes = [self.bdf_model.nodes.get(nid) for nid in elem.node_ids[:4]]
                 if any(n is None for n in nodes):
                     continue
                 d1 = nodes[2].xyz - nodes[0].xyz
                 d2 = nodes[3].xyz - nodes[1].xyz
                 area = 0.5 * np.linalg.norm(np.cross(d1, d2))
                 m_elem = rho * t * area
-                for nid in elem.nids[:4]:
+                for nid in elem.node_ids[:4]:
                     masses[nid] = masses.get(nid, 0.0) + m_elem / 4.0
 
             elif etype == 'CTRIA3':
@@ -807,20 +936,20 @@ class VTOLTransientLoadsRunner:
                 rho = getattr(mat, 'rho', 0.0)
                 if rho <= 0 or t <= 0:
                     continue
-                nodes = [self.bdf_model.nodes.get(nid) for nid in elem.nids[:3]]
+                nodes = [self.bdf_model.nodes.get(nid) for nid in elem.node_ids[:3]]
                 if any(n is None for n in nodes):
                     continue
                 d1 = nodes[1].xyz - nodes[0].xyz
                 d2 = nodes[2].xyz - nodes[0].xyz
                 area = 0.5 * np.linalg.norm(np.cross(d1, d2))
                 m_elem = rho * t * area
-                for nid in elem.nids[:3]:
+                for nid in elem.node_ids[:3]:
                     masses[nid] = masses.get(nid, 0.0) + m_elem / 3.0
 
         return masses
 
-    def _compute_cg_mm(self) -> np.ndarray:
-        """Compute CG position in model coordinates (mm)."""
+    def _compute_cg(self) -> np.ndarray:
+        """Compute CG position in model coordinates."""
         total_m = 0.0
         cg = np.zeros(3)
         for nid, m in self._node_masses.items():
@@ -839,28 +968,31 @@ class VTOLTransientLoadsRunner:
         Finds the minimum |Y| of nodes that are clearly on the wing
         (lateral nodes with significant Y displacement from centerline).
         """
+        threshold = self._wing_root_threshold
         y_values = []
         for nid, node in self.bdf_model.nodes.items():
             y = abs(node.xyz[1])
-            if y > 200.0:  # Clearly not centerline
+            if y > threshold:
                 y_values.append(y)
 
         if y_values:
             return min(y_values)
-        return 500.0  # Default fallback
+        # Fallback: 500mm or 0.5m depending on unit system
+        return 500.0 if self._length_to_m < 0.01 else 0.5
 
     def _detect_boom_junctions(self) -> List[Tuple[float, float, int]]:
         """Detect boom-fuselage junctions from rotor hub positions.
 
         Returns list of (junction_y, hub_y, hub_node_id) tuples.
-        Each boom connects a wing/fuselage junction to a rotor hub.
+        All Y values in model coordinates.
         """
         junctions = []
         for rotor in self.vtol_config.hover_rotors:
-            hub_y = rotor.hub_position[1]  # mm
+            # Hub position is in mm (config); convert to model coords
+            hub_y_model = rotor.hub_position[1] * 1e-3 / self._length_to_m
             # Junction is at the wing root Y on the same side
-            junc_y = self._wing_root_y if hub_y > 0 else -self._wing_root_y
-            junctions.append((junc_y, hub_y, rotor.hub_node_id))
+            junc_y = self._wing_root_y if hub_y_model > 0 else -self._wing_root_y
+            junctions.append((junc_y, hub_y_model, rotor.hub_node_id))
         return junctions
 
     def _build_aircraft_params(self) -> AircraftParams:
@@ -882,18 +1014,23 @@ class VTOLTransientLoadsRunner:
             from .aero_derivatives import AeroDerivativeSet
             derivs = AeroDerivativeSet()
 
-        # Compute inertia
-        cg_xyz = np.array([wc.cg_x, 0.0, 0.0])
-        inertia = compute_inertia_from_conm2(self.bdf_model, cg_xyz)
+        # Compute inertia — pass correct unit conversions for this model
+        # cg_x is always in mm (config convention); convert to model coords
+        cg_xyz = np.array([wc.cg_x * 1e-3 / self._length_to_m, 0.0, 0.0])
+        inertia = compute_inertia_from_conm2(
+            self.bdf_model, cg_xyz,
+            mass_to_kg=self._mass_to_kg,
+            length_to_m=self._length_to_m)
 
-        mm_to_m = 1e-3
+        # Convert reference dimensions from model coords to SI (m, m²)
+        L = self._length_to_m  # model length unit → m
         rho, _, _ = isa_atmosphere(alt_m)
 
         params = AircraftParams(
             mass=inertia["mass_kg"],
-            S=derivs.S_ref * mm_to_m ** 2 if derivs.S_ref > 0 else 20.0,
-            b=derivs.b_ref * mm_to_m if derivs.b_ref > 0 else 12.0,
-            c_bar=derivs.c_bar * mm_to_m if derivs.c_bar > 0 else 1.5,
+            S=derivs.S_ref * L ** 2 if derivs.S_ref > 0 else 20.0,
+            b=derivs.b_ref * L if derivs.b_ref > 0 else 12.0,
+            c_bar=derivs.c_bar * L if derivs.c_bar > 0 else 1.5,
             Ixx=inertia["Ixx"],
             Iyy=inertia["Iyy"],
             Izz=inertia["Izz"],

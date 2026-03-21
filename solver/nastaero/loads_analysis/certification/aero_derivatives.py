@@ -318,6 +318,7 @@ def compute_inertia_from_conm2(
     bdf_model,
     cg_xyz: np.ndarray,
     mass_to_kg: float = 1000.0,
+    length_to_m: float = 1e-3,
 ) -> Dict[str, float]:
     """Compute inertia tensor from CONM2 mass distribution.
 
@@ -326,10 +327,13 @@ def compute_inertia_from_conm2(
     bdf_model : BDFModel
         Parsed BDF model with CONM2 mass elements.
     cg_xyz : ndarray (3,)
-        CG position in model coordinates (mm).
+        CG position in model coordinates.
     mass_to_kg : float
         Conversion factor from model mass units to kg.
         Default 1000.0 for mm/N/Mg models (1 Mg = 1000 kg).
+    length_to_m : float
+        Conversion factor from model length units to m.
+        Default 1e-3 for mm models.
 
     Returns
     -------
@@ -340,8 +344,8 @@ def compute_inertia_from_conm2(
     total_mass = 0.0
     Ixx = Iyy = Izz = Ixz = 0.0
 
-    # Conversion: model is mm → m, mass Mg → kg
-    mm_to_m = 1e-3
+    # Conversion from model length to m
+    mm_to_m = length_to_m
 
     for eid, elem in bdf_model.masses.items():
         if not hasattr(elem, 'mass'):
