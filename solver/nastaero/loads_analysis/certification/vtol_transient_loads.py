@@ -108,7 +108,11 @@ class TransientPeakResult:
     qs_wing_Vy: float = 0.0
     qs_boom_Mx: float = 0.0
 
-    # DAF = peak_transient / quasi_static
+    # Baseline hover (all rotors active, nz=1.0)
+    baseline_wing_Mx: float = 0.0
+    baseline_wing_Vy: float = 0.0
+
+    # DAF = peak_transient / max(baseline, qs_oei)
     daf_wing_Mx: float = 1.0
     daf_wing_Vy: float = 1.0
     daf_boom_Mx: float = 1.0
@@ -641,7 +645,7 @@ class VTOLTransientLoadsRunner:
 
             # --- 2. Structural nz from total rotor force ---
             # nz = -(total upward force) / W  (body z-axis, up = negative)
-            nz_struct = -total_Fz_rotor / self._weight_N if self._weight_N > 0 else 1.0
+            nz_struct = total_Fz_rotor / self._weight_N if self._weight_N > 0 else 1.0
 
             # --- 3. Inertial forces at all mass nodes ---
             # F_inertial = -m_node × [nz×g (vertical) + α×r (angular accel)]
@@ -851,11 +855,35 @@ class VTOLTransientLoadsRunner:
         result.qs_wing_Vy = max(abs(Vy_L), abs(Vy_R))
         result.qs_boom_Mx = boom_Mx
 
-        # DAF
-        if result.qs_wing_Mx > 1e-3:
-            result.daf_wing_Mx = result.peak_wing_Mx / result.qs_wing_Mx
-        if result.qs_wing_Vy > 1e-3:
-            result.daf_wing_Vy = result.peak_wing_Vy / result.qs_wing_Vy
+        # Compute baseline hover loads (all rotors active, nz=1.0)
+        bl_forces = {}
+        T_nom = self._weight_N / len(hover_rotors)
+        for rotor in hover_rotors:
+            shaft = rotor.effective_shaft_axis
+            fvec = np.zeros(6)
+            fvec[:3] = T_nom * shaft
+            nid = rotor.hub_node_id
+            bl_forces[nid] = fvec.copy()
+        for nid, m_node in self._node_masses.items():
+            fvec = np.zeros(6)
+            fvec[2] = -m_node * self._mass_to_kg * 1.0 * _G
+            if nid in bl_forces:
+                bl_forces[nid] += fvec
+            else:
+                bl_forces[nid] = fvec.copy()
+        _, bl_Mx_L, _, bl_Mx_R = self._wing_root_section_loads(bl_forces)
+        bl_Vy_L, _, bl_Vy_R, _ = self._wing_root_section_loads(bl_forces)
+        result.baseline_wing_Mx = max(abs(bl_Mx_L), abs(bl_Mx_R))
+        result.baseline_wing_Vy = max(abs(bl_Vy_L), abs(bl_Vy_R))
+
+        # DAF — use baseline hover as denominator (more physical than QS OEI
+        # which can be smaller than baseline due to thrust redistribution)
+        denom_Mx = max(result.baseline_wing_Mx, result.qs_wing_Mx)
+        denom_Vy = max(result.baseline_wing_Vy, result.qs_wing_Vy)
+        if denom_Mx > 1e-3:
+            result.daf_wing_Mx = result.peak_wing_Mx / denom_Mx
+        if denom_Vy > 1e-3:
+            result.daf_wing_Vy = result.peak_wing_Vy / denom_Vy
         if result.qs_boom_Mx > 1e-3:
             result.daf_boom_Mx = result.peak_boom_Mx / result.qs_boom_Mx
 
