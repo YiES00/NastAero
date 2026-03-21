@@ -18,6 +18,8 @@ from .cards.sets import SET1
 from .cards.aero import (AERO, AEROS, CAERO1, PAERO1, SPLINE1, SPLINE2,
                          AESTAT, AESURF, AELIST, AEFACT, AELINK,
                          TRIM, FLFACT, MKAERO1)
+from .cards.dynamic import (TLOAD1, DLOAD, TABLED1, GUST, DAREA,
+                            FREQ1, TSTEP, TABDMP1)
 from ..config import logger
 
 def parse_bulk_card(fields: List[str], model: BDFModel) -> None:
@@ -133,6 +135,23 @@ def parse_bulk_card(fields: List[str], model: BDFModel) -> None:
             f = FLFACT.from_fields(fields); model.flfacts[f.sid] = f
         elif card_name == "MKAERO1":
             m = MKAERO1.from_fields(fields); model.mkaeros.append(m)
+        # Dynamic analysis cards (SOL 112/146)
+        elif card_name == "TLOAD1":
+            t = TLOAD1.from_fields(fields); model.tloads[t.sid] = t
+        elif card_name == "DLOAD":
+            d = DLOAD.from_fields(fields); model.dloads[d.sid] = d
+        elif card_name == "TABLED1":
+            t = TABLED1.from_fields(fields); model.tabled1s[t.tid] = t
+        elif card_name == "GUST":
+            g = GUST.from_fields(fields); model.gusts[g.sid] = g
+        elif card_name == "DAREA":
+            d = DAREA.from_fields(fields); model.dareas.setdefault(d.sid, []).append(d)
+        elif card_name == "FREQ1":
+            f = FREQ1.from_fields(fields); model.freq_entries[f.sid] = f
+        elif card_name == "TSTEP":
+            t = TSTEP.from_fields(fields); model.tsteps[t.sid] = t
+        elif card_name == "TABDMP1":
+            t = TABDMP1.from_fields(fields); model.tabdmp1s[t.tid] = t
         # DMI - parse but ignore data (not needed for SOL 144)
         elif card_name == "DMI":
             logger.debug("DMI card parsed (data ignored)")

@@ -12,6 +12,11 @@ class Subcase:
     method_id: int = 0
     flutter_id: int = 0
     trim_id: int = 0
+    dload_id: int = 0
+    freq_id: int = 0
+    tstep_id: int = 0
+    sdamp_id: int = 0
+    gust_id: int = 0
     label: str = ""
     output_requests: Dict[str, Any] = field(default_factory=dict)
 
@@ -50,6 +55,15 @@ class BDFModel:
     aelists: Dict[int, Any] = field(default_factory=dict)
     aefacts: Dict[int, Any] = field(default_factory=dict)
     aelinks: List[Any] = field(default_factory=list)
+    # Dynamic analysis cards (SOL 112/146)
+    tloads: Dict[int, Any] = field(default_factory=dict)
+    dloads: Dict[int, Any] = field(default_factory=dict)
+    tabled1s: Dict[int, Any] = field(default_factory=dict)
+    gusts: Dict[int, Any] = field(default_factory=dict)
+    dareas: Dict[int, Any] = field(default_factory=dict)
+    freq_entries: Dict[int, Any] = field(default_factory=dict)
+    tsteps: Dict[int, Any] = field(default_factory=dict)
+    tabdmp1s: Dict[int, Any] = field(default_factory=dict)
     # Spring elements (stored separately from elements dict)
     springs: Dict[int, Any] = field(default_factory=dict)
 
@@ -103,6 +117,11 @@ class BDFModel:
         effective.method_id = self.global_case.method_id
         effective.flutter_id = self.global_case.flutter_id
         effective.trim_id = self.global_case.trim_id
+        effective.dload_id = self.global_case.dload_id
+        effective.freq_id = self.global_case.freq_id
+        effective.tstep_id = self.global_case.tstep_id
+        effective.sdamp_id = self.global_case.sdamp_id
+        effective.gust_id = self.global_case.gust_id
         effective.output_requests = dict(self.global_case.output_requests)
         if subcase.spc_id:
             effective.spc_id = subcase.spc_id
@@ -116,6 +135,16 @@ class BDFModel:
             effective.flutter_id = subcase.flutter_id
         if subcase.trim_id:
             effective.trim_id = subcase.trim_id
+        if subcase.dload_id:
+            effective.dload_id = subcase.dload_id
+        if subcase.freq_id:
+            effective.freq_id = subcase.freq_id
+        if subcase.tstep_id:
+            effective.tstep_id = subcase.tstep_id
+        if subcase.sdamp_id:
+            effective.sdamp_id = subcase.sdamp_id
+        if subcase.gust_id:
+            effective.gust_id = subcase.gust_id
         effective.output_requests.update(subcase.output_requests)
         effective.label = subcase.label
         return effective

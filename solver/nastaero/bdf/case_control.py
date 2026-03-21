@@ -57,11 +57,36 @@ def parse_case_control(lines: List[str], model: BDFModel) -> None:
         if trim_match:
             current_subcase.trim_id = int(trim_match.group(1))
             continue
+        dload_match = re.match(r"DLOAD\s*=\s*(\d+)", upper)
+        if dload_match:
+            current_subcase.dload_id = int(dload_match.group(1))
+            continue
+        freq_match = re.match(r"FREQ(?:UENCY)?\s*=\s*(\d+)", upper)
+        if freq_match:
+            current_subcase.freq_id = int(freq_match.group(1))
+            continue
+        tstep_match = re.match(r"TSTEP\s*=\s*(\d+)", upper)
+        if tstep_match:
+            current_subcase.tstep_id = int(tstep_match.group(1))
+            continue
+        sdamp_match = re.match(r"SDAMPING\s*=\s*(\d+)", upper)
+        if sdamp_match:
+            current_subcase.sdamp_id = int(sdamp_match.group(1))
+            continue
+        gust_match = re.match(r"GUST\s*=\s*(\d+)", upper)
+        if gust_match:
+            current_subcase.gust_id = int(gust_match.group(1))
+            continue
     if not model.subcases:
         default_sc = Subcase(id=1)
         default_sc.spc_id = model.global_case.spc_id
         default_sc.mpc_id = model.global_case.mpc_id
         default_sc.load_id = model.global_case.load_id
         default_sc.method_id = model.global_case.method_id
+        default_sc.dload_id = model.global_case.dload_id
+        default_sc.freq_id = model.global_case.freq_id
+        default_sc.tstep_id = model.global_case.tstep_id
+        default_sc.sdamp_id = model.global_case.sdamp_id
+        default_sc.gust_id = model.global_case.gust_id
         default_sc.output_requests = dict(model.global_case.output_requests)
         model.subcases.append(default_sc)

@@ -213,6 +213,13 @@ def main() -> None:
         results = solve_trim(bdf_model,
                              n_workers=args.parallel,
                              blas_threads=args.blas_threads)
+    elif bdf_model.sol == 146:
+        from .solvers.sol146 import solve_aeroelastic_transient
+        logger.info("SOL 146: Dynamic Aeroelastic Response")
+        logger.info("  SOL 146 requires programmatic force_func input")
+        logger.info("  Use: from nastaero.solvers.sol146 import "
+                     "solve_aeroelastic_transient")
+        sys.exit(0)
     else:
         logger.error("Unsupported SOL %d", bdf_model.sol)
         sys.exit(1)
