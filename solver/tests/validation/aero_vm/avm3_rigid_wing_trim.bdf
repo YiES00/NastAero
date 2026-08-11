@@ -1,0 +1,65 @@
+$ NastAero AVM3: Rigid Wing Trim Verification
+$ Very stiff wing to verify trim angle matches CL requirement
+$ AR=4, c=2.0m, b=8.0m, at M=0.0 (incompressible)
+$
+$ Expected: alpha = W / (q * S * CL_alpha)
+$ Weight from beam mass: rho=1000*A=0.001*L=8 = 0.008 m^3 * 1000 = 8 kg
+$ W = 8 * 9.81 = 78.48 N
+$ S = 16 m^2
+$ CL_alpha from VLM (AR=4) ~ 3.5-3.9 (depends on panel density)
+$ q = 6125 Pa
+$ alpha = 78.48 / (6125 * 16 * CL_alpha)
+$
+SOL 144
+CEND
+TITLE = AVM3 - RIGID WING TRIM (AR=4)
+SPC = 1
+TRIM = 1
+DISPLACEMENT = ALL
+BEGIN BULK
+$
+AEROS, 0, 0, 2.0, 8.0, 16.0
+AERO,  0, 100.0, 2.0, 1.225
+$
+$ 9 nodes along span at mid-chord (x=1.0)
+GRID,  1, , 1.0, 0.0, 0.0
+GRID,  2, , 1.0, 1.0, 0.0
+GRID,  3, , 1.0, 2.0, 0.0
+GRID,  4, , 1.0, 3.0, 0.0
+GRID,  5, , 1.0, 4.0, 0.0
+GRID,  6, , 1.0, 5.0, 0.0
+GRID,  7, , 1.0, 6.0, 0.0
+GRID,  8, , 1.0, 7.0, 0.0
+GRID,  9, , 1.0, 8.0, 0.0
+$
+CBAR, 1, 1, 1, 2, 0.0, 0.0, 1.0
+CBAR, 2, 1, 2, 3, 0.0, 0.0, 1.0
+CBAR, 3, 1, 3, 4, 0.0, 0.0, 1.0
+CBAR, 4, 1, 4, 5, 0.0, 0.0, 1.0
+CBAR, 5, 1, 5, 6, 0.0, 0.0, 1.0
+CBAR, 6, 1, 6, 7, 0.0, 0.0, 1.0
+CBAR, 7, 1, 7, 8, 0.0, 0.0, 1.0
+CBAR, 8, 1, 8, 9, 0.0, 0.0, 1.0
+$
+$ Ultra-stiff to behave as rigid
+PBAR, 1, 1, 0.001, 10.0, 10.0, 20.0
+MAT1, 1, 2.0E14,,0.3, 1000.0
+$
+SPC1, 1, 123456, 1
+$
+$ 8 spanwise x 4 chordwise
+CAERO1,1001,1001,0,8,4,0,0,1,+CA1
++CA1,  0.0, 0.0, 0.0, 2.0, 0.0, 8.0, 0.0, 2.0
+$
+PAERO1, 1001
+$
+SPLINE1, 100, 1001, 0, 31, 10, 0.0
+SET1, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9
+$
+AESTAT, 501, ANGLEA
+AESTAT, 502, URDD3
+$
+$ q = 0.5 * 1.225 * 100^2 = 6125 Pa
+TRIM, 1, 0.0, 6125.0, URDD3, 0.0
+$
+ENDDATA

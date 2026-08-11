@@ -1,0 +1,666 @@
+{
+ "variants": {
+  "BASE": {
+   "n_2d": 61,
+   "n_3d": 68,
+   "only_3d": [
+    {
+     "case_id": 10020,
+     "label": "[BASE@0m] Yaw Right VA RUD=25.0° β=overswing BASE",
+     "category": "yaw",
+     "exceedance_pct": 0.09
+    },
+    {
+     "case_id": 10022,
+     "label": "[BASE@0m] Yaw Left VA RUD=-25.0° β=overswing BASE",
+     "category": "yaw",
+     "exceedance_pct": 0.09
+    },
+    {
+     "case_id": 10064,
+     "label": "[BASE@3000m] Yaw Left VC RUD=-22.2° β=0 BASE",
+     "category": "yaw",
+     "exceedance_pct": 0.04
+    },
+    {
+     "case_id": 10027,
+     "label": "[BASE@0m] Yaw Right VD RUD=17.8° β=0 BASE",
+     "category": "yaw",
+     "exceedance_pct": 0.02
+    },
+    {
+     "case_id": 10029,
+     "label": "[BASE@0m] Yaw Left VD RUD=-17.8° β=0 BASE",
+     "category": "yaw",
+     "exceedance_pct": 0.02
+    },
+    {
+     "case_id": 10034,
+     "label": "[BASE@0m] Checked VC nz=3.80 BASE",
+     "category": "checked",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 10073,
+     "label": "[BASE@3000m] Checked VC nz=3.80 BASE",
+     "category": "checked",
+     "exceedance_pct": 0.0
+    }
+   ]
+  },
+  "FWD_CG": {
+   "n_2d": 35,
+   "n_3d": 37,
+   "only_3d": [
+    {
+     "case_id": 20006,
+     "label": "[FWD_CG@0m] D- V=100.0m/s nz=-1.52 FWD_CG",
+     "category": "symmetric",
+     "exceedance_pct": 0.02
+    },
+    {
+     "case_id": 20034,
+     "label": "[FWD_CG@0m] Checked VC nz=3.80 FWD_CG",
+     "category": "checked",
+     "exceedance_pct": 0.0
+    }
+   ]
+  },
+  "AFT_CG": {
+   "n_2d": 32,
+   "n_3d": 39,
+   "only_3d": [
+    {
+     "case_id": 50024,
+     "label": "[LIGHT_AFT@0m] Yaw Right VC RUD=22.2° β=overswing LIGHT_AFT",
+     "category": "yaw",
+     "exceedance_pct": 0.72
+    },
+    {
+     "case_id": 50026,
+     "label": "[LIGHT_AFT@0m] Yaw Left VC RUD=-22.2° β=overswing LIGHT_AFT",
+     "category": "yaw",
+     "exceedance_pct": 0.7
+    },
+    {
+     "case_id": 30022,
+     "label": "[AFT_CG@0m] Yaw Left VA RUD=-25.0° β=overswing AFT_CG",
+     "category": "yaw",
+     "exceedance_pct": 0.26
+    },
+    {
+     "case_id": 30020,
+     "label": "[AFT_CG@0m] Yaw Right VA RUD=25.0° β=overswing AFT_CG",
+     "category": "yaw",
+     "exceedance_pct": 0.24
+    },
+    {
+     "case_id": 30002,
+     "label": "[AFT_CG@0m] A- V=44.4m/s nz=-1.52 AFT_CG",
+     "category": "symmetric",
+     "exceedance_pct": 0.02
+    },
+    {
+     "case_id": 50005,
+     "label": "[LIGHT_AFT@0m] D+ V=100.0m/s nz=3.80 LIGHT_AFT",
+     "category": "symmetric",
+     "exceedance_pct": 0.02
+    },
+    {
+     "case_id": 30006,
+     "label": "[AFT_CG@0m] D- V=100.0m/s nz=-1.52 AFT_CG",
+     "category": "symmetric",
+     "exceedance_pct": 0.01
+    }
+   ]
+  },
+  "LIGHT": {
+   "n_2d": 35,
+   "n_3d": 38,
+   "only_3d": [
+    {
+     "case_id": 60006,
+     "label": "[COMBO@0m] D- V=100.0m/s nz=-1.52 COMBO",
+     "category": "symmetric",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 60031,
+     "label": "[COMBO@0m] Checked VA nz=3.80 COMBO",
+     "category": "checked",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 60034,
+     "label": "[COMBO@0m] Checked VC nz=3.80 COMBO",
+     "category": "checked",
+     "exceedance_pct": 0.0
+    }
+   ]
+  },
+  "LIGHT_AFT": {
+   "n_2d": 24,
+   "n_3d": 42,
+   "only_3d": [
+    {
+     "case_id": 50002,
+     "label": "[LIGHT_AFT@0m] A- V=44.4m/s nz=-1.52 LIGHT_AFT",
+     "category": "symmetric",
+     "exceedance_pct": 0.36
+    },
+    {
+     "case_id": 50045,
+     "label": "[LIGHT_AFT@0m] One-wheel left nz=3.08 LIGHT_AFT",
+     "category": "landing",
+     "exceedance_pct": 0.13
+    },
+    {
+     "case_id": 50046,
+     "label": "[LIGHT_AFT@0m] One-wheel right nz=3.08 LIGHT_AFT",
+     "category": "landing",
+     "exceedance_pct": 0.13
+    },
+    {
+     "case_id": 70021,
+     "label": "[COMBO_LA@0m] Yaw Left VA RUD=-25.0° β=0 COMBO_LA",
+     "category": "yaw",
+     "exceedance_pct": 0.05
+    },
+    {
+     "case_id": 50006,
+     "label": "[LIGHT_AFT@0m] D- V=100.0m/s nz=-1.52 LIGHT_AFT",
+     "category": "symmetric",
+     "exceedance_pct": 0.04
+    },
+    {
+     "case_id": 50019,
+     "label": "[LIGHT_AFT@0m] Yaw Right VA RUD=25.0° β=0 LIGHT_AFT",
+     "category": "yaw",
+     "exceedance_pct": 0.04
+    },
+    {
+     "case_id": 50037,
+     "label": "[LIGHT_AFT@0m] Flap VF nz=2.0 LIGHT_AFT",
+     "category": "flap",
+     "exceedance_pct": 0.03
+    },
+    {
+     "case_id": 50031,
+     "label": "[LIGHT_AFT@0m] Checked VA nz=3.80 LIGHT_AFT",
+     "category": "checked",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 50044,
+     "label": "[LIGHT_AFT@0m] Tail-down landing nz=3.08 LIGHT_AFT",
+     "category": "landing",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 70005,
+     "label": "[COMBO_LA@0m] D+ V=100.0m/s nz=3.80 COMBO_LA",
+     "category": "symmetric",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 70010,
+     "label": "[COMBO_LA@0m] Gust_VC- V=80.0m/s nz=-2.13 COMBO_LA",
+     "category": "gust",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 70020,
+     "label": "[COMBO_LA@0m] Yaw Right VA RUD=25.0° β=overswing COMBO_LA",
+     "category": "yaw",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 70022,
+     "label": "[COMBO_LA@0m] Yaw Left VA RUD=-25.0° β=overswing COMBO_LA",
+     "category": "yaw",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 70024,
+     "label": "[COMBO_LA@0m] Yaw Right VC RUD=22.2° β=overswing COMBO_LA",
+     "category": "yaw",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 70026,
+     "label": "[COMBO_LA@0m] Yaw Left VC RUD=-22.2° β=overswing COMBO_LA",
+     "category": "yaw",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 70028,
+     "label": "[COMBO_LA@0m] Yaw Right VD RUD=17.8° β=overswing COMBO_LA",
+     "category": "yaw",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 70029,
+     "label": "[COMBO_LA@0m] Yaw Left VD RUD=-17.8° β=0 COMBO_LA",
+     "category": "yaw",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 70030,
+     "label": "[COMBO_LA@0m] Yaw Left VD RUD=-17.8° β=overswing COMBO_LA",
+     "category": "yaw",
+     "exceedance_pct": 0.0
+    }
+   ]
+  },
+  "COMBO": {
+   "n_2d": 57,
+   "n_3d": 68,
+   "only_3d": [
+    {
+     "case_id": 80142,
+     "label": "[COMBO@0m] Transition V=23.2m/s nz=1.5 h=0m + Jam R8",
+     "category": "vtol_transition",
+     "exceedance_pct": 0.17
+    },
+    {
+     "case_id": 80139,
+     "label": "[COMBO@0m] Transition V=23.2m/s nz=1.5 h=0m + Jam R5",
+     "category": "vtol_transition",
+     "exceedance_pct": 0.14
+    },
+    {
+     "case_id": 80158,
+     "label": "[COMBO@0m] Transition V=27.1m/s nz=1.5 h=0m + Jam R8",
+     "category": "vtol_transition",
+     "exceedance_pct": 0.12
+    },
+    {
+     "case_id": 80155,
+     "label": "[COMBO@0m] Transition V=27.1m/s nz=1.5 h=0m + Jam R5",
+     "category": "vtol_transition",
+     "exceedance_pct": 0.11
+    },
+    {
+     "case_id": 80163,
+     "label": "[COMBO@0m] Transition V=31.1m/s nz=1.0 h=0m + Jam R5",
+     "category": "vtol_transition",
+     "exceedance_pct": 0.08
+    },
+    {
+     "case_id": 80164,
+     "label": "[COMBO@0m] Transition V=31.1m/s nz=1.0 h=0m + Jam R6",
+     "category": "vtol_transition",
+     "exceedance_pct": 0.06
+    },
+    {
+     "case_id": 60025,
+     "label": "[COMBO@0m] Yaw Left VC RUD=-22.2° β=0 COMBO",
+     "category": "yaw",
+     "exceedance_pct": 0.05
+    },
+    {
+     "case_id": 80165,
+     "label": "[COMBO@0m] Transition V=31.1m/s nz=1.0 h=0m + Jam R7",
+     "category": "vtol_transition",
+     "exceedance_pct": 0.02
+    },
+    {
+     "case_id": 80059,
+     "label": "[COMBO@0m] OEI R7+maneuver nz=1.15",
+     "category": "vtol_oei",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 80168,
+     "label": "[COMBO@0m] Transition V=31.1m/s nz=1.5 h=0m + Jam R2",
+     "category": "vtol_transition",
+     "exceedance_pct": 0.0
+    },
+    {
+     "case_id": 80169,
+     "label": "[COMBO@0m] Transition V=31.1m/s nz=1.5 h=0m + Jam R3",
+     "category": "vtol_transition",
+     "exceedance_pct": 0.0
+    }
+   ]
+  },
+  "COMBO_LA": {
+   "n_2d": 44,
+   "n_3d": 52,
+   "only_3d": [
+    {
+     "case_id": 90076,
+     "label": "[COMBO_LA@0m] Transition V=7.5m/s nz=1.5 h=0m + Jam R6",
+     "category": "vtol_transition",
+     "exceedance_pct": 1.88
+    },
+    {
+     "case_id": 90077,
+     "label": "[COMBO_LA@0m] Transition V=7.5m/s nz=1.5 h=0m + Jam R7",
+     "category": "vtol_transition",
+     "exceedance_pct": 1.88
+    },
+    {
+     "case_id": 90055,
+     "label": "[COMBO_LA@0m] Jam R6+gust nz=1.3",
+     "category": "vtol_rotor_jam",
+     "exceedance_pct": 0.72
+    },
+    {
+     "case_id": 90058,
+     "label": "[COMBO_LA@0m] Jam R7+gust nz=1.3",
+     "category": "vtol_rotor_jam",
+     "exceedance_pct": 0.72
+    },
+    {
+     "case_id": 70002,
+     "label": "[COMBO_LA@0m] A- V=44.4m/s nz=-1.52 COMBO_LA",
+     "category": "symmetric",
+     "exceedance_pct": 0.36
+    },
+    {
+     "case_id": 90179,
+     "label": "[COMBO_LA@0m] Transition V=35.0m/s nz=1.0 h=0m + Jam R5",
+     "category": "vtol_transition",
+     "exceedance_pct": 0.18
+    },
+    {
+     "case_id": 70021,
+     "label": "[COMBO_LA@0m] Yaw Left VA RUD=-25.0° β=0 COMBO_LA",
+     "category": "yaw",
+     "exceedance_pct": 0.05
+    },
+    {
+     "case_id": 70019,
+     "label": "[COMBO_LA@0m] Yaw Right VA RUD=25.0° β=0 COMBO_LA",
+     "category": "yaw",
+     "exceedance_pct": 0.04
+    }
+   ]
+  }
+ },
+ "merged": {
+  "n_2d": 109,
+  "n_3d": 155,
+  "only_3d": [
+   {
+    "case_id": 40047,
+    "label": "[LIGHT@0m] Side load +y LIGHT",
+    "category": "landing",
+    "exceedance_pct": 0.57
+   },
+   {
+    "case_id": 40048,
+    "label": "[LIGHT@0m] Side load -y LIGHT",
+    "category": "landing",
+    "exceedance_pct": 0.56
+   },
+   {
+    "case_id": 30022,
+    "label": "[AFT_CG@0m] Yaw Left VA RUD=-25.0° β=overswing AFT_CG",
+    "category": "yaw",
+    "exceedance_pct": 0.24
+   },
+   {
+    "case_id": 30020,
+    "label": "[AFT_CG@0m] Yaw Right VA RUD=25.0° β=overswing AFT_CG",
+    "category": "yaw",
+    "exceedance_pct": 0.22
+   },
+   {
+    "case_id": 90040,
+    "label": "[COMBO_LA@0m] Jam R1+gust nz=1.3",
+    "category": "vtol_rotor_jam",
+    "exceedance_pct": 0.17
+   },
+   {
+    "case_id": 90049,
+    "label": "[COMBO_LA@0m] Jam R4+gust nz=1.3",
+    "category": "vtol_rotor_jam",
+    "exceedance_pct": 0.17
+   },
+   {
+    "case_id": 10086,
+    "label": "[BASE@0m] Side load +y BASE",
+    "category": "landing",
+    "exceedance_pct": 0.09
+   },
+   {
+    "case_id": 10087,
+    "label": "[BASE@0m] Side load -y BASE",
+    "category": "landing",
+    "exceedance_pct": 0.09
+   },
+   {
+    "case_id": 60047,
+    "label": "[COMBO@0m] Side load +y COMBO",
+    "category": "landing",
+    "exceedance_pct": 0.09
+   },
+   {
+    "case_id": 10020,
+    "label": "[BASE@0m] Yaw Right VA RUD=25.0° β=overswing BASE",
+    "category": "yaw",
+    "exceedance_pct": 0.08
+   },
+   {
+    "case_id": 10022,
+    "label": "[BASE@0m] Yaw Left VA RUD=-25.0° β=overswing BASE",
+    "category": "yaw",
+    "exceedance_pct": 0.08
+   },
+   {
+    "case_id": 60020,
+    "label": "[COMBO@0m] Yaw Right VA RUD=25.0° β=overswing COMBO",
+    "category": "yaw",
+    "exceedance_pct": 0.08
+   },
+   {
+    "case_id": 60022,
+    "label": "[COMBO@0m] Yaw Left VA RUD=-25.0° β=overswing COMBO",
+    "category": "yaw",
+    "exceedance_pct": 0.08
+   },
+   {
+    "case_id": 10030,
+    "label": "[BASE@0m] Yaw Left VD RUD=-17.8° β=overswing BASE",
+    "category": "yaw",
+    "exceedance_pct": 0.05
+   },
+   {
+    "case_id": 60030,
+    "label": "[COMBO@0m] Yaw Left VD RUD=-17.8° β=overswing COMBO",
+    "category": "yaw",
+    "exceedance_pct": 0.05
+   },
+   {
+    "case_id": 10028,
+    "label": "[BASE@0m] Yaw Right VD RUD=17.8° β=overswing BASE",
+    "category": "yaw",
+    "exceedance_pct": 0.04
+   },
+   {
+    "case_id": 60028,
+    "label": "[COMBO@0m] Yaw Right VD RUD=17.8° β=overswing COMBO",
+    "category": "yaw",
+    "exceedance_pct": 0.04
+   },
+   {
+    "case_id": 80163,
+    "label": "[COMBO@0m] Transition V=31.1m/s nz=1.0 h=0m + Jam R5",
+    "category": "vtol_transition",
+    "exceedance_pct": 0.03
+   },
+   {
+    "case_id": 80164,
+    "label": "[COMBO@0m] Transition V=31.1m/s nz=1.0 h=0m + Jam R6",
+    "category": "vtol_transition",
+    "exceedance_pct": 0.02
+   },
+   {
+    "case_id": 40027,
+    "label": "[LIGHT@0m] Yaw Right VD RUD=17.8° β=0 LIGHT",
+    "category": "yaw",
+    "exceedance_pct": 0.01
+   },
+   {
+    "case_id": 40029,
+    "label": "[LIGHT@0m] Yaw Left VD RUD=-17.8° β=0 LIGHT",
+    "category": "yaw",
+    "exceedance_pct": 0.01
+   },
+   {
+    "case_id": 80165,
+    "label": "[COMBO@0m] Transition V=31.1m/s nz=1.0 h=0m + Jam R7",
+    "category": "vtol_transition",
+    "exceedance_pct": 0.01
+   },
+   {
+    "case_id": 10003,
+    "label": "[BASE@0m] C+ V=80.0m/s nz=3.80 BASE",
+    "category": "symmetric",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 10027,
+    "label": "[BASE@0m] Yaw Right VD RUD=17.8° β=0 BASE",
+    "category": "yaw",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 10029,
+    "label": "[BASE@0m] Yaw Left VD RUD=-17.8° β=0 BASE",
+    "category": "yaw",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 10034,
+    "label": "[BASE@0m] Checked VC nz=3.80 BASE",
+    "category": "checked",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 10042,
+    "label": "[BASE@3000m] C+ V=80.0m/s nz=3.80 BASE",
+    "category": "symmetric",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 10073,
+    "label": "[BASE@3000m] Checked VC nz=3.80 BASE",
+    "category": "checked",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 60001,
+    "label": "[COMBO@0m] A+ V=71.0m/s nz=3.80 COMBO",
+    "category": "symmetric",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 60003,
+    "label": "[COMBO@0m] C+ V=80.0m/s nz=3.80 COMBO",
+    "category": "symmetric",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 60005,
+    "label": "[COMBO@0m] D+ V=100.0m/s nz=3.80 COMBO",
+    "category": "symmetric",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 60024,
+    "label": "[COMBO@0m] Yaw Right VC RUD=22.2° β=overswing COMBO",
+    "category": "yaw",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 60026,
+    "label": "[COMBO@0m] Yaw Left VC RUD=-22.2° β=overswing COMBO",
+    "category": "yaw",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 60034,
+    "label": "[COMBO@0m] Checked VC nz=3.80 COMBO",
+    "category": "checked",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 70010,
+    "label": "[COMBO_LA@0m] Gust_VC- V=80.0m/s nz=-2.13 COMBO_LA",
+    "category": "gust",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 70027,
+    "label": "[COMBO_LA@0m] Yaw Right VD RUD=17.8° β=0 COMBO_LA",
+    "category": "yaw",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 70028,
+    "label": "[COMBO_LA@0m] Yaw Right VD RUD=17.8° β=overswing COMBO_LA",
+    "category": "yaw",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 70029,
+    "label": "[COMBO_LA@0m] Yaw Left VD RUD=-17.8° β=0 COMBO_LA",
+    "category": "yaw",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 70041,
+    "label": "[COMBO_LA@0m] Level landing 3pt drag K=0.26 nz=3.08 COMBO_LA",
+    "category": "landing",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 70051,
+    "label": "[COMBO_LA@0m] Braked roll nz=1.33 COMBO_LA",
+    "category": "landing",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 80047,
+    "label": "[COMBO@0m] OEI R3+maneuver nz=1.15",
+    "category": "vtol_oei",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 80052,
+    "label": "[COMBO@0m] Jam R5+gust nz=1.3",
+    "category": "vtol_rotor_jam",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 80059,
+    "label": "[COMBO@0m] OEI R7+maneuver nz=1.15",
+    "category": "vtol_oei",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 80061,
+    "label": "[COMBO@0m] Jam R8+gust nz=1.3",
+    "category": "vtol_rotor_jam",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 80168,
+    "label": "[COMBO@0m] Transition V=31.1m/s nz=1.5 h=0m + Jam R2",
+    "category": "vtol_transition",
+    "exceedance_pct": 0.0
+   },
+   {
+    "case_id": 80169,
+    "label": "[COMBO@0m] Transition V=31.1m/s nz=1.5 h=0m + Jam R3",
+    "category": "vtol_transition",
+    "exceedance_pct": 0.0
+   }
+  ],
+  "audit_vs_2d": [],
+  "audit_vs_3d": []
+ }
+}

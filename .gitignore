@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+*.so
+*.dll
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+.venv/
+env/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/
+
+# Build artifacts
+*.o
+*.obj
+~$*
+*.xdv
+solver/ilc8_cert_results_*/
+solver/tests/validation/ILC8/ilc8_cert_trim.f06
+references/
+solver/vtol_cert_results_*/
+solver/tests/validation/ILC8/cert_trim_cases*.f06

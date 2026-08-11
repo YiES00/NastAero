@@ -1,0 +1,110 @@
+{
+ "n_events": 200,
+ "top_n": 40,
+ "coverage_pct": 77.6,
+ "misses": [
+  {
+   "quantity": "wing_Mx_L(top5,>95%)",
+   "rotor": "Lift Rotor F1 (y=-4m)",
+   "phase": "TO",
+   "mode": "M3",
+   "eid": 7,
+   "risk_rank": 117
+  },
+  {
+   "quantity": "wing_Mx_L(top5,>95%)",
+   "rotor": "Lift Rotor F1 (y=-4m)",
+   "phase": "LD",
+   "mode": "M3",
+   "eid": 22,
+   "risk_rank": 70
+  },
+  {
+   "quantity": "wing_Mx_L(top5,>95%)",
+   "rotor": "Lift Rotor A1 (y=-4m)",
+   "phase": "TO",
+   "mode": "M3",
+   "eid": 107,
+   "risk_rank": 123
+  },
+  {
+   "quantity": "wing_Mx_R(top5,>95%)",
+   "rotor": "Lift Rotor F4 (y=+4m)",
+   "phase": "TO",
+   "mode": "M3",
+   "eid": 82,
+   "risk_rank": 121
+  },
+  {
+   "quantity": "wing_Mx_R(top5,>95%)",
+   "rotor": "Lift Rotor F4 (y=+4m)",
+   "phase": "LD",
+   "mode": "M3",
+   "eid": 97,
+   "risk_rank": 77
+  },
+  {
+   "quantity": "wing_Mx_R(top5,>95%)",
+   "rotor": "Lift Rotor A4 (y=+4m)",
+   "phase": "TO",
+   "mode": "M3",
+   "eid": 182,
+   "risk_rank": 127
+  },
+  {
+   "quantity": "wing_Vy_L(top5,>95%)",
+   "rotor": "Lift Rotor F1 (y=-4m)",
+   "phase": "TO",
+   "mode": "M3",
+   "eid": 7,
+   "risk_rank": 117
+  },
+  {
+   "quantity": "wing_Vy_L(top5,>95%)",
+   "rotor": "Lift Rotor F1 (y=-4m)",
+   "phase": "LD",
+   "mode": "M3",
+   "eid": 22,
+   "risk_rank": 70
+  },
+  {
+   "quantity": "wing_Vy_L(top5,>95%)",
+   "rotor": "Lift Rotor F2 (y=-2m)",
+   "phase": "TO",
+   "mode": "M3",
+   "eid": 32,
+   "risk_rank": 129
+  },
+  {
+   "quantity": "wing_Vy_R(top5,>95%)",
+   "rotor": "Lift Rotor F3 (y=+2m)",
+   "phase": "TO",
+   "mode": "M3",
+   "eid": 57,
+   "risk_rank": 131
+  },
+  {
+   "quantity": "wing_Vy_R(top5,>95%)",
+   "rotor": "Lift Rotor F3 (y=+2m)",
+   "phase": "LD",
+   "mode": "M3",
+   "eid": 72,
+   "risk_rank": 102
+  },
+  {
+   "quantity": "wing_Vy_R(top5,>95%)",
+   "rotor": "Lift Rotor F4 (y=+4m)",
+   "phase": "TO",
+   "mode": "M3",
+   "eid": 82,
+   "risk_rank": 121
+  }
+ ],
+ "governing": {
+  "wing_Mx_L": 2,
+  "wing_Mx_R": 77,
+  "wing_Vy_L": 2,
+  "wing_Vy_R": 52,
+  "boom_Mx": 19
+ }
+}

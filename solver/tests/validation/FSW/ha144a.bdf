@@ -1,0 +1,115 @@
+$ HA144A - Forward Swept Wing (FSW) Static Aeroelastic Trim
+$ MSC Nastran Aeroelastic User Guide Example HA144A
+$ Adapted for NastAero SOL 144
+$
+$ Half-span model with SYMXZ=1 (image vortices for symmetry)
+$ Units: ft-lb-sec. Masses scaled so mass*9.81 = weight_lb
+$ Total aircraft weight = 8000 lb
+$
+SOL 144
+CEND
+$
+TITLE = HA144A FSW STATIC AEROELASTIC TRIM
+SPC = 1
+TRIM = 1
+DISPLACEMENT = ALL
+$
+BEGIN BULK
+$
+$ --- AERO REFERENCE DATA ---
+$ SYMXZ=1: symmetric half-model with image vortices
+$ AEROS ACSID RCSID REFC   REFB    REFS    SYMXZ SYMXY
+AEROS,  0,    0,    10.0,  40.0,   200.0,  1,    0
+$
+$ --- STRUCTURAL GRIDS ---
+$ Fuselage (x-axis, y=0, z=0)
+GRID,  90, , 15.0,    0.0,  0.0
+GRID,  97, ,  0.0,    0.0,  0.0
+GRID,  98, , 10.0,    0.0,  0.0
+GRID,  99, , 20.0,    0.0,  0.0
+GRID, 100, , 30.0,    0.0,  0.0
+$
+$ Right wing (y > 0)
+GRID, 110, , 24.61325, 5.0,  0.0
+GRID, 111, , 27.11325, 5.0,  0.0
+GRID, 112, , 29.61325, 5.0,  0.0
+GRID, 120, , 21.33975, 15.0, 0.0
+GRID, 121, , 18.83975, 15.0, 0.0
+GRID, 122, , 23.83975, 15.0, 0.0
+$
+$ --- ELEMENTS ---
+CBAR, 101, 100,  97,  98, 0.0, 0.0, 1.0
+CBAR, 102, 100,  98,  90, 0.0, 0.0, 1.0
+CBAR, 103, 100,  90,  99, 0.0, 0.0, 1.0
+CBAR, 104, 100,  99, 100, 0.0, 0.0, 1.0
+CBAR, 110, 101, 100, 110, 0.0, 0.0, 1.0
+CBAR, 120, 101, 110, 120, 0.0, 0.0, 1.0
+$
+$ --- PROPERTIES ---
+PBAR,  100, 1,   2.0,   0.173611, 0.15,     0.5, 0.0
+PBAR,  101, 1,   1.5,   0.173611, 0.462963, 0.5, 0.0
+$
+$ --- MATERIAL ---
+MAT1,  1,   1.44+9,  5.40+8,   0.0, 0.0
+$
+$ --- MASSES (mass = weight_lb / 9.81) ---
+$ Total weight = 8000 lb (full aircraft)
+$ Fuselage: 1500 lb each = 152.905
+CONM2,  1,   97,  0,  152.905
+CONM2,  2,   98,  0,  152.905
+CONM2,  3,   99,  0,  152.905
+CONM2,  4,  100,  0,  152.905
+$ Right wing: 600 lb = 61.162, 400 lb = 40.775
+CONM2,  5,  111,  0,  61.162
+CONM2,  6,  112,  0,  40.775
+CONM2,  7,  121,  0,  61.162
+CONM2,  8,  122,  0,  40.775
+$ Total structural mass: 4*1500 + 2*600 + 2*400 = 8000 lb
+$
+$ --- BOUNDARY CONDITIONS ---
+SPC1, 1, 1246, 90
+SPC1, 1, 126, 97
+SPC1, 1, 126, 98
+SPC1, 1, 126, 99
+SPC1, 1, 126, 100
+SPC1, 1, 126, 110
+SPC1, 1, 126, 111
+SPC1, 1, 126, 112
+SPC1, 1, 126, 120
+SPC1, 1, 126, 121
+SPC1, 1, 126, 122
+$
+$ --- AERODYNAMIC PANELS (right half only, SYMXZ=1 handles left) ---
+$ Right canard (y=0 to y=5)
+CAERO1, 1000, 1000, 0, 2, 4, 0, 0, 1,+CAN
++CAN,   10.0, 0.0, 0.0, 10.0, 10.0, 5.0, 0.0, 10.0
+$
+$ Right wing (y=0 to y=20), 30 deg forward swept
+CAERO1, 1100, 1000, 0, 8, 4, 0, 0, 1,+WNG
++WNG,   25.0, 0.0, 0.0, 10.0, 13.4530, 20.0, 0.0, 10.0
+$
+PAERO1, 1000
+$
+$ --- SPLINES ---
+SPLINE2, 100, 1000,  1000, 1007, 10, 0.0, 1.0, 0
+SPLINE2, 200, 1100,  1100, 1131, 20, 0.0, 1.0, 0
+$
+SET1, 10, 98, 99
+SET1, 20, 99, 100, 111, 112, 121, 122
+$
+$ --- CONTROL SURFACE (canard = elevator) ---
+AESURF, 505, ELEV, 0, 1005, 0, 0, 1.0
+AELIST, 1005, 1000, THRU, 1007
+$
+$ --- TRIM VARIABLES ---
+AESTAT, 501, ANGLEA
+AESTAT, 502, PITCH
+AESTAT, 503, URDD3
+AESTAT, 504, URDD5
+$
+$ --- TRIM ---
+$ 1g level flight: M=0.9, q=40 psf
+TRIM,   1,  0.9,  40.0, PITCH,  0.0, URDD3,  0.0,+TR1
++TR1,   URDD5, 0.0
+$
+ENDDATA

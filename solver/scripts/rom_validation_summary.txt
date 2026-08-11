@@ -1,0 +1,20 @@
+ROM vs SOL 144 Validation Summary — GACOMP
+==================================================
+
+Model: 22,640 nodes, 27,016 elements, 135,840 DOF
+Aero: 783 VLM panels, 44 SPLINE1 cards
+ROM modes: 20
+ROM q_ref: 0.011348 N/mm²
+
+Displacement(z) RMS relative error:
+  Mean: 4.01%
+  Max:  6.09%
+
+Force(z) RMS relative error:
+  Mean: 0.89%
+  Max:  1.30%
+
+Timing:
+  SOL 144: 98.4 s
+  ROM build: 42.1 s
+  ROM eval: < 0.5 ms/subcase

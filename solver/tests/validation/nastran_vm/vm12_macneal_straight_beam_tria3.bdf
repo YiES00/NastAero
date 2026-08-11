@@ -1,0 +1,78 @@
+$ NastAero VM12: MacNeal-Harder Straight Cantilever Beam (CTRIA3)
+$ Reference: MacNeal & Harder (1985), same geometry as VM11
+$
+$ Each CQUAD4 from VM11 split into 2 CTRIA3 = 12 triangles
+$ Length=6.0, Width=0.2, Depth=0.1
+$ E=1.0e7, nu=0.30
+$
+$ Same node layout as VM11: 14 nodes
+$ Case 1: In-plane shear, exact = 0.1081
+$ Case 2: Out-of-plane shear, exact = 0.4321
+$
+SOL 101
+CEND
+TITLE = VM12 - MACNEAL-HARDER STRAIGHT BEAM (CTRIA3)
+SUBCASE 1
+  SUBTITLE = IN-PLANE SHEAR
+  SPC = 1
+  LOAD = 1
+  DISPLACEMENT(PRINT) = ALL
+SUBCASE 2
+  SUBTITLE = OUT-OF-PLANE SHEAR
+  SPC = 1
+  LOAD = 2
+  DISPLACEMENT(PRINT) = ALL
+BEGIN BULK
+$
+$ Row 1 (y = -0.1)
+GRID,1,,0.0,-0.1,0.0
+GRID,2,,1.0,-0.1,0.0
+GRID,3,,2.0,-0.1,0.0
+GRID,4,,3.0,-0.1,0.0
+GRID,5,,4.0,-0.1,0.0
+GRID,6,,5.0,-0.1,0.0
+GRID,7,,6.0,-0.1,0.0
+$
+$ Row 2 (y = +0.1)
+GRID,8,,0.0,0.1,0.0
+GRID,9,,1.0,0.1,0.0
+GRID,10,,2.0,0.1,0.0
+GRID,11,,3.0,0.1,0.0
+GRID,12,,4.0,0.1,0.0
+GRID,13,,5.0,0.1,0.0
+GRID,14,,6.0,0.1,0.0
+$
+$ 12 CTRIA3 elements (each quad split diagonally)
+$ Quad 1: nodes 1,2,9,8 -> tri 1(1,2,9) + tri 2(1,9,8)
+CTRIA3,1,1,1,2,9
+CTRIA3,2,1,1,9,8
+$ Quad 2: 2,3,10,9
+CTRIA3,3,1,2,3,10
+CTRIA3,4,1,2,10,9
+$ Quad 3: 3,4,11,10
+CTRIA3,5,1,3,4,11
+CTRIA3,6,1,3,11,10
+$ Quad 4: 4,5,12,11
+CTRIA3,7,1,4,5,12
+CTRIA3,8,1,4,12,11
+$ Quad 5: 5,6,13,12
+CTRIA3,9,1,5,6,13
+CTRIA3,10,1,5,13,12
+$ Quad 6: 6,7,14,13
+CTRIA3,11,1,6,7,14
+CTRIA3,12,1,6,14,13
+$
+PSHELL,1,1,0.1,1
+MAT1,1,1.0e7,,0.30,0.0
+$
+SPC1,1,123456,1,8
+$
+$ Case 1: In-plane shear
+FORCE,1,7,,0.5,0.0,0.0,1.0
+FORCE,1,14,,0.5,0.0,0.0,1.0
+$
+$ Case 2: Out-of-plane shear
+FORCE,2,7,,0.5,0.0,1.0,0.0
+FORCE,2,14,,0.5,0.0,1.0,0.0
+$
+ENDDATA

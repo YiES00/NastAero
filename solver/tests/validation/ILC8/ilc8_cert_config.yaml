@@ -1,0 +1,39 @@
+# ILC-8 리프트+크루즈(1,900 kg) 인증 하중해석 기체 설정 — GUI Aircraft 탭 입력
+# 로터 하중 케이스(호버·OEI·로터잼·천이·VTOL착륙)까지 포함한 전체 89케이스는
+# solver/run_ilc8_cert_analysis.py 실행 (make_ilc8_vtol_config 로터 8+1기 사용).
+name: ILC-8 Lift+Cruise (VTOL)
+bdf_model: ilc8.bdf   # nastaero/models/ilc8.py 생성 쉘 FE 전기체 덱
+speeds:            # 순항 속도 스케줄 (EAS, m/s)
+  VS1: 36.0
+  VA: 71.0
+  VB: 0.0
+  VC: 80.0
+  VD: 100.0
+  VF: 50.0
+wing_area_m2: 16.2
+mean_chord_m: 1.35
+CLalpha: 5.348     # VLM 계산값 (M=0.235, 중심선 연장 패널)
+altitudes_m: [0.0]
+weight_cg:
+  - label: MTOW
+    weight_N: 18633.0    # compute_node_masses 기준 1,900 kg (구조+CONM2)
+    cg_x: 4450.0
+gust_Ude_VC_fps: 50.0
+gust_Ude_VD_fps: 25.0
+ctrl_limits:
+  aileron_max_deg: 20.0
+  elevator_max_deg: 25.0   # 러더베이터 ELEV 성분
+  rudder_max_deg: 25.0     # 러더베이터 RUD 성분
+landing_gear:
+  main_gear_node_ids: [101720, 101718]   # 동체 벨리 좌/우 대칭쌍 (x≈4750)
+  nose_gear_node_ids: [100419]           # 중심선 (x≈1500)
+  main_gear_x: 4700.0
+  nose_gear_x: 1500.0
+  strut_efficiency: 0.7
+  stroke: 0.25
+  sink_rate_fps: 10.0
+  tire_deflection: 0.03    # (OD-hub)/6, FAR23 LOADS Manual LGFACTOR
+  tire_efficiency: 0.3
+elastic_axis_frac: 0.40
+# (고장×재트림) 재트림 선별(GUI Cert Cases 탭 버튼)용 로터 구성 팩토리
+vtol_factory: nastaero.models.ilc8.make_ilc8_vtol_config

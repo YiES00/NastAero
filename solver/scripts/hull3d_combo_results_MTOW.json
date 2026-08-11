@@ -1,0 +1,593 @@
+{
+ "context": "MTOW",
+ "n_patterns": 368248,
+ "n_interior": 39770,
+ "top_search": [
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.0,
+    1.0,
+    1.5,
+    0.0,
+    0.0,
+    1.3
+   ],
+   "exceedance_pct": 7.21,
+   "class": "multi-failure(3)"
+  },
+  {
+   "pattern": [
+    1.0,
+    1.0,
+    0.7,
+    0.7,
+    1.3,
+    0.0,
+    0.0,
+    1.5
+   ],
+   "exceedance_pct": 7.21,
+   "class": "multi-failure(3)"
+  },
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    0.7,
+    1.3,
+    1.5,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "exceedance_pct": 7.2,
+   "class": "multi-failure(3)"
+  },
+  {
+   "pattern": [
+    1.3,
+    0.7,
+    0.7,
+    0.7,
+    1.0,
+    0.0,
+    0.0,
+    1.5
+   ],
+   "exceedance_pct": 7.2,
+   "class": "multi-failure(3)"
+  },
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.0,
+    1.3,
+    1.5,
+    0.0,
+    0.7,
+    0.7
+   ],
+   "exceedance_pct": 7.18,
+   "class": "dual-failure"
+  },
+  {
+   "pattern": [
+    1.3,
+    1.0,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.0,
+    1.5
+   ],
+   "exceedance_pct": 7.18,
+   "class": "dual-failure"
+  },
+  {
+   "pattern": [
+    0.7,
+    1.0,
+    1.0,
+    1.3,
+    1.5,
+    0.0,
+    0.7,
+    1.0
+   ],
+   "exceedance_pct": 7.16,
+   "class": "dual-failure"
+  },
+  {
+   "pattern": [
+    1.3,
+    1.0,
+    1.0,
+    0.7,
+    1.0,
+    0.7,
+    0.0,
+    1.5
+   ],
+   "exceedance_pct": 7.16,
+   "class": "dual-failure"
+  },
+  {
+   "pattern": [
+    0.7,
+    1.0,
+    1.3,
+    1.0,
+    1.5,
+    0.0,
+    0.0,
+    1.3
+   ],
+   "exceedance_pct": 7.15,
+   "class": "multi-failure(3)"
+  },
+  {
+   "pattern": [
+    1.0,
+    1.3,
+    1.0,
+    0.7,
+    1.3,
+    0.0,
+    0.0,
+    1.5
+   ],
+   "exceedance_pct": 7.15,
+   "class": "multi-failure(3)"
+  },
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.3,
+    0.7,
+    1.5,
+    0.0,
+    0.7,
+    1.5
+   ],
+   "exceedance_pct": 7.13,
+   "class": "multi-failure(3)"
+  },
+  {
+   "pattern": [
+    0.7,
+    1.3,
+    0.7,
+    0.7,
+    1.5,
+    0.7,
+    0.0,
+    1.5
+   ],
+   "exceedance_pct": 7.13,
+   "class": "multi-failure(3)"
+  },
+  {
+   "pattern": [
+    0.7,
+    1.0,
+    1.3,
+    1.3,
+    1.5,
+    0.0,
+    1.0,
+    0.7
+   ],
+   "exceedance_pct": 7.13,
+   "class": "dual-failure"
+  },
+  {
+   "pattern": [
+    1.3,
+    1.3,
+    1.0,
+    0.7,
+    0.7,
+    1.0,
+    0.0,
+    1.5
+   ],
+   "exceedance_pct": 7.13,
+   "class": "dual-failure"
+  },
+  {
+   "pattern": [
+    0.7,
+    1.0,
+    1.3,
+    1.3,
+    1.5,
+    0.0,
+    0.7,
+    0.7
+   ],
+   "exceedance_pct": 7.13,
+   "class": "dual-failure"
+  },
+  {
+   "pattern": [
+    1.3,
+    1.3,
+    1.0,
+    0.7,
+    0.7,
+    0.7,
+    0.0,
+    1.5
+   ],
+   "exceedance_pct": 7.13,
+   "class": "dual-failure"
+  },
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.3,
+    0.7,
+    1.5,
+    0.0,
+    0.0,
+    1.5
+   ],
+   "exceedance_pct": 7.12,
+   "class": "multi-failure(4)"
+  },
+  {
+   "pattern": [
+    0.7,
+    1.3,
+    0.7,
+    0.7,
+    1.5,
+    0.0,
+    0.0,
+    1.5
+   ],
+   "exceedance_pct": 7.12,
+   "class": "multi-failure(4)"
+  },
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.5,
+    0.7,
+    1.5,
+    0.0,
+    1.0,
+    1.3
+   ],
+   "exceedance_pct": 7.12,
+   "class": "multi-failure(3)"
+  },
+  {
+   "pattern": [
+    0.7,
+    1.5,
+    0.7,
+    0.7,
+    1.3,
+    1.0,
+    0.0,
+    1.5
+   ],
+   "exceedance_pct": 7.12,
+   "class": "multi-failure(3)"
+  }
+ ],
+ "validated": [
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.0,
+    1.0,
+    1.5,
+    0.0,
+    0.0,
+    1.3
+   ],
+   "nz": 0.775,
+   "class": "multi-failure(3)",
+   "search_pct": 7.21,
+   "validated_pct": 0.0,
+   "status": "2D-caught",
+   "worst_component": "Left Wing",
+   "worst_station": -3944.8979591836737
+  },
+  {
+   "pattern": [
+    1.0,
+    1.0,
+    0.7,
+    0.7,
+    1.3,
+    0.0,
+    0.0,
+    1.5
+   ],
+   "nz": 0.775,
+   "class": "multi-failure(3)",
+   "search_pct": 7.21,
+   "validated_pct": 0.0,
+   "status": "2D-caught",
+   "worst_component": "Right Wing",
+   "worst_station": 3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.0,
+    1.3,
+    1.5,
+    0.0,
+    0.7,
+    0.7
+   ],
+   "nz": 0.825,
+   "class": "dual-failure",
+   "search_pct": 7.18,
+   "validated_pct": 0.0,
+   "status": "2D-caught",
+   "worst_component": "Left Wing",
+   "worst_station": -3944.8979591836737
+  },
+  {
+   "pattern": [
+    1.3,
+    1.0,
+    0.7,
+    0.7,
+    0.7,
+    0.7,
+    0.0,
+    1.5
+   ],
+   "nz": 0.825,
+   "class": "dual-failure",
+   "search_pct": 7.18,
+   "validated_pct": 0.0,
+   "status": "2D-caught",
+   "worst_component": "Right Wing",
+   "worst_station": 3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.3,
+    0.7,
+    1.5,
+    0.0,
+    0.7,
+    1.5
+   ],
+   "nz": 0.887,
+   "class": "multi-failure(3)",
+   "search_pct": 7.13,
+   "validated_pct": 0.0,
+   "status": "2D-caught",
+   "worst_component": "Left Wing",
+   "worst_station": -3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    1.3,
+    0.7,
+    0.7,
+    1.5,
+    0.7,
+    0.0,
+    1.5
+   ],
+   "nz": 0.887,
+   "class": "multi-failure(3)",
+   "search_pct": 7.13,
+   "validated_pct": 0.0,
+   "status": "2D-caught",
+   "worst_component": "Right Wing",
+   "worst_station": 3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.3,
+    0.7,
+    1.5,
+    0.0,
+    0.0,
+    1.5
+   ],
+   "nz": 0.8,
+   "class": "multi-failure(4)",
+   "search_pct": 7.12,
+   "validated_pct": 0.0,
+   "status": "2D-caught",
+   "worst_component": "Left Wing",
+   "worst_station": -3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.5,
+    0.7,
+    1.5,
+    0.0,
+    1.0,
+    1.3
+   ],
+   "nz": 0.925,
+   "class": "multi-failure(3)",
+   "search_pct": 7.12,
+   "validated_pct": 0.0,
+   "status": "2D-caught",
+   "worst_component": "Left Wing",
+   "worst_station": -3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    1.5,
+    0.7,
+    0.7,
+    1.3,
+    1.0,
+    0.0,
+    1.5
+   ],
+   "nz": 0.925,
+   "class": "multi-failure(3)",
+   "search_pct": 7.12,
+   "validated_pct": 0.0,
+   "status": "2D-caught",
+   "worst_component": "Right Wing",
+   "worst_station": 3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.5,
+    0.7,
+    1.5,
+    0.0,
+    0.0,
+    1.3
+   ],
+   "nz": 0.8,
+   "class": "multi-failure(4)",
+   "search_pct": 7.1,
+   "validated_pct": 7.1,
+   "status": "3D-only",
+   "worst_component": "Left Wing",
+   "worst_station": -3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    1.5,
+    0.7,
+    0.7,
+    1.3,
+    0.0,
+    0.0,
+    1.5
+   ],
+   "nz": 0.8,
+   "class": "multi-failure(4)",
+   "search_pct": 7.1,
+   "validated_pct": 7.1,
+   "status": "3D-only",
+   "worst_component": "Right Wing",
+   "worst_station": 3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    1.5,
+    1.5,
+    1.3,
+    1.5,
+    0.0,
+    1.0,
+    1.0
+   ],
+   "nz": 1.062,
+   "class": "multi-failure(4)",
+   "search_pct": 7.07,
+   "validated_pct": 0.0,
+   "status": "2D-caught",
+   "worst_component": "Left Wing",
+   "worst_station": -3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    1.5,
+    1.5,
+    1.0,
+    1.5,
+    0.0,
+    1.3,
+    1.5
+   ],
+   "nz": 1.125,
+   "class": "multi-failure(5)",
+   "search_pct": 7.02,
+   "validated_pct": 0.0,
+   "status": "2D-caught",
+   "worst_component": "Left Wing",
+   "worst_station": -3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    1.5,
+    1.5,
+    0.7,
+    1.5,
+    0.0,
+    0.0,
+    1.5
+   ],
+   "nz": 0.925,
+   "class": "multi-failure(6)",
+   "search_pct": 6.51,
+   "validated_pct": 6.51,
+   "status": "3D-only",
+   "worst_component": "Left Wing",
+   "worst_station": -3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.3,
+    1.3,
+    1.5,
+    0.7,
+    1.3,
+    1.0
+   ],
+   "nz": 1.062,
+   "class": "single-failure",
+   "search_pct": 6.48,
+   "validated_pct": 6.48,
+   "status": "3D-only",
+   "worst_component": "Left Wing",
+   "worst_station": -3944.8979591836737
+  },
+  {
+   "pattern": [
+    0.7,
+    0.7,
+    1.3,
+    1.3,
+    1.3,
+    0.7,
+    1.3,
+    1.0
+   ],
+   "nz": 1.038,
+   "class": "command",
+   "search_pct": 1.73,
+   "validated_pct": 1.73,
+   "status": "3D-only",
+   "worst_component": "Left Wing",
+   "worst_station": -3944.8979591836737
+  }
+ ]
+}

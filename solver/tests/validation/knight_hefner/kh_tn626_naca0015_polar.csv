@@ -1,0 +1,44 @@
+# NACA 0015 단면 극선(polar), Re=242,000 — Knight & Hefner NACA TN-626 Tables V/VI를 스캔 원본에서 판독하여 전사
+# Source: NACA TN-626, Tables V (Position A) and VI (Position B), report pages 37-38 (PDF pages 39-40).
+# 6- by 72-inch airfoil (AR 12), corrected to infinite aspect ratio; alpha_inf in degrees.
+# CD0 = total profile drag; dCD0 = CD0 minus minimum profile drag (0.0113).
+# Rotor-blade-tip Reynolds number of the model tests = 242,000.
+# Lift-curve slope used by the report: a0 = 5.75 /rad; delta = CD0min = 0.0113 (airfoil) / 0.0115 (rotor avg).
+# Profile-drag variation: dCD = eps * alpha^2 (alpha in rad); eps = 0.75 from airfoil test,
+#   but eps = 1.25 required to match model rotor torque (report's correlation factor K = 1.67).
+# NOTE: last row of Table VI prints dCD0 = ".855" in the original; 0.0968-0.0113 = 0.0855 (printing error).
+position,alpha_inf_deg,CL,CD0,dCD0
+A,12.65,0.873,0.0911,0.0798
+A,11.55,0.906,0.0504,0.0391
+A,10.60,0.899,0.0383,0.0270
+A,8.70,0.830,0.0284,0.0171
+A,6.95,0.711,0.0222,0.0109
+A,5.30,0.534,0.0172,0.0059
+A,3.65,0.351,0.0131,0.0018
+A,1.95,0.185,0.0113,0
+A,0.25,0.026,0.0113,0
+A,-1.45,-0.138,0.0102,-0.0011
+A,-3.10,-0.302,0.0136,0.0023
+A,-4.75,-0.501,0.0165,0.0052
+A,-6.40,-0.693,0.0205,0.0092
+A,-8.10,-0.821,0.0265,0.0152
+A,-9.95,-0.915,0.0350,0.0237
+A,-10.90,-0.948,0.0413,0.0300
+A,-11.90,-0.939,0.0710,0.0607
+B,12.00,0.955,0.0548,0.0435
+B,11.00,0.944,0.0387,0.0274
+B,10.05,0.909,0.0331,0.0218
+B,8.25,0.819,0.0262,0.0149
+B,6.55,0.663,0.0210,0.0097
+B,4.90,0.475,0.0160,0.0047
+B,3.20,0.304,0.0132,0.0019
+B,1.55,0.143,0.0117,0.0004
+B,-0.20,-0.012,0.0113,0
+B,-1.85,-0.174,0.0121,0.0008
+B,-3.55,-0.351,0.0141,0.0028
+B,-5.15,-0.561,0.0177,0.0064
+B,-6.80,-0.734,0.0226,0.0113
+B,-8.60,-0.831,0.0286,0.0173
+B,-10.50,-0.903,0.0397,0.0284
+B,-11.45,-0.910,0.0533,0.0420
+B,-12.55,-0.870,0.0968,0.0855

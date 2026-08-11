@@ -1,0 +1,50 @@
+# Knight & Hefner, NACA TN-626 (1937) 정지추력 로터 실험 데이터 — Tables I~IV를 스캔 원본 페이지에서 판독하여 전사
+# Source: Knight, M. & Hefner, R.A., "Static Thrust Analysis of the Lifting Airscrew", NACA TN-626, Dec. 1937.
+#   PDF: https://ntrs.nasa.gov/api/citations/19930081433/downloads/19930081433.pdf (NTRS ID 19930081433)
+#   Tables I-IV, report pages 34-36 (PDF pages 36-38). Read visually from the scanned tables (not OCR-only).
+# CONVENTIONS (as defined in the report, pp. 9-11):
+#   CT = T / (0.5 * rho * pi * R^4 * Omega^2)   <-- NOTE the 0.5: this is TWICE the modern helicopter
+#   CQ = Q / (0.5 * rho * pi * R^5 * Omega^2)       convention CT_modern = T/(rho*A*(Omega*R)^2).
+#   Divide CT and CQ by 2 to convert to modern helicopter convention.
+#   CQ_prime = CQ - CQ(theta=0)  (measured torque minus zero-incidence profile torque)
+#   theta_deg = blade incidence (collective pitch) angle, uniform (untwisted blades), set to +/-0.05 deg
+#   sigma = B*c/(pi*R)
+# Reference area = disk area pi*R^2; reference speed = tip speed Omega*R; R = 2.5 ft.
+# Measurement precision quoted: thrust +/-1%, torque +/-1% (minimum torque +/-2%), rotation rate +/-0.5%.
+# Model: D = 5 ft, NACA 0015, c = 2 in constant, untwisted; ~960 rpm; tip Re = 242,000.
+blades,sigma,theta_deg,CT,CQ,CQ_prime
+2,0.0424,0,0,0.000108,0
+2,0.0424,1,0.000280,0.000111,0.000003
+2,0.0424,2,0.000873,0.000125,0.000017
+2,0.0424,4,0.00248,0.000191,0.000083
+2,0.0424,6,0.00442,0.000316,0.000208
+2,0.0424,8,0.00650,0.000494,0.000386
+2,0.0424,10,0.00847,0.000691,0.000583
+2,0.0424,12,0.00990,0.000878,0.000770
+3,0.0636,0,0,0.000185,0
+3,0.0636,2,0.00102,0.000206,0.000021
+3,0.0636,4,0.00298,0.000300,0.000115
+3,0.0636,6,0.00548,0.000474,0.000289
+3,0.0636,8,0.00833,0.000735,0.000550
+3,0.0636,10,0.01125,0.001048,0.000863
+3,0.0636,12,0.01370,0.001357,0.001172
+4,0.0849,0,0,0.000268,0
+4,0.0849,1,0.000287,0.000274,0.000006
+4,0.0849,2,0.001042,0.000300,0.000032
+4,0.0849,3,0.00214,0.000338,0.000070
+4,0.0849,4,0.00338,0.000410,0.000142
+4,0.0849,5,0.00473,0.000499,0.000231
+4,0.0849,6,0.00645,0.000620,0.000352
+4,0.0849,7,0.00792,0.000743,0.000475
+4,0.0849,8,0.00981,0.000920,0.000652
+4,0.0849,9,0.01182,0.001162,0.000894
+4,0.0849,10,0.01382,0.001395,0.001127
+4,0.0849,11,0.01596,0.00171,0.00144
+4,0.0849,12,0.01745,0.00191,0.00164
+5,0.1061,0,0,0.000238,0
+5,0.1061,2,0.001181,0.000270,0.000032
+5,0.1061,4,0.00362,0.000396,0.000158
+5,0.1061,6,0.00694,0.000680,0.000442
+5,0.1061,8,0.01103,0.001086,0.000848
+5,0.1061,10,0.01548,0.001635,0.001397
+5,0.1061,12,0.0200,0.00228,0.00204

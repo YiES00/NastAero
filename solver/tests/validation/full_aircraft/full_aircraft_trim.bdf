@@ -1,0 +1,179 @@
+$ Full Aircraft Static Aeroelastic Trim (SOL 144)
+$ Simplified wing + horizontal tail beam model with elevator control surface
+$
+$ Configuration:
+$   - Wing: semi-span 10m, chord 2.0m, sweep 0
+$   - H-tail: semi-span 3m, chord 1.0m, at x=8m behind wing LE
+$   - Fuselage beam connecting wing to tail
+$   - Elevator control surface on H-tail (rear 50% of chord)
+$   - Wing structure: 10 CBAR along y=0..10
+$   - Tail structure: 6 CBAR along y=0..3 at x=8.5
+$   - Fuselage: 4 CBAR along x=0..8.5
+$
+$ Stiffness design: EI_wing = 1.0e9 N-m^2 (well above divergence)
+$ q_div estimate: 3*EI/(e*S*L^2) ~ 3e9/(0.3*20*100) ~ 5e5 >> q=6125
+$
+$ Flight condition: M=0.3, V=100 m/s, rho=1.225 kg/m3
+$ Trim: level flight (Fz = Weight, My_cg = 0)
+$ Free variables: ANGLEA, ELEV
+$ Fixed: URDD3 = 0 (no vertical acceleration)
+$
+SOL 144
+CEND
+$
+TITLE = FULL AIRCRAFT STATIC AEROELASTIC TRIM
+SPC = 1
+TRIM = 1
+DISPLACEMENT = ALL
+$
+BEGIN BULK
+$
+$ ====== AERO REFERENCE DATA ======
+$ AEROS ACSID RCSID REFC    REFB    REFS
+AEROS,  0,    0,    2.0,    20.0,   40.0
+$
+$ AERO  ACSID VELOCITY REFC   RHOREF
+AERO,   0,    100.0,   2.0,   1.225
+$
+$ ====== STRUCTURAL MODEL ======
+$
+$ --- Fuselage nodes (along x-axis) ---
+GRID,1000, , 0.6,   0.0,  0.0
+GRID,1001, , 2.6,   0.0,  0.0
+GRID,1002, , 4.6,   0.0,  0.0
+GRID,1003, , 6.6,   0.0,  0.0
+GRID,1004, , 8.5,   0.0,  0.0
+$
+$ --- Wing nodes (along y-axis, at x=0.6 = 30% chord of 2.0m) ---
+GRID,  1, , 0.6,   0.0,  0.0
+GRID,  2, , 0.6,   1.0,  0.0
+GRID,  3, , 0.6,   2.0,  0.0
+GRID,  4, , 0.6,   3.0,  0.0
+GRID,  5, , 0.6,   4.0,  0.0
+GRID,  6, , 0.6,   5.0,  0.0
+GRID,  7, , 0.6,   6.0,  0.0
+GRID,  8, , 0.6,   7.0,  0.0
+GRID,  9, , 0.6,   8.0,  0.0
+GRID, 10, , 0.6,   9.0,  0.0
+GRID, 11, , 0.6,  10.0,  0.0
+$
+$ --- Tail nodes (along y-axis, at x=8.5) ---
+GRID, 51, , 8.5,   0.0,  0.0
+GRID, 52, , 8.5,   0.5,  0.0
+GRID, 53, , 8.5,   1.0,  0.0
+GRID, 54, , 8.5,   1.5,  0.0
+GRID, 55, , 8.5,   2.0,  0.0
+GRID, 56, , 8.5,   2.5,  0.0
+GRID, 57, , 8.5,   3.0,  0.0
+$
+$ --- Wing beam elements ---
+CBAR, 101, 1,  1,  2, 0.0,0.0,1.0
+CBAR, 102, 1,  2,  3, 0.0,0.0,1.0
+CBAR, 103, 1,  3,  4, 0.0,0.0,1.0
+CBAR, 104, 1,  4,  5, 0.0,0.0,1.0
+CBAR, 105, 1,  5,  6, 0.0,0.0,1.0
+CBAR, 106, 1,  6,  7, 0.0,0.0,1.0
+CBAR, 107, 1,  7,  8, 0.0,0.0,1.0
+CBAR, 108, 1,  8,  9, 0.0,0.0,1.0
+CBAR, 109, 1,  9, 10, 0.0,0.0,1.0
+CBAR, 110, 1, 10, 11, 0.0,0.0,1.0
+$
+$ --- Fuselage beam elements ---
+CBAR, 201, 2, 1000,1001, 0.0,0.0,1.0
+CBAR, 202, 2, 1001,1002, 0.0,0.0,1.0
+CBAR, 203, 2, 1002,1003, 0.0,0.0,1.0
+CBAR, 204, 2, 1003,1004, 0.0,0.0,1.0
+$
+$ --- Tail beam elements ---
+CBAR, 301, 3, 51, 52, 0.0,0.0,1.0
+CBAR, 302, 3, 52, 53, 0.0,0.0,1.0
+CBAR, 303, 3, 53, 54, 0.0,0.0,1.0
+CBAR, 304, 3, 54, 55, 0.0,0.0,1.0
+CBAR, 305, 3, 55, 56, 0.0,0.0,1.0
+CBAR, 306, 3, 56, 57, 0.0,0.0,1.0
+$
+$ --- RBE2 connecting wing root to fuselage ---
+RBE2, 901, 1000, 123456, 1
+$
+$ --- RBE2 connecting tail root to fuselage end ---
+RBE2, 902, 1004, 123456, 51
+$
+$ --- Wing beam property ---
+$ EI_bend = 1.0e9 N-m^2, GJ_torsion = 1.0e8 N-m^2
+$ m = 50 kg/m, A = 0.01 m^2
+$ I1 = I2 = EI/E = 1.0e9/7.0e10 = 1.429e-2
+$ J = GJ/G = 1.0e8/7.7e10 = 1.299e-3
+PBAR,  1,  1, 0.01, 1.429E-2, 1.429E-2, 1.299E-3
+$
+$ --- Fuselage beam property ---
+$ Very stiff fuselage: EI = 1.0e11
+$ A=0.05, I1=I2=1.429, J=1.299e-1
+PBAR,  2,  1, 0.05, 1.429, 1.429, 1.299E-1
+$
+$ --- Tail beam property ---
+$ EI_bend = 2.0e8 N-m^2, GJ = 2.0e7
+$ A = 0.005, I1 = 2.857e-3, J = 2.597e-4
+PBAR,  3,  1, 0.005, 2.857E-3, 2.857E-3, 2.597E-4
+$
+$ --- Material ---
+$ E=7.0e10, G=7.7e10, rho=5000 kg/m^3
+MAT1, 1, 7.0E10, 7.7E10, 0.3, 5000.0
+$
+$ --- Fuselage concentrated masses ---
+CONM2, 801, 1000, , 100.0
+CONM2, 802, 1001, , 200.0
+CONM2, 803, 1002, , 300.0
+CONM2, 804, 1003, , 200.0
+CONM2, 805, 1004, , 100.0
+$
+$ --- Boundary conditions ---
+SPC1, 1, 123456, 1000
+$
+$ ====== AERODYNAMIC MODEL ======
+$
+$ --- Wing CAERO1 ---
+$ LE at x=0, TE at x=2.0, span y=0..10
+$ 10 spanwise x 2 chordwise = 20 boxes
+CAERO1,2001, 100,  0, 10,    2,    0,    0,     1,+WNG
++WNG,  0.0,  0.0, 0.0, 2.0,  0.0,  10.0, 0.0,  2.0
+$
+$ --- H-tail CAERO1 ---
+$ LE at x=8.0, TE at x=9.0, span y=0..3
+$ 6 spanwise x 2 chordwise = 12 boxes
+CAERO1,3001, 100,  0,  6,    2,    0,    0,     2,+TL1
++TL1,  8.0,  0.0, 0.0, 1.0,  8.0,  3.0,  0.0,  1.0
+$
+PAERO1, 100
+$
+$ ====== SPLINES ======
+$
+$ --- Wing spline (beam spline along y) ---
+SPLINE2,  10, 2001, 2001, 2020,  10,  0.0, 1.0
+$
+$ --- Tail spline (beam spline along y) ---
+SPLINE2,  20, 3001, 3001, 3012,  20,  0.0, 1.0
+$
+$ --- Structural grid sets ---
+SET1, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
+SET1, 20, 51, 52, 53, 54, 55, 56, 57
+$
+$ ====== CONTROL SURFACES ======
+$
+$ Elevator: rear column of H-tail boxes
+AESURF, 601, ELEV,   0,   610
+$
+$ AELIST: TE boxes of H-tail (chordwise index 1)
+AELIST, 610, 3002, 3004, 3006, 3008, 3010, 3012
+$
+$ ====== TRIM VARIABLES ======
+$
+AESTAT, 501, ANGLEA
+AESTAT, 502, URDD3
+$
+$ ====== TRIM CONDITION ======
+$
+$ Level flight at M=0.3, V=100 m/s
+$ q = 0.5 * 1.225 * 100^2 = 6125 Pa
+TRIM, 1, 0.3, 6125.0, URDD3, 0.0
+$
+ENDDATA

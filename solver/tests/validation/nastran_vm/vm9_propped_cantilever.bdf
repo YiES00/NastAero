@@ -1,0 +1,86 @@
+$ NastAero VM9: Propped Cantilever with Uniform Load
+$ Reference: Roark's Formulas for Stress and Strain
+$ Fixed at left (node 1), roller support at right (node 11)
+$ 10 CBAR elements, L=10m, same cross section as VM6
+$ A=0.01 m^2, I=8.333e-6 m^4, J=1.406e-5 m^4, E=200GPa
+$
+$ Uniform load w=1000 N/m approximated by lumped nodal forces
+$ Element length = 1.0m
+$ Interior nodes: F = w * L_elem = 1000 * 1.0 = 1000 N (in -Y)
+$ End nodes 1 and 11: F = w * L_elem / 2 = 500 N (in -Y)
+$ Total load: 2*500 + 9*1000 = 10000 N = w*L (correct)
+$
+$ Analytical (propped cantilever, uniform load):
+$ R_right = 3*w*L/8 = 3*1000*10/8 = 3750 N
+$ R_left  = 5*w*L/8 = 5*1000*10/8 = 6250 N
+$ M_fixed = w*L^2/8 = 1000*100/8 = 12500 N-m
+$
+$ Max deflection at x = 0.4215*L = 4.215 m:
+$ delta_max = w*L^4/(185*E*I)
+$           = 1000*10^4/(185*200e9*8.333e-6)
+$           = 1e7/(185*1.6666e6)
+$           = 1e7/3.0833e8
+$           = 0.03243 m
+$
+SOL 101
+CEND
+TITLE = VM9 - PROPPED CANTILEVER WITH UNIFORM LOAD
+SPC = 1
+LOAD = 1
+DISPLACEMENT(PRINT) = ALL
+SPCFORCES(PRINT) = ALL
+BEGIN BULK
+$
+$ 11 nodes along X axis: x=0 to x=10 (spacing=1.0m)
+GRID,1,,0.0,0.0,0.0
+GRID,2,,1.0,0.0,0.0
+GRID,3,,2.0,0.0,0.0
+GRID,4,,3.0,0.0,0.0
+GRID,5,,4.0,0.0,0.0
+GRID,6,,5.0,0.0,0.0
+GRID,7,,6.0,0.0,0.0
+GRID,8,,7.0,0.0,0.0
+GRID,9,,8.0,0.0,0.0
+GRID,10,,9.0,0.0,0.0
+GRID,11,,10.0,0.0,0.0
+$
+$ 10 CBAR elements
+CBAR,1,1,1,2,0.0,1.0,0.0
+CBAR,2,1,2,3,0.0,1.0,0.0
+CBAR,3,1,3,4,0.0,1.0,0.0
+CBAR,4,1,4,5,0.0,1.0,0.0
+CBAR,5,1,5,6,0.0,1.0,0.0
+CBAR,6,1,6,7,0.0,1.0,0.0
+CBAR,7,1,7,8,0.0,1.0,0.0
+CBAR,8,1,8,9,0.0,1.0,0.0
+CBAR,9,1,9,10,0.0,1.0,0.0
+CBAR,10,1,10,11,0.0,1.0,0.0
+$
+$ 0.1m x 0.1m square beam
+PBAR,1,1,0.01,8.333e-6,8.333e-6,1.406e-5
+MAT1,1,200.0e9,,0.3,7850.0
+$
+$ Fixed at left end (all 6 DOFs)
+SPC1,1,123456,1
+$ Roller at right end: constrain Y-translation (DOF 2)
+$ Also constrain out-of-plane DOFs (3,4,5) to keep planar
+$ Leave DOF 1 (X-translation) and DOF 6 (Rz) free
+SPC1,1,2345,11
+$
+$ Lumped nodal forces approximating uniform load w=1000 N/m
+$ All forces use load set ID 1, applied in -Y direction
+$ End nodes get half the tributary load (500 N)
+FORCE,1,1,,500.0,0.0,-1.0,0.0
+FORCE,1,11,,500.0,0.0,-1.0,0.0
+$ Interior nodes get full tributary load (1000 N)
+FORCE,1,2,,1000.0,0.0,-1.0,0.0
+FORCE,1,3,,1000.0,0.0,-1.0,0.0
+FORCE,1,4,,1000.0,0.0,-1.0,0.0
+FORCE,1,5,,1000.0,0.0,-1.0,0.0
+FORCE,1,6,,1000.0,0.0,-1.0,0.0
+FORCE,1,7,,1000.0,0.0,-1.0,0.0
+FORCE,1,8,,1000.0,0.0,-1.0,0.0
+FORCE,1,9,,1000.0,0.0,-1.0,0.0
+FORCE,1,10,,1000.0,0.0,-1.0,0.0
+$
+ENDDATA
