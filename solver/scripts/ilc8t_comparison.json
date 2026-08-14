@@ -1,18 +1,18 @@
 {
  "Right Wing/bending": {
   "ILC-8 (L+C)": {
-   "min": -28142822.367763713,
+   "min": -26639493.300341483,
    "min_case": "Gust_VC- V=80.0m/s nz=-1.55 MTOW",
    "min_cat": "gust",
-   "max": 69205501.77441949,
+   "max": 65671963.80950702,
    "max_case": "D+ V=100.0m/s nz=3.80 MTOW",
    "max_cat": "symmetric"
   },
   "ILC-8T (tilt)": {
-   "min": -27617468.76909348,
+   "min": -26109084.259755548,
    "min_case": "Gust_VC- V=80.0m/s nz=-1.55 MTOW",
    "min_cat": "gust",
-   "max": 67914434.59049697,
+   "max": 64364385.72425485,
    "max_case": "D+ V=100.0m/s nz=3.80 MTOW",
    "max_cat": "symmetric"
   }
@@ -22,51 +22,51 @@
    "min": -7025617.168429993,
    "min_case": "Rotor Jam R4 h=0m",
    "min_cat": "vtol_rotor_jam",
-   "max": 6802034.298560577,
+   "max": 11782976.641389256,
    "max_case": "A+ V=71.0m/s nz=3.80 MTOW",
    "max_cat": "symmetric"
   },
   "ILC-8T (tilt)": {
-   "min": -10370478.012427019,
-   "min_case": "Tilt conv gust+ V=23.2m/s s=46.0deg nz=2.19 h=0m",
-   "min_cat": "vtol_tilt_transition",
-   "max": 7539586.505272193,
-   "max_case": "Tilt conv V=27.1m/s s=2.5deg nz=1.0 h=0m",
-   "max_cat": "vtol_tilt_transition"
+   "min": -9232787.259159375,
+   "min_case": "Tilt stuck R4 s=90deg (sched 1.8deg) V=7.5m/s h=0m",
+   "min_cat": "vtol_tilt_stuck",
+   "max": 11742168.88984924,
+   "max_case": "A+ V=71.0m/s nz=3.80 MTOW",
+   "max_cat": "symmetric"
   }
  },
  "Right Wing/shear": {
   "ILC-8 (L+C)": {
-   "min": -10371.449165639082,
+   "min": -9728.543555000944,
    "min_case": "Gust_VC- V=80.0m/s nz=-1.55 MTOW",
    "min_cat": "gust",
-   "max": 25485.221093541713,
-   "max_case": "A+ V=71.0m/s nz=3.80 MTOW",
+   "max": 23916.976386326918,
+   "max_case": "D+ V=100.0m/s nz=3.80 MTOW",
    "max_cat": "symmetric"
   },
   "ILC-8T (tilt)": {
-   "min": -10160.895277284826,
+   "min": -9514.58883157766,
    "min_case": "Gust_VC- V=80.0m/s nz=-1.55 MTOW",
    "min_cat": "gust",
-   "max": 24967.95697330632,
-   "max_case": "A+ V=71.0m/s nz=3.80 MTOW",
+   "max": 23387.795709807266,
+   "max_case": "D+ V=100.0m/s nz=3.80 MTOW",
    "max_cat": "symmetric"
   }
  },
  "Fuselage/bending": {
   "ILC-8 (L+C)": {
-   "min": -27167297.15319337,
-   "min_case": "A+ V=71.0m/s nz=3.80 MTOW",
+   "min": -27167297.15319395,
+   "min_case": "C+ V=80.0m/s nz=3.80 MTOW",
    "min_cat": "symmetric",
-   "max": 11057383.587577345,
+   "max": 11057383.587577557,
    "max_case": "Gust_VC- V=80.0m/s nz=-1.55 MTOW",
    "max_cat": "gust"
   },
   "ILC-8T (tilt)": {
-   "min": -25163615.705022626,
+   "min": -25163677.742877953,
    "min_case": "A+ V=71.0m/s nz=3.80 MTOW",
    "min_cat": "symmetric",
-   "max": 10241853.19160461,
+   "max": 10241886.266105207,
    "max_case": "Gust_VC- V=80.0m/s nz=-1.55 MTOW",
    "max_cat": "gust"
   }

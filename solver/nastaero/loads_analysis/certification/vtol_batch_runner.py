@@ -130,7 +130,7 @@ class VTOLBatchRunner:
                         label_parts.append(f"t_rec={tr.t_recognition:.2f}s")
                     label_parts.append(f"DAF={tr.daf_wing_Mx:.2f}")
                     far = {"oei": "SC-VTOL.2140",
-                           "gust": "SC-VTOL.2135"}.get(tr.event_type,
+                           "gust": "SC-VTOL.2215"}.get(tr.event_type,
                                                        "SC-VTOL.2150")
                     peak_result = CaseResult(
                         case_id=case_id,

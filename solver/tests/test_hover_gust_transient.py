@@ -71,14 +71,14 @@ class TestHoverGustTransient:
 
         tr = gust_results[0]
         far = {"oei": "SC-VTOL.2140",
-               "gust": "SC-VTOL.2135"}.get(tr.event_type, "SC-VTOL.2150")
+               "gust": "SC-VTOL.2215"}.get(tr.event_type, "SC-VTOL.2150")
         cr = CaseResult(case_id=30000,
                         category=f"vtol_{tr.event_type}_transient",
                         far_section=far,
                         nodal_forces=tr.peak_nodal_forces,
                         converged=True, label=tr.failed_rotor_label)
         assert cr.category == "vtol_gust_transient"
-        assert cr.far_section == "SC-VTOL.2135"
+        assert cr.far_section == "SC-VTOL.2215"
         assert cr.nodal_forces is tr.peak_nodal_forces
         total_fz = sum(f[2] for f in cr.nodal_forces.values())
         # 피크 시점 절점하중은 로터 상향력-관성 하향력의 순힘 (유한값)

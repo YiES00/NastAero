@@ -301,7 +301,10 @@ class AELINK:
     @classmethod
     def from_fields(cls, fields: List[str]) -> AELINK:
         a = cls()
-        a.id = nastran_int(fields[1])
+        try:
+            a.id = nastran_int(fields[1])
+        except ValueError:
+            a.id = 0  # MSC character ID 'ALWAYS' = applies to all TRIM sets
         a.dependent = fields[2].strip().upper() if len(fields) > 2 else ""
         i = 3
         while i + 1 < len(fields):
@@ -338,6 +341,16 @@ class TRIM:
             label = fields[i].strip().upper()
             if not label:
                 i += 1; continue
+            if i == 8:
+                # MSC format: field 9 of the parent line is AEQR (real,
+                # 1.0=flexible/0.0=rigid). Labels are never numeric, so a
+                # numeric token here is AEQR; legacy decks carry a label.
+                try:
+                    t.aeqr = float(label)
+                    i += 1
+                    continue
+                except ValueError:
+                    pass
             val = nastran_float(fields[i + 1])
             t.variables.append((label, val))
             i += 2

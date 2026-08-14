@@ -119,7 +119,10 @@ def parse_bulk_card(fields: List[str], model: BDFModel) -> None:
             s = SPLINE1.from_fields(fields); model.splines[s.eid] = s
         elif card_name == "SPLINE2":
             s = SPLINE2.from_fields(fields); model.splines[s.eid] = s
-        elif card_name == "AESTAT":
+        elif card_name in ("AESTAT", "AEPARM"):
+            # AEPARM (general controller, MSC arbitrary-label trim variable)
+            # shares the ID/LABEL layout and plays the same trim-variable
+            # role here, so it is stored alongside AESTAT entries.
             a = AESTAT.from_fields(fields); model.aestats[a.id] = a
         elif card_name == "AESURF":
             a = AESURF.from_fields(fields); model.aesurfs[a.id] = a

@@ -99,7 +99,15 @@ class TrimSharedData:
     active_cols: Any = None
     G_w_active: Any = None        # G_sp active columns (normalwash)
     G_d_active: Any = None        # G_disp active columns (displacement)
-    K_reg: Any = None
+
+    # 자유-자유 덱의 가상 확정 마운트(3-2-1) f-set 인덱스 (구속 덱이면 None).
+    # 이전의 K+eps·I 인공 기초는 전 자유도 접지 스프링이 되어 유연 변형을
+    # 지배했다 (ILC-8 날개 끝 3.9 mm vs MSC 283 mm) — MSC RESTRAINED
+    # 정식화와 같은 결정적 마운트로 대체 (MSC SOL 144 대조로 확정).
+    mount_idx: Any = None
+    # f-DOF별 T3 질량 벡터 — 구조 해에 관성 하중(-nz·g·m)을 포함시켜
+    # 자중 처짐/워시아웃이 공탄성 피드백에 반영되게 한다 (MSC INERTIAL 열).
+    mass_t3: Any = None
 
     # K_eff factorization cache by (mach, q)
     # Key: (round(mach, 8), round(q, 8))
@@ -109,6 +117,140 @@ class TrimSharedData:
 
     # Camber normalwash correction (from airfoil profiles)
     w_camber: Any = None          # ndarray (n_boxes,) or None
+
+
+# ---------------------------------------------------------------------------
+# Virtual mount (free-free structural solve)
+# ---------------------------------------------------------------------------
+
+def _build_rigid_modes(bdf_model: BDFModel, dof_mgr,
+                       f_dof_index: Dict[int, int], n_free: int,
+                       cg: np.ndarray) -> np.ndarray:
+    """f-set 위 강체모드 6열 (CG 기준 병진 3 + 회전 3)."""
+    D = np.zeros((n_free, 6))
+    for nid, node in bdf_model.nodes.items():
+        d = np.asarray(node.xyz_global, dtype=float) - cg
+        for c in (1, 2, 3):
+            j = f_dof_index.get(dof_mgr.get_dof(nid, c))
+            if j is None:
+                continue
+            D[j, c - 1] = 1.0
+            # 회전 모드의 병진 성분: u = omega x (r - cg)
+            if c == 1:    # ux: +wy*dz - wz*dy
+                D[j, 4] = d[2]; D[j, 5] = -d[1]
+            elif c == 2:  # uy: +wz*dx - wx*dz
+                D[j, 5] = d[0]; D[j, 3] = -d[2]
+            else:         # uz: +wx*dy - wy*dx
+                D[j, 3] = d[1]; D[j, 4] = -d[0]
+        for c in (4, 5, 6):
+            j = f_dof_index.get(dof_mgr.get_dof(nid, c))
+            if j is not None:
+                D[j, c - 1] = 1.0
+    return D
+
+
+def _has_free_rigid_modes(K_ff, D: np.ndarray) -> bool:
+    """강체모드 잔차 검사: 어느 모드든 ||K·d||가 미소하면 자유-자유.
+
+    덱 SPC 개수 휴리스틱은 국소 더미 구속(예: GACOMP의 계기 절점)이 많은
+    산업 덱에서 오판하므로, K가 실제로 강체모드를 지지하는지 직접 잰다.
+    """
+    K = K_ff if sp.issparse(K_ff) else sp.csc_matrix(K_ff)
+    diag = np.abs(K.diagonal())
+    scale = np.mean(diag[diag > 0]) if np.any(diag > 0) else 1.0
+    for k in range(6):
+        d = D[:, k]
+        nd = np.linalg.norm(d)
+        if nd < 1e-12:
+            continue
+        r = np.linalg.norm(K @ d) / (scale * nd)
+        if r < 1e-6:
+            return True
+    return False
+
+
+def _select_virtual_mount(bdf_model: BDFModel, dof_mgr,
+                          f_dof_index: Dict[int, int],
+                          cg: np.ndarray) -> Optional[np.ndarray]:
+    """자유-자유 덱에 대한 가상 확정 마운트(3-2-1) f-set 인덱스 선정.
+
+    n1(CG 최근접): T1+T2+T3, n2(n1에서 x-거리 최대): T2+T3,
+    n3(n1-n2 축에서 수직거리 최대): T3 — 강체 6자유도가 비공선 3점의
+    병진으로 지지된다. 하중이 평형(트림+릴리프)이면 마운트 반력은 ~0이고
+    변위는 마운트 기준 상대 변형(MSC SUPORT-상대 변위와 동렬)이다.
+    """
+    cand = []
+    for nid, node in bdf_model.nodes.items():
+        dofs = [dof_mgr.get_dof(nid, c) for c in (1, 2, 3)]
+        if all(d in f_dof_index for d in dofs):
+            cand.append((nid, np.asarray(node.xyz_global, dtype=float), dofs))
+    if len(cand) < 3:
+        return None
+
+    # 후보를 CG 근방(주 구조부)으로 제한 — 기하 극값을 그대로 좇으면
+    # 날개/스텁 끝단이 뽑혀 유연 부재를 핀으로 누르게 된다. MSC 덱의
+    # 검증된 패턴(CG 인접 동체 프레임 3점 클러스터)을 따른다.
+    all_xyz = np.array([c[1] for c in cand])
+    order = np.argsort(np.linalg.norm(all_xyz - cg, axis=1))
+    # CG 최근접 소수(주 구조부)만 후보로 — 풀이 크면 소형 모델에서
+    # 날개/부속 끝단이 뽑혀 유연 부재를 핀으로 누른다
+    pool_n = min(max(12, len(cand) // 20), len(cand))
+    while True:
+        pool = [cand[int(k)] for k in order[:pool_n]]
+        xyz = np.array([c[1] for c in pool])
+        i1 = 0  # CG 최근접
+        i2 = int(np.argmax(np.abs(xyz[:, 0] - xyz[i1, 0])))
+        axis = xyz[i2] - xyz[i1]
+        axis_n = axis / max(np.linalg.norm(axis), 1e-12)
+        rel = xyz - xyz[i1]
+        perp = np.linalg.norm(rel - np.outer(rel @ axis_n, axis_n), axis=1)
+        i3 = int(np.argmax(perp))
+        if (np.linalg.norm(axis) > 1e-6 and perp[i3] > 1e-6):
+            break
+        if pool_n >= len(cand):
+            return None
+        pool_n = min(pool_n * 2, len(cand))
+    cand = pool
+
+    n1, n2, n3 = cand[i1], cand[i2], cand[i3]
+    idx = [f_dof_index[d] for d in n1[2]]          # T1 T2 T3
+    idx += [f_dof_index[n2[2][1]], f_dof_index[n2[2][2]]]  # T2 T3
+    idx += [f_dof_index[n3[2][2]]]                 # T3
+    logger.info("  Virtual mount (3-2-1): nodes %d/%d/%d",
+                n1[0], n2[0], n3[0])
+    return np.asarray(idx, dtype=int)
+
+
+def _build_mass_t3(bdf_model: BDFModel, dof_mgr,
+                   f_dof_index: Dict[int, int], n_free: int) -> np.ndarray:
+    """f-DOF 벡터로 표현한 절점 T3 질량 (관성 하중 -nz·g·m 용)."""
+    from ..loads_analysis.trim_loads import compute_node_masses
+    m = np.zeros(n_free)
+    for nid, mass in compute_node_masses(bdf_model).items():
+        d = dof_mgr.get_dof(nid, 3)
+        j = f_dof_index.get(d)
+        if j is not None:
+            m[j] = mass
+    return m
+
+
+def _apply_virtual_mount(K_csc, mount_idx: np.ndarray):
+    """K(희소)에 마운트 자유도 행/열 소거 + 단위 대각(평균 스케일) 적용."""
+    diag = np.abs(K_csc.diagonal())
+    scale = np.mean(diag[diag > 0]) if np.any(diag > 0) else 1.0
+    K = K_csc.tolil()
+    for i in mount_idx:
+        K.rows[i] = [i]
+        K.data[i] = [scale]
+    K = K.tocsc()
+    # 열 소거 (대칭 위치): 마운트 열의 비대각 성분 제거
+    mask = np.ones(K.shape[0], dtype=bool)
+    mask[mount_idx] = False
+    K_t = K.T.tolil()
+    for i in mount_idx:
+        K_t.rows[i] = [i]
+        K_t.data[i] = [scale]
+    return K_t.T.tocsc()
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +457,6 @@ def _build_shared_data(bdf_model: BDFModel,
     active_cols = None
     G_w_active_arr = None
     G_d_active_arr = None
-    K_reg = None
 
     if n_free > 10000:
         # Active columns = union of nonzero columns in G_sp and G_disp
@@ -329,13 +470,19 @@ def _build_shared_data(bdf_model: BDFModel,
         G_w_active_arr = G_w_csc[:, active_cols].toarray()
         G_d_active_arr = G_d_csc[:, active_cols].toarray()
 
-        # Pre-compute regularized K
-        K_sparse = K_ff if sp.issparse(K_ff) else sp.csc_matrix(K_ff)
-        diag = np.abs(K_sparse.diagonal())
-        avg_diag = np.mean(diag[diag > 0]) if np.any(diag > 0) else 1.0
-        eps_reg = avg_diag * 1e-8
-        K_reg = K_sparse + sp.eye(n_free, format='csc') * eps_reg
-        logger.info("  K_reg pre-computed: eps = %.2e", eps_reg)
+    # 강체모드 지지 판정: 덱 SPC < 6 자유도면 가상 마운트(3-2-1) 적용
+    f_dof_index = {dof: idx for idx, dof in enumerate(f_dofs)}
+    mount_idx = None
+    D_rigid = _build_rigid_modes(bdf_model, fe_model.dof_mgr, f_dof_index,
+                                 n_free, cg)
+    if _has_free_rigid_modes(K_ff, D_rigid):
+        mount_idx = _select_virtual_mount(bdf_model, fe_model.dof_mgr,
+                                          f_dof_index, cg)
+        if mount_idx is None:
+            logger.warning("  Virtual mount selection failed — "
+                           "falling back to unconstrained solve")
+    mass_t3 = _build_mass_t3(bdf_model, fe_model.dof_mgr, f_dof_index,
+                             n_free)
 
     # Camber normalwash correction (equivalent to NASTRAN W2GJ)
     w_camber = None
@@ -388,7 +535,8 @@ def _build_shared_data(bdf_model: BDFModel,
         all_trim_labels=all_trim_labels,
         slave_deps=fe_model.slave_deps,
         active_cols=active_cols, G_w_active=G_w_active_arr,
-        G_d_active=G_d_active_arr, K_reg=K_reg,
+        G_d_active=G_d_active_arr,
+        mount_idx=mount_idx, mass_t3=mass_t3,
         _solver_cache={},
         w_camber=w_camber,
         kernel=kernel,
@@ -480,6 +628,10 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
     G_disp = shared.G_disp    # displacement coupling (force distribution)
 
     # 3. Parse trim variables (fixed vs free)
+    if getattr(trim, "aeqr", 1.0) == 0.0:
+        logger.warning("  [SC%d] TRIM AEQR=0.0 (rigid trim) requested — "
+                       "NastAero solves flexible trim only; this deck is "
+                       "for MSC comparison", subcase_id)
     trim_vars = {}
     for label, val in trim.variables:
         trim_vars[label] = val
@@ -491,6 +643,15 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
             fixed_labels[label] = trim_vars[label]
         else:
             free_labels.append(label)
+
+    # 자유 URDD*(강체 가속도)는 공력 미지수가 아니라 관성 릴리프 폐합이
+    # 푸는 양이다 (MSC 자유비행 트림 덱은 SUPORT 자유도 수를 맞추기 위해
+    # URDD1/2/4/6을 자유로 두는데, 그 해가 곧 릴리프 가속도와 동일).
+    relief_urdds = [l for l in free_labels if l.startswith("URDD")]
+    if relief_urdds:
+        free_labels = [l for l in free_labels if not l.startswith("URDD")]
+        logger.info("  [SC%d] Free URDD vars delegated to inertia relief: %s",
+                    subcase_id, relief_urdds)
 
     n_trim_free = len(free_labels)
 
@@ -558,7 +719,10 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
     nz_proj = np.array([boxes[i].normal[2] for i in range(n_boxes)])
     ny_proj = np.array([boxes[i].normal[1] for i in range(n_boxes)])
     nx_proj = np.array([boxes[i].normal[0] for i in range(n_boxes)])
-    cp_pts = np.array([boxes[i].control_point for i in range(n_boxes)]) \
+    # 모멘트 팔은 힘 작용점(1/4-코드 더블릿 라인) 기준 — 다운워시
+    # 콜로케이션 점(3/4-코드)을 쓰면 x_ac가 박스 코드의 절반만큼 뒤로
+    # 밀려 중립점 근처에서 조종면 부호가 뒤집힌다 (MSC SOL 144 대조로 확인).
+    cp_pts = np.array([boxes[i].doublet_point for i in range(n_boxes)]) \
         if n_boxes else np.zeros((0, 3))
 
     _ROLL_LABELS = ("ARON", "AILERON", "ROLL")
@@ -621,15 +785,24 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
                 subcase_id, "iterative" if use_iterative else "dense",
                 n_free, n_trim_free)
 
+    # 관성 하중(-nz·g·m, T3)을 구조 해에 포함 — 자중 처짐이 스플라인을
+    # 통해 워시로 되먹임되는 실제 공탄성 경로 (MSC INERTIAL 열과 동렬).
+    # 자유비행(가상 마운트) 정식화에만 적용한다: 구속(SPC) 덱은 MSC의
+    # 구속 트림처럼 공력 하중만으로 응답을 계산한다.
+    F_static = F_trim_fixed
+    if shared.mount_idx is not None and shared.mass_t3 is not None:
+        F_static = F_trim_fixed - nz * shared.g * shared.mass_t3
+
     if use_iterative:
         u_f, x_trim = _solve_iterative_from_shared(
-            shared, A_jj, Q_ax, F_trim_fixed,
+            shared, A_jj, Q_ax, F_static,
             D_r, D_x, rhs_trim, n_trim_free, n_constraints, subcase_id,
             cache_key=cache_key)
     else:
         u_f, x_trim = _solve_dense(shared.K_ff, G_sp, G_disp, A_jj, Q_ax,
-                                    shared.F_f, F_trim_fixed, D_r, D_x, rhs_trim,
-                                    n_free, n_trim_free, n_constraints)
+                                    shared.F_f, F_static, D_r, D_x, rhs_trim,
+                                    n_free, n_trim_free, n_constraints,
+                                    mount_idx=shared.mount_idx)
 
     # 7. Post-process
     dof_mgr = shared.dof_mgr
@@ -709,7 +882,7 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
 
     # Pitch moment about CG
     if n_boxes > 0:
-        my_total = sum(aero_forces[i, 2] * (boxes[i].control_point[0] - shared.cg_x)
+        my_total = sum(aero_forces[i, 2] * (boxes[i].doublet_point[0] - shared.cg_x)
                        for i in range(n_boxes))
         logger.info("  [SC%d] Pitch moment about CG = %.2f", subcase_id, my_total)
 
@@ -940,7 +1113,6 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
     active_cols = None
     G_w_active_arr = None
     G_d_active_arr = None
-    K_reg = None
     if n_free > 10000:
         G_w_csc = G_sp.tocsc()
         G_d_csc = G_disp.tocsc()
@@ -949,11 +1121,19 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
         active_cols = np.where(col_nnz_w | col_nnz_d)[0]
         G_w_active_arr = G_w_csc[:, active_cols].toarray()
         G_d_active_arr = G_d_csc[:, active_cols].toarray()
-        K_sparse = K_ff if sp.issparse(K_ff) else sp.csc_matrix(K_ff)
-        diag = np.abs(K_sparse.diagonal())
-        avg_diag = np.mean(diag[diag > 0]) if np.any(diag > 0) else 1.0
-        eps_reg = avg_diag * 1e-8
-        K_reg = K_sparse + sp.eye(n_free, format='csc') * eps_reg
+
+    f_dof_index = {dof: idx for idx, dof in enumerate(f_dofs)}
+    mount_idx = None
+    D_rigid = _build_rigid_modes(bdf_model, fe_model.dof_mgr, f_dof_index,
+                                 n_free, cg)
+    if _has_free_rigid_modes(K_ff, D_rigid):
+        mount_idx = _select_virtual_mount(bdf_model, fe_model.dof_mgr,
+                                          f_dof_index, cg)
+        if mount_idx is None:
+            logger.warning("  Virtual mount selection failed — "
+                           "falling back to unconstrained solve")
+    mass_t3 = _build_mass_t3(bdf_model, fe_model.dof_mgr, f_dof_index,
+                             n_free)
 
     shared = TrimSharedData(
         K_ff=K_ff, F_f=F_f, f_dofs=f_dofs, s_dofs=s_dofs,
@@ -965,7 +1145,8 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
         all_trim_labels=all_trim_labels,
         slave_deps=fe_model.slave_deps,
         active_cols=active_cols, G_w_active=G_w_active_arr,
-        G_d_active=G_d_active_arr, K_reg=K_reg,
+        G_d_active=G_d_active_arr,
+        mount_idx=mount_idx, mass_t3=mass_t3,
         _solver_cache={},
         kernel=kernel,
     )
@@ -978,7 +1159,8 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
 # ---------------------------------------------------------------------------
 
 def _solve_dense(K_ff, G_sp, G_disp, A_jj, Q_ax, F_f, F_trim_fixed,
-                 D_r, D_x, rhs_trim, n_free, n_trim_free, n_constraints):
+                 D_r, D_x, rhs_trim, n_free, n_trim_free, n_constraints,
+                 mount_idx=None):
     """Solve trim using dense matrices (small models).
 
     Q_aa = G_disp^T @ A_jj @ G_sp (asymmetric: displacement for forces,
@@ -990,6 +1172,22 @@ def _solve_dense(K_ff, G_sp, G_disp, A_jj, Q_ax, F_f, F_trim_fixed,
 
     n_total = n_free + n_trim_free
     K_dense = K_ff.toarray() if sp.issparse(K_ff) else K_ff
+
+    if mount_idx is not None:
+        # 자유-자유 소형 모델: 가상 마운트 행/열 소거 (u[mount]=0)
+        K_dense = K_dense.copy()
+        Q_aa_free = Q_aa_free.copy()
+        diag = np.abs(np.diag(K_dense))
+        scale = np.mean(diag[diag > 0]) if np.any(diag > 0) else 1.0
+        for i in mount_idx:
+            K_dense[i, :] = 0.0; K_dense[:, i] = 0.0; K_dense[i, i] = scale
+            Q_aa_free[i, :] = 0.0; Q_aa_free[:, i] = 0.0
+        F_f = np.asarray(F_f).copy(); F_f[mount_idx] = 0.0
+        F_trim_fixed = np.asarray(F_trim_fixed).copy()
+        F_trim_fixed[mount_idx] = 0.0
+        Q_ax = np.asarray(Q_ax).copy()
+        if Q_ax.size:
+            Q_ax[mount_idx, :] = 0.0
 
     if n_trim_free > 0:
         A_sys = np.zeros((n_total + n_constraints, n_total))
@@ -1032,7 +1230,7 @@ def _solve_iterative_from_shared(shared: TrimSharedData,
                                   cache_key=None):
     """Sparse solver using shared pre-computed structural data.
 
-    Uses pre-computed K_reg, G_w_active, G_d_active, active_cols from
+    Uses pre-computed G_w_active, G_d_active, active_cols from
     TrimSharedData to avoid redundant work across subcases.
 
     Q_aa = G_d^T @ A_jj @ G_w  (asymmetric: displacement forces × normalwash)
@@ -1072,8 +1270,10 @@ def _solve_iterative_from_shared(shared: TrimSharedData,
         logger.info("  [SC%d] Q_active computed in %.2f s",
                     subcase_id, time.perf_counter() - t_q)
 
-        # Build K_eff = K_reg + Q_aa (K_reg pre-computed)
-        K_eff = shared.K_reg.copy()  # Already has regularization
+        # Build K_eff = K + Q_aa (인공 정규화 없음 — 자유-자유는 가상
+        # 마운트가, 구속 덱은 실제 경계조건이 강체모드를 처리한다)
+        K_eff = (shared.K_ff if sp.issparse(shared.K_ff)
+                 else sp.csc_matrix(shared.K_ff)).tocsc(copy=True)
 
         if n_active > 0 and n_active < 5000:
             row_idx = np.repeat(active_cols, n_active)
@@ -1084,6 +1284,18 @@ def _solve_iterative_from_shared(shared: TrimSharedData,
                 Q_sp = sp.coo_matrix((q_vals[mask], (row_idx[mask], col_idx[mask])),
                                      shape=(n_free, n_free)).tocsc()
                 K_eff = K_eff + Q_sp
+
+        # 가상 마운트: Q까지 조립된 뒤 행/열 소거 (마운트 자유도 = 0)
+        if shared.mount_idx is not None:
+            K_eff = _apply_virtual_mount(K_eff.tocsc(), shared.mount_idx)
+
+        # 미세 백스톱: 전기체 강체모드(마운트/경계가 처리) 외의 잔여
+        # 특이성(고립 부재/근사기구)만 정칙화한다. avg_diag*1e-12는 날개급
+        # 유연 모드 강성의 0.1% 미만이라 변형을 왜곡하지 않는다
+        # (이전의 1e-8 스케일은 인공 탄성 기초로 작용 — 제거됨).
+        diag = np.abs(K_eff.diagonal())
+        avg_diag = np.mean(diag[diag > 0]) if np.any(diag > 0) else 1.0
+        K_eff = K_eff.tocsc() + sp.eye(n_free, format='csc') * (avg_diag * 1e-12)
 
         # Factorize K_eff
         logger.info("  [SC%d] Factorizing K_eff (%d x %d)...",
@@ -1129,14 +1341,24 @@ def _solve_iterative_from_shared(shared: TrimSharedData,
         logger.info("  [SC%d] Factorization done in %.2f s",
                     subcase_id, factor_time)
 
-        # Build solve function
+        # Build solve function (마운트 자유도의 RHS는 0으로 강제 —
+        # 행/열 소거된 K_eff와 함께 u[mount] = 0 을 보장한다)
+        _mount = shared.mount_idx
+
         if _solver_mode == 'pardiso':
             _K_eff_csc_ref = K_eff_csc  # prevent GC
 
-            def _solve_system(rhs_vec, _csc=K_eff_csc, _ps=_pardiso_solve):
+            def _solve_system(rhs_vec, _csc=K_eff_csc, _ps=_pardiso_solve,
+                              _m=_mount):
+                if _m is not None:
+                    rhs_vec = rhs_vec.copy()
+                    rhs_vec[_m] = 0.0
                 return _ps(_csc, rhs_vec)
         else:
-            def _solve_system(rhs_vec, _lu=K_lu):
+            def _solve_system(rhs_vec, _lu=K_lu, _m=_mount):
+                if _m is not None:
+                    rhs_vec = rhs_vec.copy()
+                    rhs_vec[_m] = 0.0
                 return _lu.solve(rhs_vec)
 
         # ---- Store in cache ----
@@ -1253,10 +1475,14 @@ def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
         all_nids = sorted(bdf_model.nodes.keys())
         struct_xyz = np.array([bdf_model.nodes[nid].xyz_global
                                for nid in all_nids])
-        aero_pts = np.array([box.control_point for box in boxes])
-        G_ka_z = build_beam_spline(struct_xyz, aero_pts, axis=1)
-        _fill_geff(G_w, G_d, G_ka_z, range(n_boxes), all_nids,
-                   aero_pts, struct_xyz, dof_mgr, f_dof_index)
+        # 워시(G_w)는 3/4-코드 콜로케이션 점, 힘 전달(G_d)은 1/4-코드
+        # 더블릿 라인(힘 작용점)에서 평가한다 (MSC SOL 144 대조로 확인).
+        wash_pts = np.array([box.control_point for box in boxes])
+        force_pts = np.array([box.doublet_point for box in boxes])
+        G_ka_wash = build_beam_spline(struct_xyz, wash_pts, axis=1)
+        G_ka_force = build_beam_spline(struct_xyz, force_pts, axis=1)
+        _fill_geff(G_w, G_d, G_ka_wash, G_ka_force, range(n_boxes), all_nids,
+                   force_pts, struct_xyz, dof_mgr, f_dof_index)
         return G_w, G_d
 
     # Process each spline independently
@@ -1317,8 +1543,11 @@ def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
                            sid, box1, box2)
             continue
 
-        # Get aero control points for these boxes
-        aero_pts = np.array([boxes[idx].control_point for idx in spline_box_indices])
+        # 워시는 3/4-코드 콜로케이션 점, 힘 전달은 1/4-코드 더블릿 라인
+        wash_pts = np.array([boxes[idx].control_point
+                             for idx in spline_box_indices])
+        force_pts = np.array([boxes[idx].doublet_point
+                              for idx in spline_box_indices])
 
         # Determine spline axis from structural nodes
         span_range = np.ptp(struct_xyz, axis=0)
@@ -1330,18 +1559,22 @@ def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
 
         G_ka_slope = None
         if is_spline2 or is_collinear:
-            G_ka_z = build_beam_spline(struct_xyz, aero_pts, axis=span_axis)
+            G_ka_wash = build_beam_spline(struct_xyz, wash_pts,
+                                          axis=span_axis)
+            G_ka_force = build_beam_spline(struct_xyz, force_pts,
+                                           axis=span_axis)
             if is_collinear and not is_spline2:
                 logger.info("    Spline %d: collinear nodes, using beam spline "
                            "instead of IPS", sid)
         else:
             dz = getattr(spline, 'dz', 0.0)
-            G_ka_z = build_ips_spline(struct_xyz, aero_pts, dz)
+            G_ka_wash = build_ips_spline(struct_xyz, wash_pts, dz)
+            G_ka_force = build_ips_spline(struct_xyz, force_pts, dz)
             if slope_method == 'surface':
                 # SPLINE1 semantics: slope from the analytic x-derivative
                 # of the interpolated displacement surface (z-translations
                 # only; nodal rotations do not participate).
-                G_ka_slope = build_ips_spline_slope(struct_xyz, aero_pts, dz)
+                G_ka_slope = build_ips_spline_slope(struct_xyz, wash_pts, dz)
 
         logger.info("  Spline %d: CAERO %d, boxes %d-%d (%d boxes), "
                      "%d struct nodes, axis=%d",
@@ -1349,25 +1582,28 @@ def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
                      len(spline_nids), span_axis)
 
         # Fill both G matrices for this spline's boxes
-        _fill_geff(G_w, G_d, G_ka_z, spline_box_indices, spline_nids,
-                   aero_pts, struct_xyz, dof_mgr, f_dof_index,
+        _fill_geff(G_w, G_d, G_ka_wash, G_ka_force, spline_box_indices,
+                   spline_nids, force_pts, struct_xyz, dof_mgr, f_dof_index,
                    G_ka_slope=G_ka_slope)
 
     return G_w, G_d
 
 
-def _fill_geff(G_w: np.ndarray, G_d: np.ndarray, G_ka_z: np.ndarray,
-               box_indices: list, struct_nids: list,
-               aero_pts: np.ndarray, struct_xyz: np.ndarray,
+def _fill_geff(G_w: np.ndarray, G_d: np.ndarray, G_ka_wash: np.ndarray,
+               G_ka_force: np.ndarray, box_indices: list, struct_nids: list,
+               force_pts: np.ndarray, struct_xyz: np.ndarray,
                dof_mgr: DOFManager, f_dof_index: dict,
                G_ka_slope: np.ndarray = None) -> None:
     """Fill both normalwash (G_w) and displacement (G_d) coupling matrices.
 
-    G_w: normalwash matrix — maps structural DOFs to normalwash (slope dz/dx).
+    G_w: normalwash matrix — maps structural DOFs to normalwash (slope dz/dx),
+        evaluated at the 3/4-chord collocation points (G_ka_wash).
         Only theta_y (DOF 5) contributes because slope = theta_y for beam spline.
         w_j = sum_k w_k * theta_y_k
 
-    G_d: displacement matrix — maps structural DOFs to z-displacement at aero pts.
+    G_d: displacement matrix — maps structural DOFs to z-displacement at the
+        1/4-chord doublet points where the box forces act (G_ka_force), so
+        F_struct = G_d^T f_aero applies each force at its physical location.
         Both z (DOF 3) and theta_y (DOF 5) with lever arm dx contribute.
         z_j = sum_k w_k * (z_k + theta_y_k * dx_k)
 
@@ -1393,7 +1629,7 @@ def _fill_geff(G_w: np.ndarray, G_d: np.ndarray, G_ka_z: np.ndarray,
                 z_dof = dof_mgr.get_dof(nid, 3)
                 if z_dof not in f_dof_index:
                     continue
-                w_disp = G_ka_z[i_local, j_node]
+                w_disp = G_ka_force[i_local, j_node]
                 w_slope = G_ka_slope[i_local, j_node]
                 if abs(w_disp) > 1e-15:
                     G_d[i_box, f_dof_index[z_dof]] += w_disp
@@ -1404,25 +1640,27 @@ def _fill_geff(G_w: np.ndarray, G_d: np.ndarray, G_ka_z: np.ndarray,
     for i_local, i_box in enumerate(box_indices):
         for j_node in range(n_spline):
             nid = struct_nids[j_node]
-            w_j = G_ka_z[i_local, j_node]
-            if abs(w_j) < 1e-15:
+            w_wash = G_ka_wash[i_local, j_node]
+            w_force = G_ka_force[i_local, j_node]
+            if abs(w_wash) < 1e-15 and abs(w_force) < 1e-15:
                 continue
 
             # DOF 3 (z-translation): contributes to displacement only
             z_dof = dof_mgr.get_dof(nid, 3)
-            if z_dof in f_dof_index:
-                G_d[i_box, f_dof_index[z_dof]] += w_j
+            if z_dof in f_dof_index and abs(w_force) > 1e-15:
+                G_d[i_box, f_dof_index[z_dof]] += w_force
 
             # DOF 5 (theta_y): contributes to BOTH normalwash and displacement
             # Normalwash: w_j = theta_y (direct slope contribution)
             # Displacement: z_j = theta_y * dx (lever arm effect)
             ry_dof = dof_mgr.get_dof(nid, 5)  # theta_y = pitch/torsion
             if ry_dof in f_dof_index:
-                G_w[i_box, f_dof_index[ry_dof]] += w_j  # normalwash
+                if abs(w_wash) > 1e-15:
+                    G_w[i_box, f_dof_index[ry_dof]] += w_wash  # normalwash
 
-                dx = aero_pts[i_local, 0] - struct_xyz[j_node, 0]
-                if abs(dx) > 1e-12:
-                    G_d[i_box, f_dof_index[ry_dof]] += w_j * dx  # displacement
+                dx = force_pts[i_local, 0] - struct_xyz[j_node, 0]
+                if abs(w_force) > 1e-15 and abs(dx) > 1e-12:
+                    G_d[i_box, f_dof_index[ry_dof]] += w_force * dx
 
 
 # ---------------------------------------------------------------------------

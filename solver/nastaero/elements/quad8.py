@@ -203,9 +203,9 @@ class CQuad8Element(BaseElement):
                 Bs = np.zeros((2, 24))
                 for nd in range(8):
                     Bs[0, 3 * nd] = dNdx[nd]      # dw/dx
-                    Bs[0, 3 * nd + 2] = -N[nd]    # -ry
+                    Bs[0, 3 * nd + 2] = N[nd]     # +theta_y (Nastran)
                     Bs[1, 3 * nd] = dNdy[nd]       # dw/dy
-                    Bs[1, 3 * nd + 1] = N[nd]     # rx
+                    Bs[1, 3 * nd + 1] = -N[nd]    # -theta_x (Nastran)
 
                 ks = Bs.T @ Ds @ Bs * detJ * w
                 for ii in range(24):

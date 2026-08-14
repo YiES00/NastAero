@@ -127,7 +127,9 @@ class TestGACOMPParsing:
         assert len(gacomp_model.nodes) == 22640
 
     def test_element_count(self, gacomp_model):
-        assert len(gacomp_model.elements) == 27016
+        # 27016 -> 27020: 대필드 CBAR*의 소필드 오프셋 연속행을 행별 형식
+        # 규칙으로 파싱하게 되면서 누락되던 CBAR 4개가 복원됨
+        assert len(gacomp_model.elements) == 27020
 
     def test_mass_count(self, gacomp_model):
         assert len(gacomp_model.masses) > 18000

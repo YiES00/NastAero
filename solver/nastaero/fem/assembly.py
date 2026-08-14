@@ -663,12 +663,16 @@ def _batch_cquad4_stiffness(xy_local, E_, nu_, t_, n_elem):
     dNdy_c = np.outer(Jinv_c[:, 1, 0], dNdxi_c).reshape(ne, 4) + \
              np.outer(Jinv_c[:, 1, 1], dNdeta_c).reshape(ne, 4)
 
+    # 전단 변형률 (Nastran 절점회전 규약): gxz = dw/dx + theta_y,
+    # gyz = dw/dy - theta_x. 이전 부호(-theta_y/+theta_x)는 회전이 Nastran의
+    # 음수 규약이라 판 단독으로는 등가지만 보/강체와 절점을 공유하는 혼합
+    # 구조에서 전단 잠금을 일으켜 강성이 수백 배 과대였다 (MSC 대조로 확인).
     Bs = np.zeros((ne, 2, 12))
     for nd in range(4):
         Bs[:, 0, 3*nd] = dNdx_c[:, nd]
-        Bs[:, 0, 3*nd+2] = -N_c[nd]
+        Bs[:, 0, 3*nd+2] = N_c[nd]
         Bs[:, 1, 3*nd] = dNdy_c[:, nd]
-        Bs[:, 1, 3*nd+1] = N_c[nd]
+        Bs[:, 1, 3*nd+1] = -N_c[nd]
 
     # Ds @ Bs = fac_s * Bs (isotropic shear)
     Ds_Bs = fac_s[:, None, None] * Bs  # (ne, 2, 12)

@@ -127,13 +127,18 @@ class CQuad4Element(BaseElement):
                     for jj in range(8):
                         k[mem_dofs[ii], mem_dofs[jj]] += km[ii, jj]
 
-                # Bending B-matrix (3 x 8)
+                # Bending B-matrix (3 x 8) — Nastran 절점회전 규약
+                # (theta_x = +dw/dy, theta_y = -dw/dx): kxx = -theta_y,x,
+                # kyy = +theta_x,y, kxy = theta_x,x - theta_y,y.
+                # (이전 구현은 회전 부호가 Nastran의 음수 규약이라 판 단독
+                # 에너지는 동일했지만 보/강체요소와 절점 공유 시 전단항이
+                # 잠금을 일으켜 혼합 구조가 수백 배 강성 과대였다.)
                 Bb = np.zeros((3, 8))
                 for n_idx in range(4):
-                    Bb[0, 2*n_idx+1] = -dNdx[n_idx]  # -d(ry)/dx
-                    Bb[1, 2*n_idx] = dNdy[n_idx]      # d(rx)/dy
-                    Bb[2, 2*n_idx] = dNdx[n_idx]      # d(rx)/dx
-                    Bb[2, 2*n_idx+1] = -dNdy[n_idx]   # -d(ry)/dy
+                    Bb[0, 2*n_idx+1] = -dNdx[n_idx]  # -d(theta_y)/dx
+                    Bb[1, 2*n_idx] = dNdy[n_idx]      # d(theta_x)/dy
+                    Bb[2, 2*n_idx] = dNdx[n_idx]      # d(theta_x)/dx
+                    Bb[2, 2*n_idx+1] = -dNdy[n_idx]   # -d(theta_y)/dy
 
                 kb = Bb.T @ Db @ Bb * detJ * w
                 for ii in range(8):
@@ -150,12 +155,15 @@ class CQuad4Element(BaseElement):
         dNdx_c = Jinv_c[0,0]*dNdxi_c + Jinv_c[0,1]*dNdeta_c
         dNdy_c = Jinv_c[1,0]*dNdxi_c + Jinv_c[1,1]*dNdeta_c
 
+        # 전단 변형률 (Nastran 규약): gxz = dw/dx + theta_y,
+        # gyz = dw/dy - theta_x — 순굽힘(theta_y=-dw/dx, theta_x=+dw/dy)에서
+        # 정확히 0이 되어 보 요소와 호환된다.
         Bs = np.zeros((2, 12))
         for n_idx in range(4):
             Bs[0, 3*n_idx] = dNdx_c[n_idx]       # dw/dx
-            Bs[0, 3*n_idx+2] = -N_c[n_idx]        # -ry
+            Bs[0, 3*n_idx+2] = N_c[n_idx]         # +theta_y
             Bs[1, 3*n_idx] = dNdy_c[n_idx]         # dw/dy
-            Bs[1, 3*n_idx+1] = N_c[n_idx]          # rx
+            Bs[1, 3*n_idx+1] = -N_c[n_idx]         # -theta_x
 
         ks = Bs.T @ Ds @ Bs * detJ_c * w_c
         for ii in range(12):

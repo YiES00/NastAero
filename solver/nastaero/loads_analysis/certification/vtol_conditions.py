@@ -96,7 +96,7 @@ def generate_hover_conditions(altitudes_m: List[float],
             V_eas=0.0, nz=1.0,
             altitude_m=alt,
             thrust_fraction=1.0,
-            far_section="SC-VTOL.2135",
+            far_section="SC-VTOL.2215",
         ))
         # Maneuvering hover (15% thrust margin)
         conditions.append(VTOLCondition(
@@ -105,7 +105,7 @@ def generate_hover_conditions(altitudes_m: List[float],
             V_eas=0.0, nz=1.15,
             altitude_m=alt,
             thrust_fraction=1.15,
-            far_section="SC-VTOL.2135",
+            far_section="SC-VTOL.2215",
         ))
         # Vertical gust in hover (positive)
         conditions.append(VTOLCondition(
@@ -114,7 +114,7 @@ def generate_hover_conditions(altitudes_m: List[float],
             V_eas=0.0, nz=1.3,
             altitude_m=alt,
             thrust_fraction=1.3,
-            far_section="SC-VTOL.2135",
+            far_section="SC-VTOL.2215",
         ))
         # Vertical gust in hover (negative)
         conditions.append(VTOLCondition(
@@ -123,7 +123,7 @@ def generate_hover_conditions(altitudes_m: List[float],
             V_eas=0.0, nz=0.7,
             altitude_m=alt,
             thrust_fraction=0.7,
-            far_section="SC-VTOL.2135",
+            far_section="SC-VTOL.2215",
         ))
     return conditions
 
@@ -249,7 +249,7 @@ def generate_transition_conditions(v_mca: float,
                     V_eas=V, nz=nz,
                     altitude_m=alt,
                     thrust_fraction=tf * nz,
-                    far_section="SC-VTOL.2135",
+                    far_section="SC-VTOL.2215",
                 ))
     return conditions
 
@@ -344,7 +344,7 @@ def generate_transition_gust_conditions(
                     V_eas=float(V), nz=nz_g,
                     altitude_m=alt,
                     thrust_fraction=tf_g,
-                    far_section="SC-VTOL.2135/23.341",
+                    far_section="SC-VTOL.2215/23.341",
                 ))
     return conditions
 
@@ -455,7 +455,7 @@ def generate_tilt_transition_conditions(
                         thrust_fraction=(F + A) / weight_N
                         if weight_N > 0 else 0.0,
                         tilt_deg=float(sg),
-                        far_section="SC-VTOL.2135/2160",
+                        far_section="SC-VTOL.2215/2160",
                     ))
             # 회랑 준정적 수직 돌풍 — L+C의 천이 돌풍(①)과 동일한
             # 혼합 모델을 틸트 회랑 중심 스케줄에 적용
@@ -483,7 +483,7 @@ def generate_tilt_transition_conditions(
                     thrust_fraction=(F + A) / weight_N
                     if weight_N > 0 else 0.0,
                     tilt_deg=float(s_c2),
-                    far_section="SC-VTOL.2135/23.341",
+                    far_section="SC-VTOL.2215/23.341",
                 ))
     return conditions
 

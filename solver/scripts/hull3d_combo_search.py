@@ -273,7 +273,7 @@ def main() -> None:
         lab = ("RotorPattern " + "/".join(f"{v:g}" for v in pat)
                + f" nz={nz:.2f}")
         cr = CaseResult(case_id=cid, category="vtol_combined_cmd",
-                        far_section="SC-VTOL.2135/2150",
+                        far_section="SC-VTOL.2215/2150",
                         converged=True, nodal_forces=forces, nz=nz,
                         label=lab)
         one = BatchResult()

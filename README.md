@@ -118,10 +118,21 @@ macOS 26.3.1 (arm64, 11 cores, 18 GB RAM).
   2% except one CQUAD8 cantilever case (7.8%)
 - Hover BEMT: compared against the Knight–Hefner static-thrust
   experiment (NACA TN-626); mean 3.8% in the operating range
-- Full aircraft: archived solver-to-solver comparison against MSC
-  Nastran SOL 144 on a 22,640-node model. This is preliminary
-  cross-code evidence, not validation — it predates the 2026-07
-  trim-equilibrium corrections and used an unmatched W2GJ setup.
+- Matched-deck MSC Nastran comparison (v1.1): the ILC-8 airframe
+  solved by both codes from one BDF
+  (`solver/tests/validation/ILC8/ilc8_msc_sol144*.bdf`, deck
+  lineage v1–v8 in the headers; `scripts/compare_msc_sol144.py`
+  reproduces the tables from an MSC F06). Rigid kernels (AEQR=0)
+  agree on angle of attack within 0.3–2.4% across seven subcases,
+  the flexible comparison within 0.3–3.4% (elevator 2.9–14.6%,
+  rudder 0.5%, wing-tip deflection 240 vs 283 mm). The comparison
+  exposed and led to the correction of three implementation
+  defects (quarter-chord force placement, a mirrored plate
+  nodal-rotation convention, swapped CBAR bending planes) — all
+  fixed in this release.
+- Full aircraft: an earlier archived comparison on a 22,640-node
+  model (lift balance 0.5%, trim variables ~5%) is retained as
+  scale evidence; it predates the current implementation.
 
 ## Data note
 

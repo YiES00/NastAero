@@ -381,10 +381,11 @@ def compute_trim_nodal_loads(
     # --- Post-spline moment conservation ---
     # 힘 보존 스케일링 후에도 스플라인 전달(G^T)은 총모멘트까지 보존하지
     # 않는다 (GACOMP: 유효 하중중심이 x로 ~11 mm 이동해 My 136 kN-mm 누설).
-    # 패널 힘(제어점 작용)의 원점 기준 총모멘트와 절점 힘의 총모멘트 차이를
-    # 절점 하중 크기에 비례한 우력으로 분배해 총모멘트를 일치시킨다.
+    # 패널 힘(1/4-코드 더블릿 라인 작용)의 원점 기준 총모멘트와 절점 힘의
+    # 총모멘트 차이를 절점 하중 크기에 비례한 우력으로 분배해 총모멘트를
+    # 일치시킨다.
     if boxes:
-        cp = np.array([b.control_point for b in boxes])
+        cp = np.array([b.doublet_point for b in boxes])
         f_panel = np.real(np.asarray(aero_forces)[:, :3])
         m_panel = np.cross(cp, f_panel).sum(axis=0)
         m_nodal = np.zeros(3)

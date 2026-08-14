@@ -181,7 +181,7 @@ class TestFullAircraftTrim:
         n_boxes = len(self.sc.aero_boxes)
         my = sum(
             self.sc.aero_forces[i, 2] *
-            (self.sc.aero_boxes[i].control_point[0] - cg_x)
+            (self.sc.aero_boxes[i].doublet_point[0] - cg_x)
             for i in range(n_boxes)
         )
         total_fz = np.sum(self.sc.aero_forces[:, 2])

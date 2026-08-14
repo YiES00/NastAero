@@ -57,20 +57,26 @@ def parse_fixed8(line: str) -> List[str]:
     return [padded[i:i + 8] for i in range(0, 80, 8)]
 
 def parse_fixed16(lines: List[str]) -> List[str]:
+    """대필드 카드 파싱 — MSC 규칙상 형식은 행 단위로 결정된다.
+
+    연속행 마커가 '*'로 시작하면 그 행은 16자 필드(4개), 아니면(+ 또는
+    공란 마커) 8자 소필드(8개)다. 혼합 카드(GACOMP CBAR*의 소필드 오프셋
+    연속행 등)를 16자로 강제 절단하면 '0.      0.' 같은 병합 토큰이 생겨
+    카드가 통째로 누락된다.
+    """
     fields = []
     for line in lines:
         padded = line.ljust(80)
         if not fields:
             fields.append(padded[0:8])
-            fields.append(padded[8:24])
-            fields.append(padded[24:40])
-            fields.append(padded[40:56])
-            fields.append(padded[56:72])
+            for s in (8, 24, 40, 56):
+                fields.append(padded[s:s + 16])
+        elif padded[0] == "*":
+            for s in (8, 24, 40, 56):
+                fields.append(padded[s:s + 16])
         else:
-            fields.append(padded[8:24])
-            fields.append(padded[24:40])
-            fields.append(padded[40:56])
-            fields.append(padded[56:72])
+            for s in range(8, 72, 8):
+                fields.append(padded[s:s + 8])
     return fields
 
 def parse_free(line: str) -> List[str]:

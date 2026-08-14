@@ -80,7 +80,9 @@ class CTria3Element(BaseElement):
         kb = self.area * Bb.T @ Db @ Bb
 
         # Transverse shear (Mindlin-Reissner, 1-point at centroid)
-        # gamma_xz = dw/dx - ry, gamma_yz = dw/dy + rx
+        # Nastran 규약: gamma_xz = dw/dx + theta_y, gamma_yz = dw/dy - theta_x
+        # (순굽힘 theta_y=-dw/dx, theta_x=+dw/dy 에서 0 — 보 요소와 호환.
+        #  이전 부호는 Nastran의 음수 회전 규약이라 혼합 구조에서 잠금 유발)
         kappa = 5.0 / 6.0
         Ds = kappa * (E * t / (2 * (1 + nu))) * np.eye(2)
         dNdx = np.array([b1, b2, b3]) / A2
@@ -89,9 +91,9 @@ class CTria3Element(BaseElement):
         Bs = np.zeros((2, 9))
         for i in range(3):
             Bs[0, 3*i] = dNdx[i]       # dw/dx
-            Bs[0, 3*i+2] = -N_c[i]     # -ry
+            Bs[0, 3*i+2] = N_c[i]      # +theta_y
             Bs[1, 3*i] = dNdy[i]       # dw/dy
-            Bs[1, 3*i+1] = N_c[i]      # +rx
+            Bs[1, 3*i+1] = -N_c[i]     # -theta_x
         ks = self.area * Bs.T @ Ds @ Bs
 
         # Assemble into 18x18

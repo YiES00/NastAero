@@ -7,15 +7,18 @@ def build_beam_transform(node1_xyz: np.ndarray, node2_xyz: np.ndarray, v_vector:
     L = np.linalg.norm(ex)
     if L < 1e-12: raise ValueError("Zero-length beam element")
     ex = ex / L
+    # MSC 규약: plane 1은 (x_elem, v) 평면 — z = x×v, y = z×x 로 v가
+    # local y(플레인 1) 방향에 놓여 I1이 plane-1 굽힘을 지배한다.
+    # (이전 구현은 y = x×v 라서 v가 local -z가 되어 I1/I2 평면이 뒤바뀜.)
     v = v_vector.copy()
-    ey = np.cross(ex, v)
-    ey_norm = np.linalg.norm(ey)
-    if ey_norm < 1e-12:
+    ez = np.cross(ex, v)
+    ez_norm = np.linalg.norm(ez)
+    if ez_norm < 1e-12:
         v = np.array([0., 0., 1.]) if abs(ex[2]) < 0.9 else np.array([1., 0., 0.])
-        ey = np.cross(ex, v)
-        ey_norm = np.linalg.norm(ey)
-    ey = ey / ey_norm
-    ez = np.cross(ex, ey)
+        ez = np.cross(ex, v)
+        ez_norm = np.linalg.norm(ez)
+    ez = ez / ez_norm
+    ey = np.cross(ez, ex)
     return np.array([ex, ey, ez])
 
 def build_transform_12x12(Lambda: np.ndarray) -> np.ndarray:
