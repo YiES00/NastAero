@@ -31,3 +31,9 @@ venv/
 .DS_Store
 .vscode/
 .idea/
+
+# 제3자 사유 비교 모델에서 파생된 보고서 — 재배포 권리 없음
+solver/docs/GACOMP_*
+solver/docs/VTOL_TiltRotor12_Report.md
+# 개발 세션 원본 로그 — 정제되지 않은 부산물(개인정보 포함 가능)
+solver/docs/claude_sessions/
