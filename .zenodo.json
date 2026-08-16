@@ -1,0 +1,31 @@
+{
+  "title": "NastAero: An Open-Source BDF-Native Aeroelastic and Rotor Loads Framework for Certification-Oriented eVTOL Loads Analysis",
+  "description": "<p>NastAero is an open-source aeroelastic finite-element framework that reads MSC Nastran bulk-data (BDF) input and integrates fixed-wing static aeroelastic trim (SOL 144, with inertia relief for free-free models) with rotor load models for hover, transition, and rotor-failure cases in a single tested loads path.</p><p>The aeroelastic coupling uses a two-G-matrix spline that separates the normalwash and force-transfer roles. Trim is reduced by a Schur complement onto the trim degrees of freedom, so subcases sharing a flight condition reuse one factorization. Rotor loads from blade-element momentum theory and a reduced-order Pitt-Peters-form inflow lag feed the same finite-element model and the load-recovery, envelope, and critical-design-load pipeline, ending in FORCE-card decks.</p><p>This release accompanies the submitted manuscripts. The test suite is run in continuous integration on every change; the expected counts are 816 collected / 790 passed / 26 skipped with the solver extras, and 866 collected / 840 passed / 26 skipped with the optional GUI extra. The skipped tests require a third-party proprietary comparison model that is not redistributable and is therefore excluded from this archive.</p>",
+  "upload_type": "software",
+  "license": "AGPL-3.0-or-later",
+  "access_right": "open",
+  "version": "1.1.0",
+  "language": "eng",
+  "creators": [
+    {
+      "name": "Lee, Eunsuk",
+      "affiliation": "Department of Aerospace Engineering, Inha University, Incheon, Republic of Korea"
+    },
+    {
+      "name": "Cho, Jin Yeon",
+      "affiliation": "Department of Aerospace Engineering, Inha University, Incheon, Republic of Korea"
+    }
+  ],
+  "keywords": [
+    "aeroelasticity",
+    "static aeroelastic trim",
+    "finite element method",
+    "MSC Nastran BDF",
+    "surface spline",
+    "Schur complement",
+    "blade element momentum theory",
+    "eVTOL",
+    "certification loads",
+    "open-source scientific software"
+  ]
+}

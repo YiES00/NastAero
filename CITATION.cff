@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+title: >-
+  NastAero: An Open-Source BDF-Native Aeroelastic and Rotor Loads
+  Framework for Certification-Oriented eVTOL Loads Analysis
+message: If you use this software, please cite it using these metadata.
+type: software
+authors:
+  - family-names: Lee
+    given-names: Eunsuk
+    affiliation: >-
+      Department of Aerospace Engineering, Inha University, Incheon,
+      Republic of Korea
+  - family-names: Cho
+    given-names: Jin Yeon
+    email: jycho@inha.ac.kr
+    affiliation: >-
+      Department of Aerospace Engineering, Inha University, Incheon,
+      Republic of Korea
+repository-code: https://github.com/YiES00/NastAero
+license: AGPL-3.0-or-later
+version: 1.1.0
+keywords:
+  - aeroelasticity
+  - static aeroelastic trim
+  - finite element method
+  - MSC Nastran BDF
+  - surface spline
+  - Schur complement
+  - blade element momentum theory
+  - eVTOL
+  - certification loads
