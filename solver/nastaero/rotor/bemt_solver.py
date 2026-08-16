@@ -49,6 +49,16 @@ class RotorLoads:
         Power coefficient: P / (ρ A Ω³R³). Equal to CQ.
     collective_rad : float
         Collective pitch used (radians).
+    thrust_target_N : float or None
+        Commanded thrust when the loads came from ``solve_for_thrust``;
+        ``None`` for a direct ``solve`` at fixed collective.
+    thrust_saturated : bool
+        True when the commanded thrust could not be reached within the
+        collective/RPM limits. The achieved thrust is returned in
+        ``thrust``; a case built on a saturated rotor represents a
+        propulsion-limited boundary condition rather than the commanded
+        flight state, and its loads may be unconservative relative to
+        that command.
     """
     thrust: float = 0.0
     torque: float = 0.0
@@ -60,6 +70,15 @@ class RotorLoads:
     CQ: float = 0.0
     CP: float = 0.0
     collective_rad: float = 0.0
+    thrust_target_N: Optional[float] = None
+    thrust_saturated: bool = False
+
+    @property
+    def thrust_shortfall_frac(self) -> float:
+        """(target - achieved)/target, 0 when unsaturated or uncommanded."""
+        if not self.thrust_saturated or not self.thrust_target_N:
+            return 0.0
+        return (self.thrust_target_N - self.thrust) / abs(self.thrust_target_N)
 
 
 class BEMTSolver:
@@ -315,7 +334,9 @@ class BEMTSolver:
                 break
 
         result = self.solve(rpm, V_inf, rho, collective_rad=0.5 * (lo + hi))
+        result.thrust_target_N = float(target_thrust_N)
         if abs(result.thrust - target_thrust_N) > 0.02 * max(abs(target_thrust_N), 1.0):
+            result.thrust_saturated = True
             logger.warning(
                 "BEMT thrust saturated: target %.1f N, achieved %.1f N "
                 "(collective %.1f deg, rpm %.0f) — rotor cannot meet target",

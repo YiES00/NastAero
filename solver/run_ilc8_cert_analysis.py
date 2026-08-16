@@ -294,10 +294,11 @@ def main():
     proc = EnvelopeProcessor(batch_result, vmt_data)
     proc.compute_envelopes()
     proc.identify_critical_cases()
+    # 평면 껍질은 두 양의 조합 파괴만 덮는다. 세 투영 모두에서 내부점이면서
+    # 혼합 (V,M,T) 방향으로 극값인 케이스를 잡으려면 3차원 껍질이 필요하다.
+    proc.add_interaction_critical_cases()
+    proc.add_interaction_critical_cases_3d()
     all_critical = proc.get_critical_cases()
-    print(f"\n[10] Critical cases: {len(all_critical)}")
-    for cat, count in sorted(proc.critical_category_distribution().items()):
-        print(f"      {cat:18s}: {count:3d}")
 
     # 임계 케이스 표 (요약)
     print(f"    {'Component':14s} {'Qty':8s} {'Ext':6s} "

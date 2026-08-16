@@ -88,6 +88,10 @@ class CaseResult:
     mach: float = 0.0
     label: str = ""
     flight_state: Optional[Dict] = None
+    # 로터 지령 실현 가능성. ``converged``는 트림/조립의 수치적 성공만
+    # 뜻하므로, 로터가 지령 추력에 도달했는지는 따로 기록한다.
+    rotor_command_feasible: bool = True
+    rotor_thrust_shortfall: float = 0.0
 
 
 def _build_flight_state(case: CertLoadCase,
@@ -460,6 +464,9 @@ class BatchRunner:
                     mach=tc.mach,
                     label=tc.label,
                     flight_state=_build_flight_state(c),
+                    rotor_command_feasible=getattr(c, 'rotor_command_feasible', True),
+                    rotor_thrust_shortfall=getattr(c, 'rotor_thrust_shortfall', 0.0),
+
                 ))
             return results
 
@@ -542,6 +549,8 @@ class BatchRunner:
                     label=tc.label,
                     flight_state=_build_flight_state(
                         c, sc_result.trim_variables),
+                    rotor_command_feasible=getattr(c, 'rotor_command_feasible', True),
+                    rotor_thrust_shortfall=getattr(c, 'rotor_thrust_shortfall', 0.0),
                 ))
                 solved_case_ids.add(tc.case_id)
 
@@ -561,6 +570,9 @@ class BatchRunner:
                         mach=tc.mach,
                         label=tc.label,
                         flight_state=_build_flight_state(c),
+                        rotor_command_feasible=getattr(c, 'rotor_command_feasible', True),
+                        rotor_thrust_shortfall=getattr(c, 'rotor_thrust_shortfall', 0.0),
+
                     ))
 
         except Exception as e:
@@ -580,6 +592,9 @@ class BatchRunner:
                     mach=tc.mach,
                     label=tc.label,
                     flight_state=_build_flight_state(c),
+                    rotor_command_feasible=getattr(c, 'rotor_command_feasible', True),
+                    rotor_thrust_shortfall=getattr(c, 'rotor_thrust_shortfall', 0.0),
+
                 ))
 
         finally:

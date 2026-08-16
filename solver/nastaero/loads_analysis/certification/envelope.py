@@ -943,7 +943,7 @@ def select_critical_design_loads(
     fuselage_cg_x: Optional[float] = None,
     planes: Tuple[Tuple[str, str], ...] = (("V", "M"), ("V", "T"), ("M", "T")),
     include_axis: bool = True,
-    include_3d: bool = False,
+    include_3d: bool = True,
 ) -> Dict[str, Any]:
     """Run the full critical-design-load selection, the last loads step.
 
@@ -981,6 +981,16 @@ def select_critical_design_loads(
         Interaction planes to hull. Default: V-M, V-T, M-T.
     include_axis : bool
         Also mark axis-aligned envelope extremes as critical.
+    include_3d : bool
+        Also hull the full (V, M, T) point cloud at every station
+        (default). The planar hulls only cover failure functions of two
+        quantities at a time; a case interior to all three projections can
+        still be extreme along a mixed V+M+T direction. On distributed-
+        propulsion re-trim matrices that residual reaches several percent
+        of the local load range, so the three-dimensional pass is the
+        default and should only be turned off to reproduce planar-selection
+        results. Cost is negligible (hulls over all stations take seconds);
+        the price is a slightly larger design set.
 
     Returns
     -------

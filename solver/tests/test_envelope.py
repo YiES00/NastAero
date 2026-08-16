@@ -606,3 +606,35 @@ class TestHull3d:
         dc7 = next(d for d in dcs if d.case_id == 7)
         assert dc7.basis == "interaction"
         assert "potato" in dc7.why()
+
+
+class TestThreeDHullIsTheDefault:
+    """설계하중 선정의 기본값이 3차원 껍질을 포함하는지 고정한다.
+
+    평면 껍질은 두 양의 조합 파괴만 덮으므로, 세 투영 모두에서
+    내부점이면서 혼합 (V,M,T) 방향으로 극값인 케이스를 놓친다.
+    분산추진 재트림 매트릭스에서 이 누락이 국부 하중 범위의 수 %에
+    이르므로 3차원 통과가 기본이어야 한다.
+    """
+
+    def test_default_signature_includes_3d(self):
+        import inspect
+        from nastaero.loads_analysis.certification.envelope import (
+            select_critical_design_loads,
+        )
+        sig = inspect.signature(select_critical_design_loads)
+        assert sig.parameters["include_3d"].default is True
+
+    def test_default_selection_catches_triple_combination_case(self):
+        # 세 평면 투영 모두에서 내부점이지만 혼합 방향으로 극값인 케이스
+        octa = TestHull3d()
+        br, vmt = octa._octahedron_batch()
+        proc = EnvelopeProcessor(br, vmt)
+        proc.identify_critical_cases()
+        proc.add_interaction_critical_cases()
+        planar_ids = {cc.case_id for cc in proc.get_critical_cases()}
+        proc.add_interaction_critical_cases_3d()
+        with_3d_ids = {cc.case_id for cc in proc.get_critical_cases()}
+        assert 7 not in planar_ids          # 평면만으로는 놓친다
+        assert 7 in with_3d_ids             # 3차원이 잡는다
+        assert planar_ids <= with_3d_ids    # 3차원은 평면의 상위집합

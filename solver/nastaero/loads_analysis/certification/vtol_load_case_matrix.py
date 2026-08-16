@@ -125,6 +125,7 @@ class VTOLLoadCaseMatrix:
                 thrust_per_rotor, rpm, rho, V_inf=0.0)
             loads_map[rotor.rotor_id] = loads
 
+        self._last_loads_map = loads_map
         return all_rotor_forces(active_rotors, loads_map)
 
     def _compute_rotor_forces_transition(self, condition: VTOLCondition,
@@ -185,6 +186,7 @@ class VTOLLoadCaseMatrix:
                 loads_map[rotor.rotor_id] = loads
                 all_active.append(rotor)
 
+        self._last_loads_map = loads_map
         return all_rotor_forces(all_active, loads_map)
 
     def _compute_rotor_forces_tilt(self, condition: VTOLCondition,
@@ -310,9 +312,18 @@ class VTOLLoadCaseMatrix:
                    math.pi / 2)
         return forces
 
+    @staticmethod
+    def _saturation_summary(loads_map) -> tuple:
+        """(지령 실현 가능 여부, 최대 추력 부족률) — 로터 하중 맵 기준."""
+        worst = 0.0
+        for ld in (loads_map or {}).values():
+            worst = max(worst, getattr(ld, "thrust_shortfall_frac", 0.0))
+        return (worst <= 0.0), worst
+
     def _condition_to_cert_case(self, condition: VTOLCondition,
                                  wc: WeightCGCondition,
                                  rotor_forces: Dict[int, np.ndarray],
+                                 saturation: tuple = (True, 0.0),
                                  ) -> CertLoadCase:
         """Convert VTOLCondition + rotor forces to CertLoadCase."""
         # For hover (q=0), we cannot use standard trim
@@ -361,6 +372,8 @@ class VTOLLoadCaseMatrix:
             config_label=f"VTOL {condition.phase.value}",
             solve_type=solve_type,
             rotor_forces=rotor_forces if rotor_forces else None,
+            rotor_command_feasible=saturation[0],
+            rotor_thrust_shortfall=saturation[1],
         )
 
     def generate_all(self) -> List[CertLoadCase]:
@@ -475,7 +488,10 @@ class VTOLLoadCaseMatrix:
                 else:
                     rotor_forces = {}
 
-                case = self._condition_to_cert_case(cond, wc, rotor_forces)
+                sat = self._saturation_summary(
+                    getattr(self, "_last_loads_map", None))
+                case = self._condition_to_cert_case(cond, wc, rotor_forces,
+                                                    saturation=sat)
                 self.cases.append(case)
 
         return self.cases

@@ -169,6 +169,49 @@ def _has_free_rigid_modes(K_ff, D: np.ndarray) -> bool:
     return False
 
 
+def _suport_mount_idx(bdf_model: BDFModel, dof_mgr,
+                      f_dof_index: Dict[int, int]) -> Optional[np.ndarray]:
+    """덱의 SUPORT 자유도를 자유-자유 기준(마운트)으로 변환한다.
+
+    변위는 마운트 기준 상대 변형이므로, 기준점이 다르면 강체 자세와
+    탄성 변형의 분해가 달라진다. 다른 솔버와 대조할 때 덱이 SUPORT로
+    기준을 명시했다면 그것을 그대로 써야 비교가 성립한다.
+
+    f-set에 없는 자유도(이미 SPC로 구속된 경우 등)는 건너뛴다.
+    """
+    if not bdf_model.suports:
+        return None
+    idx: list = []
+    nodes: list = []
+    skipped: list = []
+    for sup in bdf_model.suports:
+        for nid, comp in sup.entries:
+            for c in comp:
+                if c not in "123456":
+                    continue
+                d = dof_mgr.get_dof(nid, int(c))
+                j = f_dof_index.get(d)
+                if j is None:
+                    skipped.append((nid, int(c)))
+                elif j not in idx:
+                    idx.append(j)
+            nodes.append(nid)
+    if not idx:
+        logger.warning("  SUPORT DOFs are not in the free set — "
+                       "falling back to the automatic virtual mount")
+        return None
+    if skipped:
+        logger.warning("  SUPORT: %d DOF(s) already constrained, skipped: %s",
+                       len(skipped), skipped[:6])
+    if len(idx) != 6:
+        logger.warning("  SUPORT defines %d DOF(s), not the 6 needed to fix "
+                       "rigid-body motion; solving with them as given",
+                       len(idx))
+    logger.info("  Deck SUPORT mount: nodes %s (%d DOFs)",
+                "/".join(str(n) for n in nodes), len(idx))
+    return np.asarray(idx, dtype=int)
+
+
 def _select_virtual_mount(bdf_model: BDFModel, dof_mgr,
                           f_dof_index: Dict[int, int],
                           cg: np.ndarray) -> Optional[np.ndarray]:
@@ -476,8 +519,12 @@ def _build_shared_data(bdf_model: BDFModel,
     D_rigid = _build_rigid_modes(bdf_model, fe_model.dof_mgr, f_dof_index,
                                  n_free, cg)
     if _has_free_rigid_modes(K_ff, D_rigid):
-        mount_idx = _select_virtual_mount(bdf_model, fe_model.dof_mgr,
-                                          f_dof_index, cg)
+        # 덱이 SUPORT로 기준을 명시했으면 그것을 쓰고, 없을 때만 자동 선정
+        mount_idx = _suport_mount_idx(bdf_model, fe_model.dof_mgr,
+                                      f_dof_index)
+        if mount_idx is None:
+            mount_idx = _select_virtual_mount(bdf_model, fe_model.dof_mgr,
+                                              f_dof_index, cg)
         if mount_idx is None:
             logger.warning("  Virtual mount selection failed — "
                            "falling back to unconstrained solve")
@@ -1127,8 +1174,12 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
     D_rigid = _build_rigid_modes(bdf_model, fe_model.dof_mgr, f_dof_index,
                                  n_free, cg)
     if _has_free_rigid_modes(K_ff, D_rigid):
-        mount_idx = _select_virtual_mount(bdf_model, fe_model.dof_mgr,
-                                          f_dof_index, cg)
+        # 덱이 SUPORT로 기준을 명시했으면 그것을 쓰고, 없을 때만 자동 선정
+        mount_idx = _suport_mount_idx(bdf_model, fe_model.dof_mgr,
+                                      f_dof_index)
+        if mount_idx is None:
+            mount_idx = _select_virtual_mount(bdf_model, fe_model.dof_mgr,
+                                              f_dof_index, cg)
         if mount_idx is None:
             logger.warning("  Virtual mount selection failed — "
                            "falling back to unconstrained solve")

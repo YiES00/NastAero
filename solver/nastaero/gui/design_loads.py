@@ -79,6 +79,12 @@ class DesignLoadsPanel(QWidget):
         self._axis_chk = QCheckBox("축 극값 포함")
         self._axis_chk.setChecked(True)
         controls.addWidget(self._axis_chk)
+        self._hull3d_chk = QCheckBox("3차원 껍질 포함")
+        self._hull3d_chk.setToolTip(
+            "평면 껍질이 놓치는 혼합 (V,M,T) 방향 임계를 잡는다. "
+            "분산추진 고장·재트림 매트릭스에서는 필수.")
+        self._hull3d_chk.setChecked(True)
+        controls.addWidget(self._hull3d_chk)
         self._plane_chks = []
         for plane in PLANES:
             chk = QCheckBox(plane)
@@ -176,7 +182,8 @@ class DesignLoadsPanel(QWidget):
             tuple(chk.text().split("-")) for chk in self._plane_chks
             if chk.isChecked()
         )
-        if not planes and not self._axis_chk.isChecked():
+        if (not planes and not self._axis_chk.isChecked()
+                and not self._hull3d_chk.isChecked()):
             QMessageBox.information(
                 self, "NastAero", "축 극값 또는 상호작용 평면을 하나 이상 선택하세요")
             return
@@ -192,6 +199,7 @@ class DesignLoadsPanel(QWidget):
                 n_stations=self._stations.value(),
                 planes=planes,
                 include_axis=self._axis_chk.isChecked(),
+                include_3d=self._hull3d_chk.isChecked(),
             )
         except Exception as exc:
             logger.exception("Design load selection failed")

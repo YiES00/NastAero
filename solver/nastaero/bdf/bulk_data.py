@@ -9,7 +9,7 @@ from .cards.elements import (CBAR, CROD, CQUAD4, CTRIA3, CQUAD8, CTRIA6,
 from .cards.properties import PBAR, PROD, PSHELL, PSOLID, PCOMP, PBARL, PBEAML, PELAS
 from .cards.materials import MAT1, MAT8
 from .cards.loads import FORCE, MOMENT, GRAV, LoadCombination
-from .cards.constraints import SPC, SPC1, MPC, MPCADD, SPCADD
+from .cards.constraints import SPC, SPC1, MPC, MPCADD, SPCADD, SUPORT
 from .cards.mass import CONM2
 from .cards.eigrl import EIGRL
 from .cards.rbe import RBE2, RBE3
@@ -93,6 +93,13 @@ def parse_bulk_card(fields: List[str], model: BDFModel) -> None:
             m = MPC.from_fields(fields); model.mpcs.setdefault(m.sid, []).append(m)
         elif card_name == "MPCADD":
             m = MPCADD.from_fields(fields); model.mpcadds[m.sid] = m
+        elif card_name == "SUPORT":
+            model.suports.append(SUPORT.from_fields(fields))
+        elif card_name == "SUPORT1":
+            # 케이스 컨트롤에서 선택하는 집합형. 선택 로직 미구현이므로
+            # 자동 마운트로 넘어간다.
+            logger.warning("SUPORT1 is not supported; falling back to the "
+                           "automatic virtual mount")
         # Mass & rigid elements
         elif card_name == "CONM2":
             m = CONM2.from_fields(fields); model.masses[m.eid] = m

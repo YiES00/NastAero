@@ -77,7 +77,23 @@ and is retained for future flutter work.
 
 ```bash
 cd solver
-pip install -e ".[dev]"
+pip install -e ".[dev]"          # solver + test suite
+```
+
+Optional extras, by what you need:
+
+| Extra | Adds | Needed for |
+|---|---|---|
+| `dev` | pytest, pytest-cov | running the test suite |
+| `plot` | matplotlib | V–M–T plots, figure regeneration |
+| `gui` | qtpy, pyside6, pyvista, pyvistaqt, matplotlib | `nastaero-gui`, 3-D visualization |
+
+`dev` alone does **not** pull in matplotlib, so reproducing the plots
+needs `".[dev,plot]"` and the 3-D viewer needs `".[gui]"`:
+
+```bash
+pip install -e ".[dev,plot]"     # + figure regeneration
+pip install -e ".[gui]"          # + desktop workbench and 3-D viewer
 ```
 
 ## Usage
@@ -94,19 +110,25 @@ python -m nastaero.gui                     # desktop workbench
 cd solver && python -m pytest tests/ -q
 ```
 
-The full suite is 841 tests (about 5–6 minutes). The tests that
-read the proprietary comparison-model data skip automatically in
-this archive (see the data note below); this archive reports
-`815 passed, 26 skipped` (815 + 26 = 841).
+866 tests pass at the current commit (about 5–6 minutes on the
+reference workstation). 26 of them compare against the proprietary
+comparison-model data, which is **not redistributable and therefore
+not part of this repository**; without it those tests skip, so a
+public clone reports **840 passed, 26 skipped**.
+
+If you hold that data under your own agreement, place it at
+`solver/tests/validation/GACOMP/` (the path is git-ignored) and the
+26 tests run automatically — no configuration needed.
 
 ## Reproducing the published results
 
 ```bash
-cd solver && python run_ilc8_cert_analysis.py
+cd solver && python run_ilc8_cert_analysis.py   # about 95 s
 ```
 
 Runs the full ILC-8 certification analysis (about 40 s). Figure and
-table scripts for the papers live under `solver/scripts/`.
+table scripts for the papers live under `solver/scripts/` and
+`docs/dissertation/papers/*/generate_*.py`.
 
 Reference environment: Python 3.12.8, NumPy 2.4.4, SciPy 1.17.1,
 macOS 26.3.1 (arm64, 11 cores, 18 GB RAM).
@@ -118,33 +140,23 @@ macOS 26.3.1 (arm64, 11 cores, 18 GB RAM).
   2% except one CQUAD8 cantilever case (7.8%)
 - Hover BEMT: compared against the Knight–Hefner static-thrust
   experiment (NACA TN-626); mean 3.8% in the operating range
-- Matched-deck MSC Nastran comparison (v1.1): the ILC-8 airframe
-  solved by both codes from one BDF
-  (`solver/tests/validation/ILC8/ilc8_msc_sol144*.bdf`, deck
-  lineage v1–v8 in the headers; `scripts/compare_msc_sol144.py`
-  reproduces the tables from an MSC F06). Rigid kernels (AEQR=0)
-  agree on angle of attack within 0.3–2.4% across seven subcases,
-  the flexible comparison within 0.3–3.4% (elevator 2.9–14.6%,
-  rudder 0.5%, wing-tip deflection 240 vs 283 mm). The comparison
-  exposed and led to the correction of three implementation
-  defects (quarter-chord force placement, a mirrored plate
-  nodal-rotation convention, swapped CBAR bending planes) — all
-  fixed in this release.
-- Full aircraft: an earlier archived comparison on a 22,640-node
-  model (lift balance 0.5%, trim variables ~5%) is retained as
-  scale evidence; it predates the current implementation.
-
-## Data note
-
-The full-aircraft comparison model used for the archived
-solver-to-solver comparison is proprietary aircraft geometry and is
-not distributed here, nor are the archived commercial-solver
-outputs derived from it. The tests that read those inputs skip
-automatically when the data directory is absent. The ILC-8 and
-ILC-8T application models are original to this project and are
-included in full, so every ILC result in the papers reproduces from
-this archive.
+- Full aircraft: archived solver-to-solver comparison against MSC
+  Nastran SOL 144 on a 22,640-node model. This is preliminary
+  cross-code evidence, not validation — it predates the 2026-07
+  trim-equilibrium corrections and used an unmatched W2GJ setup.
 
 ## License
 
-To be determined.
+NastAero is released under the **GNU Affero General Public License
+v3.0 or later** (AGPL-3.0-or-later); see [LICENSE](LICENSE) and
+[NOTICE](NOTICE).
+
+The AGPL requires derivative works — including software offered to
+users over a network — to be released under the same terms. If those
+terms do not suit your use, a **separate commercial license** can be
+negotiated with the copyright holder; contact the corresponding
+author of the accompanying publications.
+
+The proprietary comparison aircraft model used by 26 of the
+validation tests is third-party data. It is not covered by this
+license and is not distributed here (see [Tests](#tests)).

@@ -37,6 +37,9 @@ class BDFModel:
     mpcs: Dict[int, list] = field(default_factory=dict)
     spcadds: Dict[int, Any] = field(default_factory=dict)
     mpcadds: Dict[int, Any] = field(default_factory=dict)
+    # 자유-자유 기준 자유도 (SUPORT). 있으면 트림의 가상 마운트 자동
+    # 선정을 대신해 이 자유도를 기준으로 쓴다.
+    suports: List[Any] = field(default_factory=list)
     masses: Dict[int, Any] = field(default_factory=dict)
     rigids: Dict[int, Any] = field(default_factory=dict)
     eigrls: Dict[int, Any] = field(default_factory=dict)

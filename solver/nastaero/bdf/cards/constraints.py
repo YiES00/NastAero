@@ -118,3 +118,45 @@ class SPCADD:
                 except ValueError:
                     pass
         return s
+
+
+@dataclass
+class SUPORT:
+    """자유-자유 해석의 기준(지지) 자유도.
+
+    SUPORT  ID1 C1  ID2 C2  ID3 C3  ID4 C4
+
+    강체 운동을 확정적으로 억제하는 기준점을 지정한다. 관성 릴리프가
+    적용된 평형 하중에서는 이 자유도의 반력이 ~0이며, 변위는 이 기준에
+    대한 상대 변형이 된다. 따라서 두 솔버를 대조할 때 같은 SUPORT를
+    쓰는 것이 비교 가능성의 전제다.
+    """
+    entries: List[Tuple[int, str]] = field(default_factory=list)
+    # 각 항목: (절점 ID, 성분 문자열 예 "123")
+
+    @property
+    def type(self) -> str: return "SUPORT"
+
+    @property
+    def dof_count(self) -> int:
+        """지정된 총 자유도 수 (3-2-1이면 6)."""
+        return sum(len([c for c in comp if c in "123456"])
+                   for _, comp in self.entries)
+
+    @classmethod
+    def from_fields(cls, fields: List[str]) -> SUPORT:
+        s = cls()
+        i = 1
+        while i + 1 < len(fields):
+            g_str = fields[i].strip()
+            if not g_str:
+                i += 2
+                continue
+            try:
+                nid = nastran_int(fields[i])
+            except (ValueError, TypeError):
+                break
+            comp = fields[i + 1].strip() or "123456"
+            s.entries.append((nid, comp))
+            i += 2
+        return s

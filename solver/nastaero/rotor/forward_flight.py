@@ -293,7 +293,9 @@ class ForwardFlightBEMT:
 
         result = self.solve(rpm, V_inf, alpha_shaft, rho,
                             collective_rad=0.5 * (lo + hi))
+        result.thrust_target_N = float(target_thrust_N)
         if abs(result.thrust - target_thrust_N) > 0.02 * max(abs(target_thrust_N), 1.0):
+            result.thrust_saturated = True
             logger.warning(
                 "Forward-flight BEMT thrust saturated: target %.1f N, "
                 "achieved %.1f N (collective %.1f deg, rpm %.0f, V %.1f m/s)",

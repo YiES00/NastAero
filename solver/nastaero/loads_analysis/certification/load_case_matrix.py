@@ -93,6 +93,11 @@ class CertLoadCase:
     solve_type: str = "trim"
     flight_state: Optional[Dict[str, float]] = None
     rotor_forces: Optional[Dict[int, "np.ndarray"]] = None
+    # 로터 지령 실현 가능성 — BEMT가 콜렉티브/RPM 한계에서 포화하면
+    # 달성 추력으로 하중이 조립되므로, 이 케이스는 지령 비행상태가
+    # 아니라 추진 제한 경계조건이다.
+    rotor_command_feasible: bool = True
+    rotor_thrust_shortfall: float = 0.0
 
     @property
     def case_id(self) -> int:

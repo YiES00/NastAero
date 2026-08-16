@@ -6,6 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "nastaero"
 version = "0.2.0"
 description = "Open-source structural analysis FEA solver with Nastran BDF I/O and aeroelasticity"
+license = "AGPL-3.0-or-later"
+license-files = ["../LICENSE", "../NOTICE"]
+authors = [{ name = "Eunsuk Lee" }]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Programming Language :: Python :: 3",
+]
 requires-python = ">=3.9"
 dependencies = [
     "numpy>=1.22",
