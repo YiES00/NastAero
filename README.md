@@ -1,5 +1,7 @@
 # NastAero
 
+[![tests](https://github.com/YiES00/NastAero/actions/workflows/tests.yml/badge.svg)](https://github.com/YiES00/NastAero/actions/workflows/tests.yml)
+
 Open-source aeroelastic FEA framework with MSC Nastran BDF I/O
 compatibility, static aeroelastic trim, rotor load models, and a
 certification loads pipeline for eVTOL aircraft.
@@ -114,7 +116,8 @@ cd solver && python -m pytest tests/ -q
 reference workstation). 26 of them compare against the proprietary
 comparison-model data, which is **not redistributable and therefore
 not part of this repository**; without it those tests skip, so a
-public clone reports **840 passed, 26 skipped**.
+public clone reports **840 passed, 26 skipped**. That is exactly what
+the CI workflow above asserts on every push, on Python 3.10 and 3.12.
 
 If you hold that data under your own agreement, place it at
 `solver/tests/validation/GACOMP/` (the path is git-ignored) and the
