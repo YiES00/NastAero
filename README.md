@@ -112,16 +112,28 @@ python -m nastaero.gui                     # desktop workbench
 cd solver && python -m pytest tests/ -q
 ```
 
-866 tests pass at the current commit (about 5–6 minutes on the
-reference workstation). 26 of them compare against the proprietary
-comparison-model data, which is **not redistributable and therefore
-not part of this repository**; without it those tests skip, so a
-public clone reports **840 passed, 26 skipped**. That is exactly what
-the CI workflow above asserts on every push, on Python 3.10 and 3.12.
+The suite has 866 tests and takes about 5–6 minutes on the reference
+workstation. What your clone reports depends on two things: whether
+the proprietary comparison-model data is present, and whether the
+optional `gui` extra is installed — the 51 GUI tests are not collected
+without it.
 
-If you hold that data under your own agreement, place it at
-`solver/tests/validation/GACOMP/` (the path is git-ignored) and the
-26 tests run automatically — no configuration needed.
+| Install | Collected | Public clone reports |
+|---|---|---|
+| `pip install -e ".[dev,plot]"` | 816 | **790 passed, 26 skipped** |
+| `pip install -e ".[dev,plot,gui]"` | 866 | **840 passed, 26 skipped** |
+
+Both rows are asserted by the CI workflow above on every push, on
+Python 3.10 and 3.12. The two `26`s are not the same 26: in the first
+row it is 25 data-dependent tests plus the uncollected GUI module,
+which pytest counts once; in the second it is the 26 data-dependent
+tests themselves, one of which lives in the GUI module.
+
+That data is **not redistributable and therefore not part of this
+repository**. If you hold it under your own agreement, place it at
+`solver/tests/validation/GACOMP/` (the path is git-ignored) and those
+tests run automatically — no configuration needed. With the data and
+the `gui` extra both present the suite reports 866 passed.
 
 ## Reproducing the published results
 
