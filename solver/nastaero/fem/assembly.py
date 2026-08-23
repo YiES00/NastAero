@@ -433,6 +433,7 @@ def _assemble_cquad4_batch(elems, model, dof_mgr,
     all_rho = np.empty(n_elem)
     all_r12 = np.ones(n_elem)    # PSHELL 12I/T^3 (굽힘 관성비)
     all_nsm = np.zeros(n_elem)   # 단위면적당 비구조 질량
+    all_zoffs = np.zeros(n_elem)  # 기준면에서 요소 중면까지의 법선 오프셋
     valid = np.ones(n_elem, dtype=bool)
 
     for idx, (eid, elem) in enumerate(elems):
@@ -449,6 +450,7 @@ def _assemble_cquad4_batch(elems, model, dof_mgr,
             all_E[idx] = E; all_nu[idx] = nu; all_t[idx] = t; all_rho[idx] = rho
             all_r12[idx] = float(getattr(prop, 'ratio_12it3', 1.0) or 1.0)
             all_nsm[idx] = float(getattr(prop, 'nsm', 0.0) or 0.0)
+            all_zoffs[idx] = float(getattr(elem, 'zoffs', 0.0) or 0.0)
         except Exception as exc:
             logger.warning("Error collecting CQUAD4 %d: %s", eid, exc)
             valid[idx] = False
@@ -461,6 +463,7 @@ def _assemble_cquad4_batch(elems, model, dof_mgr,
         all_E = all_E[mask]; all_nu = all_nu[mask]
         all_t = all_t[mask]; all_rho = all_rho[mask]
         all_r12 = all_r12[mask]; all_nsm = all_nsm[mask]
+        all_zoffs = all_zoffs[mask]
         n_elem = int(mask.sum())
 
     if n_elem == 0:
@@ -496,6 +499,22 @@ def _assemble_cquad4_batch(elems, model, dof_mgr,
     # --- Compute all ke in batch ---
     ke_all = _batch_cquad4_stiffness(xy_local, E_, nu_, t_, n_elem,
                                      r12_=all_r12)  # (ne, 24, 24)
+
+    # --- ZOFFS: 요소 중면이 절점 기준면에서 법선 방향으로 떨어져
+    # 있으면 강체 팔로 연결된다. 국부계에서 법선은 z축이므로
+    #   u_elem = u_grid + z*(theta x n) = u_grid + z*(theta_y, -theta_x, 0)
+    # 이고 k_grid = T^T k_elem T 다. 오프셋이 없으면 항등이라
+    # 기존 결과에 영향이 없다.
+    if np.any(np.abs(all_zoffs) > 1e-12):
+        Toff = np.zeros((n_elem, 24, 24))
+        for nd in range(4):
+            b = 6 * nd
+            for i in range(6):
+                Toff[:, b + i, b + i] = 1.0
+            Toff[:, b + 0, b + 4] = all_zoffs      # u_x += z*theta_y
+            Toff[:, b + 1, b + 3] = -all_zoffs     # u_y -= z*theta_x
+        ke_all = np.einsum('nji,njk->nik', Toff, ke_all)
+        ke_all = np.einsum('nij,njk->nik', ke_all, Toff)
 
     # --- Transform to global: ke_global = T24.T @ ke_local @ T24 ---
     # Instead of building full (ne, 24, 24) T24 matrix and doing triple einsum,

@@ -6,7 +6,8 @@ from .cards.grid import GRID
 from .cards.coord import CORD2R, CORD2C
 from .cards.elements import (CBAR, CROD, CQUAD4, CTRIA3, CQUAD8, CTRIA6,
                               CBEAM, CELAS1, CELAS2)
-from .cards.properties import PBAR, PROD, PSHELL, PSOLID, PCOMP, PBARL, PBEAML, PELAS
+from .cards.properties import (PBAR, PBEAM, PROD, PSHELL, PSOLID, PCOMP,
+                              PBARL, PBEAML, PELAS)
 from .cards.materials import MAT1, MAT8
 from .cards.loads import FORCE, MOMENT, GRAV, LoadCombination
 from .cards.constraints import SPC, SPC1, MPC, MPCADD, SPCADD, SUPORT
@@ -56,6 +57,8 @@ def parse_bulk_card(fields: List[str], model: BDFModel) -> None:
             p = PBAR.from_fields(fields); model.properties[p.pid] = p
         elif card_name == "PBARL":
             p = PBARL.from_fields(fields); model.properties[p.pid] = p
+        elif card_name == "PBEAM":
+            p = PBEAM.from_fields(fields); model.properties[p.pid] = p
         elif card_name == "PBEAML":
             p = PBEAML.from_fields(fields); model.properties[p.pid] = p
         elif card_name == "PROD":

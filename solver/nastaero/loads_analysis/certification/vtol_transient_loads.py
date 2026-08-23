@@ -550,7 +550,10 @@ class VTOLTransientLoadsRunner:
 
         pps = [PittPetersInflow(rotor_radius=r.blade.radius, rho=self._rho,
                                 T_steady=T_hover) for r in lift_rotors]
-        x_m = np.array([float(r.hub_position[0]) * self._length_to_m
+        # hub_position은 모델 단위와 무관하게 설정 규약상 mm다
+        # (rotor_config.RotorDef, rotor_dynamics의 1e-3 하드코딩과 동일).
+        # 모델 단위 환산계수를 쓰면 미터 덱에서 1000배 어긋난다.
+        x_m = np.array([float(r.hub_position[0]) * 1e-3
                         for r in lift_rotors])
         x_min = float(x_m.min())
         agg = MultiRotorAggregate(rotors=pps, rotor_x_positions=x_m,
@@ -804,12 +807,13 @@ class VTOLTransientLoadsRunner:
         pps = [PittPetersInflow(rotor_radius=r.blade.radius, rho=rho,
                                 T_steady=float(T_i), V_forward=V)
                for r, T_i in zip(lift_rotors, T_ach)]
-        x_m = np.array([float(r.hub_position[0]) * self._length_to_m
+        # hub_position은 설정 규약상 항상 mm (위 주석 참조)
+        x_m = np.array([float(r.hub_position[0]) * 1e-3
                         for r in lift_rotors])
         agg = MultiRotorAggregate(rotors=pps, rotor_x_positions=x_m,
                                   body_mass=self._total_mass_kg)
         V_rel = V_wind + V                        # 전방 조우 폐쇄 속도
-        x_wing_m = float(self._cg_mm[0]) * self._length_to_m
+        x_wing_m = float(self._cg_mm[0]) * 1e-3   # _cg_mm은 이미 mm
 
         def gust(t: float, x: float) -> float:
             if 0.0 <= t <= T_g:
@@ -863,8 +867,10 @@ class VTOLTransientLoadsRunner:
             inertial = compute_nodal_inertial_forces(
                 self.bdf_model, nz_struct - nz_eff, self._g_model)
             _acc(inertial)
+            # 관성 해제는 모델 좌표계·단위에서 수행한다 (_cg_mm은 mm
+            # 고정이라 미터 덱에서 팔이 1000배가 된다)
             apply_inertia_relief(self.bdf_model, {}, forces,
-                                 cg=self._cg_mm, g=self._g_model)
+                                 cg=self._cg, g=self._g_model)
             return forces, nz_struct
 
         step = max(1, int(dt_loads / dt))
@@ -1051,8 +1057,9 @@ class VTOLTransientLoadsRunner:
                 self.bdf_model, nz_struct - nz_eff, self._g_model)
             for nid, v in inertial.items():
                 out[nid] = out.get(nid, _np.zeros(6)) + v
+            # 관성 해제는 모델 좌표계·단위에서 (위 주석 참조)
             apply_inertia_relief(self.bdf_model, {}, out,
-                                 cg=self._cg_mm, g=self._g_model)
+                                 cg=self._cg, g=self._g_model)
             return out
 
         # 스윕 + 회랑 중심 정적 케이스 + 자이로 오프 대조

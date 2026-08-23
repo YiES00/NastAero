@@ -32,6 +32,51 @@ class PBAR:
         return p
 
 @dataclass
+class PBEAM:
+    """CBEAM 표 형식 단면 물성 (A단 스테이션 기준).
+
+    MSC 필드 순서는 PBAR와 다르다: PID MID A I1 I2 I12 J NSM으로
+    I12가 J보다 앞에 온다. PBAR 순서로 읽으면 J 자리에 I12가
+    들어가 비틀림 강성이 통째로 어긋난다.
+
+    PBEAM은 스테이션별 단면을 표로 줄 수 있으나 본 솔버의 보
+    요소는 균일 단면이므로 A단 스테이션 값을 사용한다. 스테이션이
+    여럿이면 경고한다.
+    """
+    pid: int = 0
+    mid: int = 0
+    A: float = 0.0
+    I1: float = 0.0
+    I2: float = 0.0
+    I12: float = 0.0
+    J: float = 0.0
+    nsm: float = 0.0
+    material_ref: Optional[Any] = None
+
+    @classmethod
+    def from_fields(cls, fields: List[str]) -> PBEAM:
+        def f(i):
+            return nastran_float(fields[i]) if len(fields) > i else 0.0
+        p = cls()
+        p.pid = nastran_int(fields[1])
+        p.mid = nastran_int(fields[2])
+        p.A = f(3)
+        p.I1 = f(4)
+        p.I2 = f(5)
+        p.I12 = f(6)
+        p.J = f(7)
+        p.nsm = f(8)
+        # 연속행에 추가 스테이션이 있으면 A단만 쓴다는 사실을 알린다
+        if len(fields) > 17 and any(x.strip() for x in fields[17:]):
+            logger.warning(
+                "PBEAM %d: 스테이션이 여럿이지만 A단 단면만 사용한다 "
+                "(균일 단면 보 요소)", p.pid)
+        if p.A <= 0.0:
+            logger.warning("PBEAM %d: 단면적 %.6g <= 0", p.pid, p.A)
+        return p
+
+
+@dataclass
 class PROD:
     pid: int = 0; mid: int = 0; A: float = 0.0; J: float = 0.0
     c: float = 0.0; nsm: float = 0.0; material_ref: Optional[Any] = None

@@ -1769,17 +1769,21 @@ def _fill_geff(G_w: np.ndarray, G_d: np.ndarray, G_ka_wash: np.ndarray,
             if z_dof in f_dof_index and abs(w_force) > 1e-15:
                 G_d[i_box, f_dof_index[z_dof]] += w_force
 
-            # DOF 5 (theta_y): contributes to BOTH normalwash and displacement
-            # Normalwash: w_j = theta_y (direct slope contribution)
-            # Displacement: z_j = theta_y * dx (lever arm effect)
+            # DOF 5 (theta_y): contributes to BOTH normalwash and displacement.
+            # 미소회전 운동학 u = theta x r 에서 r = (dx, 0, 0)이면
+            #   u_z = -theta_y * dx
+            # 이므로 면 기울기(워시)는 dz/dx = -theta_y, 힘 작용점의
+            # z 변위도 -theta_y*dx 다. 양부호로 넣으면 탄성 비틀림의
+            # 공탄성 되먹임이 반대로 돌고, 그 공액인 힘 전달도 절점
+            # 뒤쪽 양력에 기수-업 모멘트를 주게 된다(물리는 기수-다운).
             ry_dof = dof_mgr.get_dof(nid, 5)  # theta_y = pitch/torsion
             if ry_dof in f_dof_index:
                 if abs(w_wash) > 1e-15:
-                    G_w[i_box, f_dof_index[ry_dof]] += w_wash  # normalwash
+                    G_w[i_box, f_dof_index[ry_dof]] -= w_wash  # normalwash
 
                 dx = force_pts[i_local, 0] - struct_xyz[j_node, 0]
                 if abs(w_force) > 1e-15 and abs(dx) > 1e-12:
-                    G_d[i_box, f_dof_index[ry_dof]] += w_force * dx
+                    G_d[i_box, f_dof_index[ry_dof]] -= w_force * dx
 
 
 # ---------------------------------------------------------------------------
