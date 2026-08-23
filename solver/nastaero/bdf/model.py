@@ -30,6 +30,7 @@ class BDFModel:
     coords: Dict[int, Any] = field(default_factory=dict)
     elements: Dict[int, Any] = field(default_factory=dict)
     properties: Dict[int, Any] = field(default_factory=dict)
+    paeros: Dict[int, Any] = field(default_factory=dict)   # PAERO1 (별도 ID 공간)
     materials: Dict[int, Any] = field(default_factory=dict)
     loads: Dict[int, list] = field(default_factory=dict)
     load_combinations: Dict[int, Any] = field(default_factory=dict)

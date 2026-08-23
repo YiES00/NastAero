@@ -481,7 +481,7 @@ def make_one_cosine_gust(
     Parameters
     ----------
     U_de : float
-        Derived gust velocity (m/s). Sign convention: + = upward.
+        Derived gust velocity (m/s). Sign convention: + = downward (인플로 ODE가 소비하는 부호).
     T_g : float
         Gust period (s). Typical 0.5 s for sharp UAM hover gust.
     direction : str
@@ -526,7 +526,7 @@ def make_one_cosine_gust_3d(
     Parameters
     ----------
     U_de : float
-        Vertical derived gust velocity (m/s, + = upward).
+        Vertical derived gust velocity (m/s, + = downward — 인플로 ODE 규약).
     V_de : float
         Lateral derived gust velocity (m/s, + = +Y direction).
     T_g : float

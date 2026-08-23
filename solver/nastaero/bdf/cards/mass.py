@@ -18,7 +18,10 @@ class CONM2:
     @classmethod
     def from_fields(cls, fields: List[str]) -> CONM2:
         m = cls(); m.eid = nastran_int(fields[1]); m.node_id = nastran_int(fields[2])
-        m.cid = nastran_int(fields[3]) if fields[3].strip() else -1
+        # QRG: 공란 = 0 (기본좌표계 오프셋). 명시적 -1은 X1~X3가
+        # 오프셋이 아니라 기본좌표계 기준 질량 CG의 절대좌표라는 뜻이라
+        # 공란과 구분해서 보존한다.
+        m.cid = nastran_int(fields[3]) if fields[3].strip() else 0
         m.mass = nastran_float(fields[4])
         m.offset = np.array([nastran_float(fields[5]) if len(fields)>5 else 0.,
             nastran_float(fields[6]) if len(fields)>6 else 0.,

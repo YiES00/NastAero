@@ -5,22 +5,79 @@ from .base import BaseElement
 from ..fem.coordinate_systems import build_beam_transform, build_transform_12x12
 
 class CBarElement(BaseElement):
-    def __init__(self, node1_xyz, node2_xyz, v_vector, E, G, A, I1, I2, J, rho=0.0, nsm=0.0):
+    def __init__(self, node1_xyz, node2_xyz, v_vector, E, G, A, I1, I2, J,
+                 rho=0.0, nsm=0.0, pa=0, pb=0, wa=None, wb=None):
         self.E = E; self.G = G; self.A = A; self.I1 = I1; self.I2 = I2; self.J = J
         self.rho = rho; self.nsm = nsm
-        diff = node2_xyz - node1_xyz
+        self.pa = int(pa or 0); self.pb = int(pb or 0)
+        self.wa = np.zeros(3) if wa is None else np.asarray(wa, dtype=float)
+        self.wb = np.zeros(3) if wb is None else np.asarray(wb, dtype=float)
+        # 단부 오프셋이 있으면 탄성축은 절점이 아니라 오프셋된 단부를
+        # 잇는다(MSC 규약). 길이와 방향도 그 점들로 잡는다.
+        end_a = np.asarray(node1_xyz, dtype=float) + self.wa
+        end_b = np.asarray(node2_xyz, dtype=float) + self.wb
+        diff = end_b - end_a
         self.L = np.linalg.norm(diff)
         if self.L < 1e-12: raise ValueError("Zero-length CBAR")
-        self.Lambda = build_beam_transform(node1_xyz, node2_xyz, v_vector)
+        self.Lambda = build_beam_transform(end_a, end_b, v_vector)
         self.T = build_transform_12x12(self.Lambda)
 
     def dof_count(self): return 12
 
+    def _offset_transform(self):
+        """단부 오프셋(WA/WB)의 강체 팔 변환 12x12.
+
+        보 단부 변위 = 절점 변위 + theta x w 이므로
+        u_end = R u_node 형태의 블록 [[I, -S(w)],[0, I]]가 된다
+        (S는 외적 행렬). 오프셋이 없으면 항등이다.
+        """
+        R = np.eye(12)
+        # 팔 성분은 전역(기본) 좌표계이므로 이 변환도 전역에서 적용한다.
+        for base, w in ((0, self.wa), (6, self.wb)):
+            if not np.any(np.abs(w) > 1e-12):
+                continue
+            S = np.array([[0.0, -w[2], w[1]],
+                          [w[2], 0.0, -w[0]],
+                          [-w[1], w[0], 0.0]])
+            R[base:base + 3, base + 3:base + 6] = -S
+        return R
+
+    def _apply_pins(self, k):
+        """핀 플래그(PA/PB)로 해제된 성분을 정적 축약으로 제거한다.
+
+        해제된 자유도는 그 단부에서 힘을 전달하지 않으므로, 해당
+        행/열을 정적 응축(Guyan)으로 소거한다.
+        """
+        released = []
+        for digits, base in ((self.pa, 0), (self.pb, 6)):
+            if not digits:
+                continue
+            for ch in str(digits):
+                if ch.isdigit() and 1 <= int(ch) <= 6:
+                    released.append(base + int(ch) - 1)
+        if not released:
+            return k
+        k = k.copy()
+        for d in released:
+            kdd = k[d, d]
+            if abs(kdd) < 1e-30:
+                k[d, :] = 0.0; k[:, d] = 0.0
+                continue
+            k -= np.outer(k[:, d], k[d, :]) / kdd
+            k[d, :] = 0.0; k[:, d] = 0.0
+        return k
+
     def stiffness_matrix(self):
-        return self.T.T @ self._local_stiffness() @ self.T
+        # 핀은 보 로컬 성분, 강체팔은 전역 성분이므로 순서가 중요하다:
+        # 로컬 핀 축약 -> 전역 회전 -> 전역 강체팔.
+        k_g = self.T.T @ self._apply_pins(self._local_stiffness()) @ self.T
+        R = self._offset_transform()
+        return R.T @ k_g @ R
 
     def mass_matrix(self):
-        return self.T.T @ self._local_mass() @ self.T
+        m_g = self.T.T @ self._local_mass() @ self.T
+        R = self._offset_transform()
+        return R.T @ m_g @ R
 
     def _local_stiffness(self):
         E, G, A, L = self.E, self.G, self.A, self.L

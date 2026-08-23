@@ -201,6 +201,62 @@ class TestDLM_AIC:
         assert CL05 > CL0, (
             f"CL(M=0.5) = {CL05:.4f} should be > CL(M=0) = {CL0:.4f}")
 
+    def _cl_alpha(self, boxes, S_ref, mach=0.0, sym_xz=0):
+        """Solve unit-alpha CL for a box set (helper for PG/image tests)."""
+        D = build_aic_matrix(boxes, mach=mach, reduced_freq=0.0,
+                             sym_xz=sym_xz)
+        gamma = np.linalg.solve(D, -np.ones(len(boxes)))
+        dcp = circulation_to_delta_cp(boxes, gamma)
+        return sum(dcp[i] * boxes[i].area for i in range(len(boxes))) / S_ref
+
+    def test_prandtl_glauert_goethert_magnitude(self):
+        """CL_alpha(M)/CL_alpha(0) must match the 3D Goethert rule.
+
+        Goethert: CL_alpha(M) = a(beta*AR)/beta with a(AR) the
+        incompressible slope. The pre-fix y,z-scaling gave +0.9%
+        at M=0.7 for AR=20 instead of the required +35%.
+        """
+        AR, mach = 20.0, 0.7
+        beta = np.sqrt(1.0 - mach**2)
+        boxes = self._make_rectangular_wing(AR, nspan=20, nchord=4)
+        S_ref = AR * 1.0
+        cl0 = self._cl_alpha(boxes, S_ref, mach=0.0)
+        clM = self._cl_alpha(boxes, S_ref, mach=mach)
+
+        a = lambda ar: 2.0 * np.pi * ar / (ar + 2.0)
+        ratio_goethert = (a(beta * AR) / beta) / a(AR)
+        ratio = clM / cl0
+        assert abs(ratio - ratio_goethert) / ratio_goethert < 0.06, (
+            f"CL_alpha(M={mach})/CL_alpha(0) = {ratio:.4f} vs "
+            f"Goethert {ratio_goethert:.4f}")
+
+    def test_xz_image_symmetric_matches_full_span(self):
+        """Half-span + SYMXZ=1 must reproduce the full-span solution.
+
+        The symmetric image is exactly the restriction of the
+        full-span symmetric problem, so CL_alpha must agree to
+        numerical precision. The pre-fix unswapped image endpoints
+        solved the ANTIsymmetric problem instead.
+        """
+        from types import SimpleNamespace
+        AR, chord = 6.0, 1.0
+        span = AR * chord
+        full = generate_panel_mesh(SimpleNamespace(
+            nspan=12, nchord=4,
+            p1=np.array([0.0, -span / 2.0, 0.0]),
+            p4=np.array([0.0, span / 2.0, 0.0]),
+            chord1=chord, chord4=chord))
+        half = generate_panel_mesh(SimpleNamespace(
+            nspan=6, nchord=4,
+            p1=np.array([0.0, 0.0, 0.0]),
+            p4=np.array([0.0, span / 2.0, 0.0]),
+            chord1=chord, chord4=chord))
+        cl_full = self._cl_alpha(full, span * chord, sym_xz=0)
+        cl_half = self._cl_alpha(half, span * chord / 2.0, sym_xz=1)
+        assert abs(cl_half - cl_full) / cl_full < 1e-8, (
+            f"half-span+image CL_alpha {cl_half:.6f} != "
+            f"full-span {cl_full:.6f}")
+
 
 # ============================================================================
 # Panel Mesh Tests

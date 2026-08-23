@@ -19,7 +19,7 @@ class TestCONM2Parsing:
         m = CONM2.from_fields(fields)
         assert m.eid == 10
         assert m.node_id == 5
-        assert m.cid == -1
+        assert m.cid == 0  # QRG: 공란 = 0 (기본좌표계 오프셋)
         assert m.mass == pytest.approx(100.0)
         assert m.I11 == pytest.approx(1.0)
         assert m.I21 == pytest.approx(0.0)
@@ -78,7 +78,7 @@ class TestCONM2Assembly:
         model.nodes[1] = g
 
         m = CONM2()
-        m.eid = 1; m.node_id = 1; m.cid = -1; m.mass = mass
+        m.eid = 1; m.node_id = 1; m.cid = 0; m.mass = mass
         m.offset = np.array(offset if offset else [0.0, 0.0, 0.0])
         m.I11 = I11; m.I21 = I21; m.I22 = I22
         m.I31 = I31; m.I32 = I32; m.I33 = I33
@@ -112,7 +112,11 @@ class TestCONM2Assembly:
         assert Md[5, 5] == pytest.approx(3.0)
 
     def test_off_diagonal_inertia(self):
-        """Full 3x3 symmetric inertia with off-diagonal terms."""
+        """Full 3x3 symmetric inertia with off-diagonal terms.
+
+        MSC 규약: I21/I31/I32는 관성곱의 크기이고 텐서에는 음부호가
+        자동으로 붙는다.
+        """
         model = self._make_model_with_conm2(
             mass=5.0, I11=10.0, I21=1.5, I22=20.0, I31=2.5, I32=3.5, I33=30.0)
         dof_mgr = DOFManager(sorted(model.nodes.keys()))
@@ -120,9 +124,9 @@ class TestCONM2Assembly:
         Md = M.toarray()
 
         # Check full 3x3 rotational block (DOFs 3,4,5)
-        I_expected = np.array([[10.0, 1.5, 2.5],
-                               [1.5, 20.0, 3.5],
-                               [2.5, 3.5, 30.0]])
+        I_expected = np.array([[10.0, -1.5, -2.5],
+                               [-1.5, 20.0, -3.5],
+                               [-2.5, -3.5, 30.0]])
         I_actual = Md[3:6, 3:6]
         np.testing.assert_allclose(I_actual, I_expected, atol=1e-10)
 
@@ -159,15 +163,15 @@ class TestCONM2Assembly:
         Md = M.toarray()
 
         # skew([0,0,5]) = [[0,-5,0],[5,0,0],[0,0,0]]
-        # m*S = [[0,-50,0],[50,0,0],[0,0,0]]
-        # Upper-right: M[0:3, 3:6] = m*S
-        expected_coupling = mass * np.array([[0, -5, 0],
+        # v_cg = u_dot + omega x r = u_dot - skew(r) omega 이므로
+        # Upper-right: M[0:3, 3:6] = -m*skew(r)
+        expected_coupling = -mass * np.array([[0, -5, 0],
                                               [5, 0, 0],
                                               [0, 0, 0]])
         actual_coupling = Md[0:3, 3:6]
         np.testing.assert_allclose(actual_coupling, expected_coupling, atol=1e-10)
 
-        # Lower-left: M[3:6, 0:3] = (m*S)^T = m*S (since M is assembled as symmetric)
+        # Lower-left: M[3:6, 0:3] = (-m*S)^T = +m*S
         actual_lower = Md[3:6, 0:3]
         np.testing.assert_allclose(actual_lower, expected_coupling.T, atol=1e-10)
 
@@ -194,7 +198,7 @@ class TestCONM2Assembly:
             model.nodes[i] = g
 
             m = CONM2()
-            m.eid = i; m.node_id = i; m.cid = -1; m.mass = float(i) * 10
+            m.eid = i; m.node_id = i; m.cid = 0; m.mass = float(i) * 10
             m.offset = np.zeros(3)
             m.I11 = 0; m.I21 = 0; m.I22 = 0; m.I31 = 0; m.I32 = 0; m.I33 = 0
             model.masses[i] = m
@@ -209,3 +213,72 @@ class TestCONM2Assembly:
         mass_sum = sum(Md[dof_mgr.get_node_dofs(i)[0], dof_mgr.get_node_dofs(i)[0]]
                        for i in range(1, 4))
         assert mass_sum == pytest.approx(total)
+
+
+class TestCONM2Semantics2026Audit:
+    """CONM2 규약 회귀 시험 (2026-08 감사).
+
+    - 공란 CID는 QRG 기본값 0이고, 명시적 -1은 X1~X3가 기본좌표계
+      기준 질량 CG의 절대좌표라는 별개 의미다.
+    - 오프셋 병진-회전 결합은 M[병진,회전] = -m*skew(r)다.
+    """
+
+    def _mass_matrix(self, cid, xyz_node, x123, mass=3.0):
+        from nastaero.bdf.cards.elements import CELAS2
+        model = BDFModel()
+        g = GRID()
+        g.nid = 1
+        g.xyz = np.array(xyz_node, dtype=float)
+        g.xyz_global = g.xyz.copy()
+        model.nodes[1] = g
+
+        c = CONM2()
+        c.eid = 1; c.node_id = 1; c.cid = cid; c.mass = mass
+        c.offset = np.array(x123, dtype=float)
+        model.masses[1] = c
+
+        sp = CELAS2()
+        sp.eid = 100; sp.k = 1.0; sp.g1 = 1; sp.c1 = 1; sp.g2 = 0; sp.c2 = 0
+        model.springs[100] = sp
+
+        model.cross_reference()
+        dof_mgr = DOFManager(sorted(model.nodes.keys()))
+        _, M, _ = assemble_global_matrices(model, dof_mgr)
+        return M.toarray()
+
+    def test_blank_cid_defaults_to_zero(self):
+        """공란 CID는 -1이 아니라 0이어야 한다 (QRG 기본값)."""
+        m = CONM2.from_fields(["CONM2", "1", "1", "", "2.0"])
+        assert m.cid == 0
+
+    def test_offset_coupling_kinetic_energy(self):
+        """강체 운동의 운동에너지가 1/2 m |u + w x r|^2 과 일치해야 한다.
+
+        결합 부호가 반대면 오프셋이 절점을 통해 반전되어
+        (1-L) 대신 (1+L)이 나온다.
+        """
+        mass, L = 3.0, 7.0
+        r = np.array([0.0, L, 0.0])
+        M = self._mass_matrix(0, [0.0, 0.0, 0.0], r, mass)
+
+        v = np.zeros(6)
+        v[0] = 1.0   # u = (1, 0, 0)
+        v[5] = 1.0   # theta = (0, 0, 1)
+        ke = 0.5 * v @ M @ v
+        v_cg = np.array([1.0, 0.0, 0.0]) + np.cross([0.0, 0.0, 1.0], r)
+        assert ke == pytest.approx(0.5 * mass * v_cg @ v_cg)
+
+    def test_cid_minus_one_is_absolute_cg(self):
+        """CID=-1의 X1~X3는 절대좌표이므로 등가 오프셋과 같아야 한다."""
+        mass, L = 3.0, 7.0
+        grid = np.array([10.0, 20.0, 30.0])
+        M_off = self._mass_matrix(0, [0.0, 0.0, 0.0], [0.0, L, 0.0], mass)
+        M_abs = self._mass_matrix(-1, grid, grid + np.array([0.0, L, 0.0]),
+                                  mass)
+        np.testing.assert_allclose(M_abs, M_off, atol=1e-10)
+
+    def test_cid_minus_one_cg_at_grid_has_no_coupling(self):
+        """CID=-1 좌표가 그리드와 같으면 팔이 0이라 결합항이 없어야 한다."""
+        grid = [2761.38, 0.0, 1851.62]
+        M = self._mass_matrix(-1, grid, grid, 1.4e-4)
+        np.testing.assert_allclose(M[0:3, 3:6], 0.0, atol=1e-20)

@@ -76,6 +76,7 @@ class TrimSharedData:
     s_dofs: Any = None
     G_sp: Any = None              # normalwash coupling (n_boxes x n_free)
     G_disp: Any = None            # displacement coupling (n_boxes x n_free)
+    G_force_node: Any = None      # 물리공간 힘 분배 (n_boxes x n_nodes)
     boxes: Any = None
     box_id_to_index: Any = None
     total_weight: float = 0.0
@@ -90,7 +91,6 @@ class TrimSharedData:
     dof_mgr: Any = None
     bdf_model: Any = None
     all_trim_labels: Any = None
-    kernel: str = 'dlm'
 
     # Slave DOF dependencies from RBE2/MPC elimination
     slave_deps: Any = None        # {slave_dof: [(master_dof, coeff), ...]}
@@ -303,7 +303,6 @@ def _apply_virtual_mount(K_csc, mount_idx: np.ndarray):
 def solve_trim(bdf_model: BDFModel, n_workers: int = 0,
                blas_threads: int = 1,
                airfoil_config=None,
-               kernel: str = 'dlm',
                spline_slope_method: str = 'surface',
                apply_w2gj: bool = True) -> ResultData:
     """Run SOL 144 static aeroelastic trim analysis.
@@ -346,7 +345,6 @@ def solve_trim(bdf_model: BDFModel, n_workers: int = 0,
     # Phase 1: Build shared (Mach-independent) data — computed ONCE
     # ---------------------------------------------------------------
     shared = _build_shared_data(bdf_model, airfoil_config=airfoil_config,
-                                kernel=kernel,
                                 spline_slope_method=spline_slope_method,
                                 apply_w2gj=apply_w2gj)
     if shared is None:
@@ -413,8 +411,7 @@ def solve_trim(bdf_model: BDFModel, n_workers: int = 0,
 
 def _build_shared_data(bdf_model: BDFModel,
                        airfoil_config=None,
-                       kernel: str = 'dlm',
-                       spline_slope_method: str = 'surface',
+                               spline_slope_method: str = 'surface',
                        apply_w2gj: bool = True
                        ) -> Optional[TrimSharedData]:
     """Build all Mach-independent data (computed once).
@@ -455,9 +452,20 @@ def _build_shared_data(bdf_model: BDFModel,
     refs = aeros.refs if aeros else 1.0
     velocity = aero.velocity if aero else 50.0
 
-    # Partition K (use first subcase's SPC — typically shared across all)
+    # Partition K (use first subcase's SPC — typically shared across all).
+    # 인수분해를 서브케이스 간에 재사용하는 구조라 f-set은 하나뿐이다.
+    # 서브케이스마다 SPC가 다르면 그 가정이 깨지므로 조용히 넘기지
+    # 않고 경고한다.
     subcases = bdf_model.subcases if bdf_model.subcases else [bdf_model.global_case]
     effective_sc = bdf_model.get_effective_subcase(subcases[0])
+    _spc_ids = {getattr(bdf_model.get_effective_subcase(sc), 'spc_id', 0)
+                for sc in subcases}
+    if len(_spc_ids) > 1:
+        logger.warning(
+            "  서브케이스마다 SPC 집합이 다르다 (%s). 현재 구현은 첫 "
+            "서브케이스의 구속으로 한 번만 분할하므로 나머지 서브케이스의 "
+            "경계조건이 반영되지 않는다 — 덱을 SPC별로 나누어 실행할 것.",
+            sorted(_spc_ids))
     K_ff, M_ff, F_f, f_dofs, s_dofs = fe_model.get_partitioned_system(effective_sc)
     n_free = len(f_dofs)
     logger.info("  Structural system: %d free DOFs, %d constrained", n_free, len(s_dofs))
@@ -466,9 +474,9 @@ def _build_shared_data(bdf_model: BDFModel,
     # G_w: structural DOFs → normalwash (slope dz/dx), theta_y only
     # G_d: structural DOFs → z-displacement, z + theta_y*dx
     logger.info("  Building spline coupling matrices G_w and G_d...")
-    G_w_dense, G_d_dense = _build_geff_per_spline(
+    G_w_dense, G_d_dense, G_force_node = _build_geff_per_spline(
         bdf_model, boxes, box_id_to_index, fe_model.dof_mgr, f_dofs,
-        slope_method=spline_slope_method)
+        slope_method=spline_slope_method, collect_node_force=True)
     logger.info("  G_w (normalwash): max = %.4f, nonzeros = %d / %d",
                 np.max(np.abs(G_w_dense)) if G_w_dense.size > 0 else 0,
                 np.count_nonzero(G_w_dense), G_w_dense.size)
@@ -574,7 +582,8 @@ def _build_shared_data(bdf_model: BDFModel,
 
     shared = TrimSharedData(
         K_ff=K_ff, F_f=F_f, f_dofs=f_dofs, s_dofs=s_dofs,
-        G_sp=G_sp, G_disp=G_disp, boxes=boxes, box_id_to_index=box_id_to_index,
+        G_sp=G_sp, G_disp=G_disp, G_force_node=G_force_node,
+        boxes=boxes, box_id_to_index=box_id_to_index,
         total_weight=total_weight, cg_x=cg_x,
         cg_y=float(cg[1]), cg_z=float(cg[2]),
         refc=refc, refb=refb, refs=refs, velocity=velocity, g=g,
@@ -586,7 +595,6 @@ def _build_shared_data(bdf_model: BDFModel,
         mount_idx=mount_idx, mass_t3=mass_t3,
         _solver_cache={},
         w_camber=w_camber,
-        kernel=kernel,
     )
     return shared
 
@@ -647,8 +655,7 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
         # 1. Build AIC matrix (Mach-dependent)
         logger.info("  [SC%d] Building AIC matrix (%d x %d, M=%.3f, symxz=%d)...",
                     subcase_id, n_boxes, n_boxes, mach, sym_xz)
-        D = build_aic_matrix(boxes, mach, reduced_freq=0.0, sym_xz=sym_xz,
-                             kernel=shared.kernel)
+        D = build_aic_matrix(boxes, mach, reduced_freq=0.0, sym_xz=sym_xz)
 
         try:
             D_inv = np.linalg.inv(D)
@@ -707,9 +714,9 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
     if nz_override is not None:
         nz = nz_override
     else:
-        nz = trim_vars.get("URDD3", 1.0)
-        if nz == 0.0:
-            nz = 1.0   # URDD3=0 means level flight (1g)
+        # 명시적 URDD3=0.0은 0g 푸시오버다. 부재(기본 1g)와 구분해야
+        # 한다 -- 덱 생성기도 "nz=0.00" 케이스를 그렇게 쓴다.
+        nz = trim_vars["URDD3"] if "URDD3" in trim_vars else 1.0
 
     logger.info("  [SC%d] Trim: %d fixed %s, %d free %s, nz=%.3f",
                 subcase_id, len(fixed_labels), list(fixed_labels.keys()),
@@ -951,7 +958,8 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
 
         aero_nodal, inertial_nodal, combined_nodal = compute_trim_nodal_loads(
             shared.bdf_model, boxes, aero_forces, G_disp, shared.f_dofs, dof_mgr,
-            nz=nz, g=shared.g, ny=ny_val)
+            nz=nz, g=shared.g, ny=ny_val,
+            G_force_node=shared.G_force_node)
 
         cg_pt = np.array([shared.cg_x, shared.cg_y, shared.cg_z])
 
@@ -1144,9 +1152,9 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
     K_ff, M_ff, F_f, f_dofs, s_dofs = fe_model.get_partitioned_system(subcase)
     n_free = len(f_dofs)
 
-    G_w_dense, G_d_dense = _build_geff_per_spline(bdf_model, boxes,
-                                                    box_id_to_index,
-                                                    fe_model.dof_mgr, f_dofs)
+    G_w_dense, G_d_dense, G_force_node = _build_geff_per_spline(
+        bdf_model, boxes, box_id_to_index, fe_model.dof_mgr, f_dofs,
+        collect_node_force=True)
     G_sp = sp.csr_matrix(G_w_dense)
     G_disp = sp.csr_matrix(G_d_dense)
     del G_w_dense, G_d_dense
@@ -1188,7 +1196,8 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
 
     shared = TrimSharedData(
         K_ff=K_ff, F_f=F_f, f_dofs=f_dofs, s_dofs=s_dofs,
-        G_sp=G_sp, G_disp=G_disp, boxes=boxes, box_id_to_index=box_id_to_index,
+        G_sp=G_sp, G_disp=G_disp, G_force_node=G_force_node,
+        boxes=boxes, box_id_to_index=box_id_to_index,
         total_weight=total_weight, cg_x=cg_x,
         cg_y=float(cg[1]), cg_z=float(cg[2]),
         refc=refc, refb=refb, refs=refs, velocity=velocity, g=g,
@@ -1199,7 +1208,6 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
         G_d_active=G_d_active_arr,
         mount_idx=mount_idx, mass_t3=mass_t3,
         _solver_cache={},
-        kernel=kernel,
     )
 
     return _solve_trim_subcase_from_shared(shared, trim, subcase.id)
@@ -1216,6 +1224,10 @@ def _solve_dense(K_ff, G_sp, G_disp, A_jj, Q_ax, F_f, F_trim_fixed,
 
     Q_aa = G_disp^T @ A_jj @ G_sp (asymmetric: displacement for forces,
     normalwash for coupling).
+
+    구조 평형은 K u = F_ext + Q_aa u 이므로 계에는 (K - Q_aa)가
+    들어간다. 부호가 반대면 동압에 따라 인위적으로 강해져(반발산)
+    유연 증분이 과소평가되고 발산이 나타나지 않는다.
     """
     G_w_dense = G_sp.toarray() if sp.issparse(G_sp) else G_sp
     G_d_dense = G_disp.toarray() if sp.issparse(G_disp) else G_disp
@@ -1244,7 +1256,7 @@ def _solve_dense(K_ff, G_sp, G_disp, A_jj, Q_ax, F_f, F_trim_fixed,
         A_sys = np.zeros((n_total + n_constraints, n_total))
         rhs_sys = np.zeros(n_total + n_constraints)
 
-        A_sys[:n_free, :n_free] = K_dense + Q_aa_free
+        A_sys[:n_free, :n_free] = K_dense - Q_aa_free
         A_sys[:n_free, n_free:n_total] = -Q_ax
         rhs_sys[:n_free] = F_f + F_trim_fixed
 
@@ -1258,7 +1270,7 @@ def _solve_dense(K_ff, G_sp, G_disp, A_jj, Q_ax, F_f, F_trim_fixed,
         u_f = sol[:n_free]
         x_trim = sol[n_free:n_total]
     else:
-        K_eff = K_dense + Q_aa_free
+        K_eff = K_dense - Q_aa_free
         rhs_eff = F_f + F_trim_fixed
         u_f = np.linalg.solve(K_eff, rhs_eff)
         x_trim = np.array([])
@@ -1321,20 +1333,33 @@ def _solve_iterative_from_shared(shared: TrimSharedData,
         logger.info("  [SC%d] Q_active computed in %.2f s",
                     subcase_id, time.perf_counter() - t_q)
 
-        # Build K_eff = K + Q_aa (인공 정규화 없음 — 자유-자유는 가상
+        # Build K_eff = K - Q_aa (인공 정규화 없음 — 자유-자유는 가상
         # 마운트가, 구속 덱은 실제 경계조건이 강체모드를 처리한다)
         K_eff = (shared.K_ff if sp.issparse(shared.K_ff)
                  else sp.csc_matrix(shared.K_ff)).tocsc(copy=True)
 
-        if n_active > 0 and n_active < 5000:
-            row_idx = np.repeat(active_cols, n_active)
-            col_idx = np.tile(active_cols, n_active)
-            q_vals = Q_active.ravel()
-            mask = np.abs(q_vals) > 1e-30
-            if mask.any():
-                Q_sp = sp.coo_matrix((q_vals[mask], (row_idx[mask], col_idx[mask])),
+        if n_active > 0:
+            # 큰 n_active에서도 결합을 반드시 조립한다. 누락하면 구조
+            # 방정식에는 공탄성 되먹임이 없는데 트림 구속행(D_r)은
+            # 변형 워시를 계속 반영해 해가 내부 모순에 빠진다.
+            CHUNK = 2000
+            q_blocks = []
+            for s in range(0, n_active, CHUNK):
+                e = min(s + CHUNK, n_active)
+                blk = Q_active[s:e, :]
+                row_idx = np.repeat(active_cols[s:e], n_active)
+                col_idx = np.tile(active_cols, e - s)
+                q_vals = blk.ravel()
+                mask = np.abs(q_vals) > 1e-30
+                if mask.any():
+                    q_blocks.append((q_vals[mask], row_idx[mask], col_idx[mask]))
+            if q_blocks:
+                vals = np.concatenate([b[0] for b in q_blocks])
+                rows = np.concatenate([b[1] for b in q_blocks])
+                cols = np.concatenate([b[2] for b in q_blocks])
+                Q_sp = sp.coo_matrix((vals, (rows, cols)),
                                      shape=(n_free, n_free)).tocsc()
-                K_eff = K_eff + Q_sp
+                K_eff = K_eff - Q_sp
 
         # 가상 마운트: Q까지 조립된 뒤 행/열 소거 (마운트 자유도 = 0)
         if shared.mount_idx is not None:
@@ -1375,7 +1400,7 @@ def _solve_iterative_from_shared(shared: TrimSharedData,
         if _solver_mode is None:
             # Use direct LU for both free-trim and all-fixed cases.
             # CG with ILU preconditioner fails for all-fixed cases because
-            # K_eff = K + Q_aa is asymmetric (Q_aa = G_d^T @ A_jj @ G_sp,
+            # K_eff = K - Q_aa is asymmetric (Q_aa = G_d^T @ A_jj @ G_sp,
             # where G_d ≠ G_sp). Direct LU is more reliable and the
             # factorization is cached for reuse across subcases with the
             # same (Mach, q).
@@ -1485,8 +1510,8 @@ def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
                             box_id_to_index: Dict[int, int],
                             dof_mgr: DOFManager,
                             f_dofs: List[int],
-                            slope_method: str = 'surface'
-                            ) -> Tuple[np.ndarray, np.ndarray]:
+                            slope_method: str = 'surface',
+                            collect_node_force: bool = False):
     """Build spline coupling matrices using per-spline mapping.
 
     Returns TWO matrices:
@@ -1512,6 +1537,10 @@ def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
         Normalwash coupling matrix.
     G_d : ndarray (n_boxes, n_free)
         Displacement coupling matrix.
+    G_fn : sparse (n_boxes, n_nodes), optional
+        ``collect_node_force``일 때만 반환. 물리공간 힘 분배 가중치로,
+        자유도 소거와 무관하게 모든 스플라인 SET 절점을 담는다.
+        열 순서는 ``dof_mgr.node_ids``.
     """
     n_boxes = len(boxes)
     n_free = len(f_dofs)
@@ -1520,6 +1549,19 @@ def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
 
     # Build f_dofs lookup for fast index finding
     f_dof_index = {dof: idx for idx, dof in enumerate(f_dofs)}
+
+    node_force = None
+    if collect_node_force:
+        node_ids = list(dof_mgr.node_ids)
+        node_force = ([], [], [], {nid: i for i, nid in enumerate(node_ids)})
+
+    def _finish(G_w, G_d):
+        if not collect_node_force:
+            return G_w, G_d
+        rows, cols, vals, node_index = node_force
+        G_fn = sp.coo_matrix((vals, (rows, cols)),
+                             shape=(n_boxes, len(node_index))).tocsr()
+        return G_w, G_d, G_fn
 
     if not bdf_model.splines:
         # No splines defined, fall back to global beam spline
@@ -1533,8 +1575,9 @@ def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
         G_ka_wash = build_beam_spline(struct_xyz, wash_pts, axis=1)
         G_ka_force = build_beam_spline(struct_xyz, force_pts, axis=1)
         _fill_geff(G_w, G_d, G_ka_wash, G_ka_force, range(n_boxes), all_nids,
-                   force_pts, struct_xyz, dof_mgr, f_dof_index)
-        return G_w, G_d
+                   force_pts, struct_xyz, dof_mgr, f_dof_index,
+                   node_force=node_force)
+        return _finish(G_w, G_d)
 
     # Process each spline independently
     for sid, spline in bdf_model.splines.items():
@@ -1604,9 +1647,12 @@ def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
         span_range = np.ptp(struct_xyz, axis=0)
         span_axis = int(np.argmax(span_range))
 
-        # Build interpolation matrix
+        # Build interpolation matrix. 퇴화 판정은 IPS가 실제로 쓰는
+        # 패널 국부 면내 투영에서 해야 한다(전역 x-y가 아니라).
         is_spline2 = hasattr(spline, 'dtor')
-        is_collinear = _nodes_are_collinear(struct_xyz)
+        e1, e2 = _spline_plane_frame(boxes, spline_box_indices)
+        struct_2d = _project_plane(struct_xyz, e1, e2)
+        is_collinear = _nodes_are_collinear(struct_xyz, plane_xy=struct_2d)
 
         G_ka_slope = None
         if is_spline2 or is_collinear:
@@ -1619,13 +1665,18 @@ def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
                            "instead of IPS", sid)
         else:
             dz = getattr(spline, 'dz', 0.0)
-            G_ka_wash = build_ips_spline(struct_xyz, wash_pts, dz)
-            G_ka_force = build_ips_spline(struct_xyz, force_pts, dz)
+            # 패널 국부 면내 좌표로 투영해 스플라인한다 (수직/경사면
+            # 에서 전역 x-y 투영이 퇴화하거나 면외 위치를 잃는 문제).
+            wash_2d = _project_plane(wash_pts, e1, e2)
+            force_2d = _project_plane(force_pts, e1, e2)
+            G_ka_wash = build_ips_spline(struct_2d, wash_2d, dz)
+            G_ka_force = build_ips_spline(struct_2d, force_2d, dz)
             if slope_method == 'surface':
                 # SPLINE1 semantics: slope from the analytic x-derivative
                 # of the interpolated displacement surface (z-translations
                 # only; nodal rotations do not participate).
-                G_ka_slope = build_ips_spline_slope(struct_xyz, wash_pts, dz)
+                # 기울기는 유선방향(e1) 도함수 — 투영 1축과 일치한다
+                G_ka_slope = build_ips_spline_slope(struct_2d, wash_2d, dz)
 
         logger.info("  Spline %d: CAERO %d, boxes %d-%d (%d boxes), "
                      "%d struct nodes, axis=%d",
@@ -1635,16 +1686,17 @@ def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
         # Fill both G matrices for this spline's boxes
         _fill_geff(G_w, G_d, G_ka_wash, G_ka_force, spline_box_indices,
                    spline_nids, force_pts, struct_xyz, dof_mgr, f_dof_index,
-                   G_ka_slope=G_ka_slope)
+                   G_ka_slope=G_ka_slope, node_force=node_force)
 
-    return G_w, G_d
+    return _finish(G_w, G_d)
 
 
 def _fill_geff(G_w: np.ndarray, G_d: np.ndarray, G_ka_wash: np.ndarray,
                G_ka_force: np.ndarray, box_indices: list, struct_nids: list,
                force_pts: np.ndarray, struct_xyz: np.ndarray,
                dof_mgr: DOFManager, f_dof_index: dict,
-               G_ka_slope: np.ndarray = None) -> None:
+               G_ka_slope: np.ndarray = None,
+               node_force: tuple = None) -> None:
     """Fill both normalwash (G_w) and displacement (G_d) coupling matrices.
 
     G_w: normalwash matrix — maps structural DOFs to normalwash (slope dz/dx),
@@ -1671,6 +1723,22 @@ def _fill_geff(G_w: np.ndarray, G_d: np.ndarray, G_ka_wash: np.ndarray,
     """
     n_local = len(box_indices)
     n_spline = len(struct_nids)
+
+    # 물리공간 힘 분배 가중치: 자유도 소거와 무관하게 모든 SET 절점에
+    # 채운다. 여기서 f-set 필터를 걸면 RBE2 종속/SPC 절점의 가중치가
+    # 통째로 사라져 박스별 가중치 합(=1)이 깨지고, 뒤따르는 보존
+    # 재스케일이 그 결손을 기체 전체에 균등하게 문질러 버린다.
+    if node_force is not None:
+        rows, cols, vals, node_index = node_force
+        for i_local, i_box in enumerate(box_indices):
+            for j_node in range(n_spline):
+                w = G_ka_force[i_local, j_node]
+                if abs(w) <= 1e-15:
+                    continue
+                j = node_index.get(struct_nids[j_node])
+                if j is None:
+                    continue
+                rows.append(i_box); cols.append(j); vals.append(w)
 
     if G_ka_slope is not None:
         # ── surface (SPLINE1) mode: translations only ──
@@ -1880,17 +1948,45 @@ def _resolve_aelink_normalwash(label: str, w: np.ndarray,
 # ---------------------------------------------------------------------------
 
 def _detect_gravity(bdf_model: BDFModel) -> float:
-    """Detect gravitational acceleration from model unit system."""
-    refc = 0.0
-    if bdf_model.aeros:
-        refc = bdf_model.aeros.refc
-    elif bdf_model.aero:
-        refc = bdf_model.aero.refc
+    """모델 단위계에서 중력가속도를 추정한다 (mm/s^2 또는 m/s^2).
 
-    if refc > 100:
+    우선순위:
+      1) 덱의 GRAV 카드 크기 — 명시된 값이 있으면 그것이 정답이다.
+      2) 기준 코드(REFC)와 기준 면적(REFS)의 정합 — 소형 mm 모델은
+         REFC<100이어도 REFS가 코드^2 규모라 mm임이 드러난다.
+      3) 모델 치수(최대 좌표 스팬).
+    셋 다 없으면 mm 단위계(9810)로 본다. 추정에 쓰인 근거를 남긴다.
+    """
+    for load_list in (getattr(bdf_model, "loads", {}) or {}).values():
+        for load in load_list:
+            if getattr(load, "type", "") == "GRAV":
+                a = float(np.linalg.norm(load.get_acceleration_vector()))
+                if a > 1e-6:
+                    logger.info("  중력을 GRAV 카드에서 취함: %.4g", a)
+                    return a
+
+    refc = refs = 0.0
+    src = bdf_model.aeros or bdf_model.aero
+    if src is not None:
+        refc = float(getattr(src, "refc", 0.0) or 0.0)
+        refs = float(getattr(src, "refs", 0.0) or 0.0)
+
+    if refc > 100.0:
         return 9810.0
-    else:
+    if refc > 0.0 and refs > 0.0:
+        # REFS/REFC^2 는 세장비 규모(수~수십)로 단위에 무관하다.
+        # REFC가 작은데 REFS가 REFC^2 대비 정상이면 그 단위계가 맞다.
         return 9.81
+
+    span = 0.0
+    if bdf_model.nodes:
+        xyz = np.array([n.xyz_global for n in bdf_model.nodes.values()])
+        span = float(np.max(xyz.max(axis=0) - xyz.min(axis=0)))
+    if span > 0.0:
+        g = 9810.0 if span > 100.0 else 9.81
+        logger.info("  중력을 모델 치수(스팬 %.4g)로 추정: %.4g", span, g)
+        return g
+    return 9810.0
 
 
 def _compute_total_weight(bdf_model: BDFModel) -> float:
@@ -1912,15 +2008,67 @@ def _compute_total_weight(bdf_model: BDFModel) -> float:
     return weight
 
 
-def _nodes_are_collinear(xyz: np.ndarray, tol: float = 1e-6) -> bool:
-    """Check if a set of 3D points are approximately collinear."""
+def _spline_plane_frame(boxes, box_indices):
+    """스플라인이 덮는 패널의 국부 면내 좌표계 (e1: 유선방향, e2: 스팬방향).
+
+    IPS는 2차원 평면에 투영한 점들로 커널을 세운다. 전역 x-y를
+    쓰면 수직 핀처럼 x-z 평면에 놓인 면은 투영이 퇴화하거나
+    (수직미익) z 위치 정보를 잃는다(경사 V-미익). 패널 법선
+    n에 수직인 평면을 잡아 그 안에서 스플라인하면 면 방향과
+    무관하게 동작한다.
+
+    수평면(n ~ +z)에서는 e1 ~ +x, e2 ~ +y가 되어 종전 전역 x-y
+    투영과 같아진다.
+    """
+    n = np.zeros(3)
+    for i in box_indices:
+        n = n + np.asarray(boxes[i].normal, dtype=float)
+    nn = np.linalg.norm(n)
+    if nn < 1e-12:
+        return np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])
+    n = n / nn
+
+    # 유선방향: 전역 x를 패널 평면에 투영. n이 x와 나란하면 y로 대체
+    e1 = np.array([1.0, 0.0, 0.0]) - n * float(n[0])
+    if np.linalg.norm(e1) < 1e-8:
+        e1 = np.array([0.0, 1.0, 0.0]) - n * float(n[1])
+    e1 = e1 / np.linalg.norm(e1)
+    e2 = np.cross(n, e1)
+    e2 = e2 / np.linalg.norm(e2)
+    return e1, e2
+
+
+def _project_plane(pts, e1, e2):
+    """3D 점들을 (e1, e2) 면내 2D 좌표로 투영한다."""
+    p = np.atleast_2d(np.asarray(pts, dtype=float))
+    return np.column_stack([p @ e1, p @ e2])
+
+
+def _nodes_are_collinear(xyz: np.ndarray, tol: float = 1e-6,
+                         plane_xy: np.ndarray = None) -> bool:
+    """IPS 스플라인이 퇴화하는 배치인지 판정한다.
+
+    IPS는 x-y 평면에 투영한 점들로 커널을 세우므로, 3D에서
+    공선이 아니어도 *투영이* 공선이면 특이해진다(예: 수직
+    핀처럼 x-z 평면에 놓인 지지점 집합). 3D 공선만 검사하면
+    그런 배치가 그대로 통과해 조용히 쓰레기 가중치가 나온다.
+    투영 공선을 먼저 보고, 3D 공선도 함께 본다.
+    """
     if xyz.shape[0] < 3:
         return True
-    centered = xyz - xyz.mean(axis=0)
-    _, s, _ = np.linalg.svd(centered, full_matrices=False)
-    if s[0] < 1e-12:
+
+    def _degenerate(points: np.ndarray) -> bool:
+        centered = points - points.mean(axis=0)
+        _, sv, _ = np.linalg.svd(centered, full_matrices=False)
+        if sv[0] < 1e-12:
+            return True
+        return sv[1] / sv[0] < tol
+
+    # IPS 커널이 실제로 쓰는 면내 투영 (주어지면 그것을, 없으면 x-y)
+    proj = xyz[:, :2] if plane_xy is None else np.asarray(plane_xy)
+    if _degenerate(proj):
         return True
-    return s[1] / s[0] < tol
+    return _degenerate(xyz)
 
 
 def _compute_cg(bdf_model: BDFModel) -> np.ndarray:
@@ -1932,16 +2080,20 @@ def _compute_cg(bdf_model: BDFModel) -> np.ndarray:
     carries a permanent moment residual of W * dr (GACOMP x-drift:
     10.7 mm -> 135 kN-mm in My).
     """
-    from ..loads_analysis.trim_loads import compute_node_masses
+    from ..loads_analysis.trim_loads import (compute_node_masses,
+                                             compute_node_mass_centroids)
 
     node_mass = compute_node_masses(bdf_model)
     total_mass = sum(node_mass.values())
     if total_mass <= 1e-12:
         return np.zeros(3)
+    # 질량 위치는 절점이 아니라 그 절점 집중질량의 질량중심이다
+    # (CONM2 오프셋/CID=-1 절대좌표).
+    centroids = compute_node_mass_centroids(bdf_model)
     moment = np.zeros(3)
     for nid, m in node_mass.items():
-        if nid in bdf_model.nodes:
-            moment += m * bdf_model.nodes[nid].xyz_global
+        if nid in centroids:
+            moment += m * centroids[nid]
     return moment / total_mass
 
 

@@ -104,6 +104,20 @@ def main() -> None:
     print(f"\n=== ILC-8T hull comparison ({len(vmt)} VMT cases) ===",
           flush=True)
 
+    # 채택된 재트림 케이스의 우익 비틀림 범위 (논문 2 수치 재현)
+    import numpy as _np
+    _rt = {c.case_id for c in retrim}
+    _lo, _hi = 0.0, 0.0
+    for cid in sorted(_rt):
+        cd = vmt.get(cid, {})
+        if "Right Wing" not in cd:
+            continue
+        arr = _np.asarray(cd["Right Wing"]["torsion"], float) / 1e6
+        _lo = min(_lo, float(arr.min())); _hi = max(_hi, float(arr.max()))
+        print(f"  retrim C{cid} tor[{arr.min()/1:7.2f}, {arr.max()/1:6.2f}] kN*m")
+    print(f"  채택 재트림 우익 비틀림 범위: {_lo:.2f} ~ {_hi:.2f} kN*m",
+          flush=True)
+
     proc2, dc2 = run_selection(batch, vmt, "2d")
     proc3, dc3 = run_selection(batch, vmt, "3d")
     s2 = {d.case_id for d in dc2}

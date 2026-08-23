@@ -3,8 +3,11 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Tuple
+import logging
 import numpy as np
 from ..field_parser import nastran_int, nastran_float
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class PBAR:
@@ -218,15 +221,23 @@ def _compute_rod(dims):
     J = math.pi * R**4 / 2.0
     return A, Ix, Iy, J
 
-def _compute_tube(dims):
-    """TUBE: R_outer, t"""
-    Ro = dims[0]; t = dims[1]
-    Ri = Ro - t
-    if Ri < 0: Ri = 0
+def _tube_from_radii(Ro, Ri):
+    Ri = min(max(Ri, 0.0), Ro)
     A = math.pi * (Ro**2 - Ri**2)
     Ix = Iy = math.pi * (Ro**4 - Ri**4) / 4.0
     J = math.pi * (Ro**4 - Ri**4) / 2.0
     return A, Ix, Iy, J
+
+def _compute_tube(dims):
+    """TUBE: DIM1 = 외경 반지름, DIM2 = 내경 반지름 (MSC 규약).
+
+    두께가 아니라 내반지름이다. 두께 변형은 TUBE2가 담당한다.
+    """
+    return _tube_from_radii(dims[0], dims[1])
+
+def _compute_tube2(dims):
+    """TUBE2: DIM1 = 외경 반지름, DIM2 = 벽 두께."""
+    return _tube_from_radii(dims[0], dims[0] - dims[1])
 
 def _compute_bar(dims):
     """BAR: width, height"""
@@ -258,51 +269,117 @@ def _compute_box(dims):
     J = 4*Am**2*t_avg / perimeter if perimeter > 0 else 0.0
     return A, Ix, Iy, J
 
-def _compute_i_section(dims):
-    """I: w_top, w_bot, h, t_top, t_bot, t_web
-    I-section with possibly different top/bottom flanges.
-    """
-    wt = dims[0]; wb = dims[1]; h = dims[2]
-    tt = dims[3]; tb = dims[4]; tw = dims[5]
-    hw = h - tt - tb  # web height
-    # Areas
+def _i_section(h, wb, wt, tw, tb, tt):
+    """상/하 플랜지가 다를 수 있는 I 단면의 A, Ix, Iy, J."""
+    hw = max(h - tt - tb, 0.0)
     A_top = wt * tt; A_bot = wb * tb; A_web = hw * tw
     A = A_top + A_bot + A_web
-    # Centroid from bottom
-    y_top = h - tt/2; y_bot = tb/2; y_web = tb + hw/2
-    if A > 0:
-        yc = (A_top*y_top + A_bot*y_bot + A_web*y_web) / A
-    else:
-        yc = h/2
-    # Ix about centroid (parallel axis theorem)
-    Ix = (wt*tt**3/12 + A_top*(y_top-yc)**2 +
-          wb*tb**3/12 + A_bot*(y_bot-yc)**2 +
-          tw*hw**3/12 + A_web*(y_web-yc)**2)
-    Iy = tt*wt**3/12 + tb*wb**3/12 + hw*tw**3/12
-    # Approximate torsion constant
-    J = (wt*tt**3 + wb*tb**3 + hw*tw**3) / 3.0
+    y_top = h - tt / 2.0; y_bot = tb / 2.0; y_web = tb + hw / 2.0
+    yc = ((A_top * y_top + A_bot * y_bot + A_web * y_web) / A
+          if A > 0 else h / 2.0)
+    Ix = (wt * tt**3 / 12 + A_top * (y_top - yc)**2 +
+          wb * tb**3 / 12 + A_bot * (y_bot - yc)**2 +
+          tw * hw**3 / 12 + A_web * (y_web - yc)**2)
+    Iy = tt * wt**3 / 12 + tb * wb**3 / 12 + hw * tw**3 / 12
+    J = (wt * tt**3 + wb * tb**3 + hw * tw**3) / 3.0
     return A, Ix, Iy, J
 
-def _compute_i1_section(dims):
-    """I1: w_bot, w_top, h_total, t_web
-    I1 section with equal flanges (simplified I).
+def _compute_i_section(dims):
+    """I: DIM1=전체 깊이, DIM2=하부 플랜지 폭, DIM3=상부 플랜지 폭,
+    DIM4=웨브 두께, DIM5=하부 플랜지 두께, DIM6=상부 플랜지 두께.
     """
-    wb = dims[0]; wt = dims[1]; h = dims[2]; tw = dims[3]
-    # Approximate flange thickness from geometry
-    tf = tw  # Assume flange thickness = web thickness if not specified
-    return _compute_i_section([wt, wb, h, tf, tf, tw])
+    h, wb, wt, tw, tb, tt = dims[0], dims[1], dims[2], dims[3], dims[4], dims[5]
+    return _i_section(h, wb, wt, tw, tb, tt)
+
+def _compute_i1_section(dims):
+    """I1: DIM1=플랜지 폭 - 웨브 두께, DIM2=웨브 두께,
+    DIM3=플랜지 사이 순 웨브 높이, DIM4=전체 깊이. 상하 플랜지 동일.
+    """
+    tw = dims[1]; bf = dims[0] + tw; hw = dims[2]; h = dims[3]
+    tf = max((h - hw) / 2.0, 0.0)
+    return _i_section(h, bf, bf, tw, tf, tf)
+
+def _channel(bf, tf, h, tw):
+    """웨브가 수직인 채널(ㄷ) 단면. bf=플랜지 전체 폭, h=전체 깊이."""
+    hw = max(h - 2.0 * tf, 0.0)
+    A_f = bf * tf; A_w = hw * tw
+    A = 2.0 * A_f + A_w
+    # 깊이 방향(강축) 관성: 상하 대칭이므로 도심은 중앙
+    Ix = 2.0 * (bf * tf**3 / 12 + A_f * ((h - tf) / 2.0)**2) + tw * hw**3 / 12
+    # 폭 방향(약축) 관성: 웨브가 한쪽에 몰려 도심이 치우친다
+    A_tot = A if A > 0 else 1.0
+    xc = (2.0 * A_f * bf / 2.0 + A_w * tw / 2.0) / A_tot
+    Iy = (2.0 * (tf * bf**3 / 12 + A_f * (bf / 2.0 - xc)**2) +
+          hw * tw**3 / 12 + A_w * (tw / 2.0 - xc)**2)
+    J = (2.0 * bf * tf**3 + hw * tw**3) / 3.0
+    return A, Ix, Iy, J
+
+def _compute_chan(dims):
+    """CHAN: DIM1=플랜지 폭, DIM2=전체 깊이, DIM3=웨브 두께,
+    DIM4=플랜지 두께.
+    """
+    return _channel(dims[0], dims[3], dims[1], dims[2])
 
 def _compute_chan1(dims):
-    """CHAN1: w_flange, t_flange, h, t_web
-    Channel section (open, no torsional stiffness).
+    """CHAN1: DIM1=웨브 바깥 플랜지 폭, DIM2=웨브 두께,
+    DIM3=플랜지 사이 순 웨브 높이, DIM4=전체 깊이.
     """
-    wf = dims[0]; tf = dims[1]; h = dims[2]; tw = dims[3]
-    hw = h - 2*tf
-    A = 2*wf*tf + hw*tw
-    yc = h/2  # symmetric about y
-    Ix = 2*(wf*tf**3/12 + wf*tf*(h/2-tf/2)**2) + tw*hw**3/12
-    Iy = 2*tf*wf**3/12 + hw*tw**3/12
-    J = (2*wf*tf**3 + hw*tw**3) / 3.0
+    tw = dims[1]; bf = dims[0] + tw; hw = dims[2]; h = dims[3]
+    tf = max((h - hw) / 2.0, 0.0)
+    return _channel(bf, tf, h, tw)
+
+def _compute_chan2(dims):
+    """CHAN2: DIM1=플랜지 두께, DIM2=웨브 두께, DIM3=전체 깊이,
+    DIM4=전체 폭. 웨브가 수평인 ㄴ자 반전(U) 배치다.
+    """
+    tf, tw, h, w = dims[0], dims[1], dims[2], dims[3]
+    hf = max(h - tw, 0.0)
+    A_web = w * tw; A_f = tf * hf
+    A = A_web + 2.0 * A_f
+    A_tot = A if A > 0 else 1.0
+    yc = (A_web * tw / 2.0 + 2.0 * A_f * (tw + hf / 2.0)) / A_tot
+    Ix = (w * tw**3 / 12 + A_web * (tw / 2.0 - yc)**2 +
+          2.0 * (tf * hf**3 / 12 + A_f * (tw + hf / 2.0 - yc)**2))
+    Iy = (tw * w**3 / 12 +
+          2.0 * (hf * tf**3 / 12 + A_f * ((w - tf) / 2.0)**2))
+    J = (w * tw**3 + 2.0 * hf * tf**3) / 3.0
+    return A, Ix, Iy, J
+
+def _compute_z_section(dims):
+    """Z: DIM1=플랜지 폭, DIM2=웨브 두께, DIM3=순 웨브 높이,
+    DIM4=전체 깊이. 플랜지가 서로 반대로 뻗는 점만 채널과 다르므로
+    면적과 강축 관성은 같고 약축 관성은 단면 자체 축 기준으로 잡는다.
+    """
+    tw = dims[1]; bf = dims[0] + tw; hw = dims[2]; h = dims[3]
+    tf = max((h - hw) / 2.0, 0.0)
+    hw_c = max(h - 2.0 * tf, 0.0)
+    A_f = bf * tf; A = 2.0 * A_f + hw_c * tw
+    Ix = (2.0 * (bf * tf**3 / 12 + A_f * ((h - tf) / 2.0)**2) +
+          tw * hw_c**3 / 12)
+    # Z는 도심이 웨브 중앙이라 약축 관성이 채널과 다르다
+    Iy = 2.0 * (tf * bf**3 / 12 + A_f * ((bf - tw) / 2.0)**2) + hw_c * tw**3 / 12
+    J = (2.0 * bf * tf**3 + hw_c * tw**3) / 3.0
+    return A, Ix, Iy, J
+
+def _compute_hat(dims):
+    """HAT: DIM1=전체 깊이, DIM2=벽 두께, DIM3=한쪽 브림 폭,
+    DIM4=상부 폭. 균일 두께 박벽 조립체로 계산한다.
+    """
+    h, t, wb, wt = dims[0], dims[1], dims[2], dims[3]
+    hw = max(h - t, 0.0)
+    A_top = wt * t; A_web = hw * t; A_brim = wb * t
+    A = A_top + 2.0 * A_web + 2.0 * A_brim
+    A_tot = A if A > 0 else 1.0
+    y_top = h - t / 2.0; y_web = t + hw / 2.0; y_brim = t / 2.0
+    yc = (A_top * y_top + 2.0 * A_web * y_web + 2.0 * A_brim * y_brim) / A_tot
+    Ix = (wt * t**3 / 12 + A_top * (y_top - yc)**2 +
+          2.0 * (t * hw**3 / 12 + A_web * (y_web - yc)**2) +
+          2.0 * (wb * t**3 / 12 + A_brim * (y_brim - yc)**2))
+    half = wt / 2.0
+    Iy = (t * wt**3 / 12 +
+          2.0 * (hw * t**3 / 12 + A_web * half**2) +
+          2.0 * (t * wb**3 / 12 + A_brim * (half + wb / 2.0)**2))
+    J = (wt * t**3 + 2.0 * hw * t**3 + 2.0 * wb * t**3) / 3.0
     return A, Ix, Iy, J
 
 def _compute_l_section(dims):
@@ -330,9 +407,19 @@ def _compute_t_section(dims):
     return A, Ix, Iy, J
 
 _SECTION_COMPUTE = {
-    'ROD': _compute_rod, 'TUBE': _compute_tube, 'BAR': _compute_bar,
-    'BOX': _compute_box, 'I': _compute_i_section, 'I1': _compute_i1_section,
-    'CHAN1': _compute_chan1, 'L': _compute_l_section, 'T': _compute_t_section,
+    'ROD': _compute_rod, 'TUBE': _compute_tube, 'TUBE2': _compute_tube2,
+    'BAR': _compute_bar, 'BOX': _compute_box,
+    'I': _compute_i_section, 'I1': _compute_i1_section,
+    'CHAN': _compute_chan, 'CHAN1': _compute_chan1, 'CHAN2': _compute_chan2,
+    'Z': _compute_z_section, 'HAT': _compute_hat,
+    'L': _compute_l_section, 'T': _compute_t_section,
+}
+
+# 타입별 DIM 개수 — 그 뒤 필드는 NSM이다 (dims에 삼키면 단면이 깨진다)
+_SECTION_NDIM = {
+    'ROD': 1, 'TUBE': 2, 'TUBE2': 2, 'BAR': 2, 'BOX': 6,
+    'I': 6, 'I1': 4, 'CHAN': 4, 'CHAN1': 4, 'CHAN2': 4,
+    'Z': 4, 'HAT': 4, 'L': 4, 'T': 4,
 }
 
 
@@ -375,13 +462,38 @@ class PBARL:
         return p
 
     def compute_section(self):
-        """Compute A, I1, I2, J from cross-section type and dimensions."""
+        """단면 타입과 치수로 A, I1, I2, J를 계산한다.
+
+        타입별 DIM 개수를 넘는 값은 NSM이므로 분리한다. 계산에
+        실패하거나 면적이 0 이하이면 그 요소는 강성이 없는 채로
+        조립되므로 조용히 넘기지 않고 경고한다.
+        """
+        ndim = _SECTION_NDIM.get(self.type_name)
+        if ndim is not None and len(self.dims) > ndim:
+            self.nsm = self.dims[ndim]
+            self.dims = self.dims[:ndim]
+
         compute_fn = _SECTION_COMPUTE.get(self.type_name)
-        if compute_fn and self.dims:
-            try:
-                self.A, self.I1, self.I2, self.J = compute_fn(self.dims)
-            except (IndexError, ZeroDivisionError, ValueError):
-                pass  # Leave as zeros
+        if compute_fn is None:
+            logger.warning(
+                "%s %d: 단면 타입 '%s'는 미지원 — 강성 0으로 조립된다",
+                type(self).__name__, self.pid, self.type_name)
+            return
+        if not self.dims:
+            logger.warning("%s %d: 단면 치수 없음 (타입 %s)",
+                           type(self).__name__, self.pid, self.type_name)
+            return
+        try:
+            self.A, self.I1, self.I2, self.J = compute_fn(self.dims)
+        except (IndexError, ZeroDivisionError, ValueError) as exc:
+            logger.warning("%s %d (%s): 단면 계산 실패 (%s) — 강성 0",
+                           type(self).__name__, self.pid, self.type_name, exc)
+            return
+        if self.A <= 0.0:
+            logger.warning(
+                "%s %d (%s): 단면적 %.6g <= 0 — 치수 %s 확인 필요",
+                type(self).__name__, self.pid, self.type_name,
+                self.A, self.dims)
 
 
 @dataclass
@@ -420,14 +532,7 @@ class PBEAML:
         p.compute_section()
         return p
 
-    def compute_section(self):
-        """Compute A, I1, I2, J from cross-section type and dimensions."""
-        compute_fn = _SECTION_COMPUTE.get(self.type_name)
-        if compute_fn and self.dims:
-            try:
-                self.A, self.I1, self.I2, self.J = compute_fn(self.dims)
-            except (IndexError, ZeroDivisionError, ValueError):
-                pass
+    compute_section = PBARL.compute_section
 
 
 @dataclass

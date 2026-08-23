@@ -90,6 +90,7 @@ $
 $ Trim condition: level flight at M=0.3, q=1531.25 Pa
 $ (V=50 m/s, rho=1.225 kg/m^3 -> q=0.5*1.225*50^2=1531.25)
 $ TRIM  ID  MACH  Q       LABEL1  UX1
-TRIM, 1, 0.3, 1531.25, URDD3, 0.0
+$ NOTE(2026-08): URDD3는 하중배수 nz다. 1g는 0.0이 아니라 1.0으로 쓴다.
+TRIM, 1, 0.3, 1531.25, URDD3, 1.0
 $
 ENDDATA

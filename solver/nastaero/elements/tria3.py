@@ -10,9 +10,12 @@ import numpy as np
 from .base import BaseElement
 
 class CTria3Element(BaseElement):
-    def __init__(self, node_xyz: np.ndarray, E: float, nu: float, t: float, rho: float = 0.0):
+    def __init__(self, node_xyz: np.ndarray, E: float, nu: float, t: float, rho: float = 0.0,
+                 r12: float = 1.0, nsm: float = 0.0):
         self.nodes = node_xyz  # (3, 3)
         self.E = E; self.nu = nu; self.t = t; self.rho = rho
+        # PSHELL 12I/T^3(굽힘 관성비)과 단위면적당 비구조 질량
+        self.r12 = float(r12); self.nsm = float(nsm)
         self._build_local_system()
 
     def _build_local_system(self):
@@ -72,7 +75,7 @@ class CTria3Element(BaseElement):
         km = self.area * Bm.T @ Dm @ Bm
 
         # Plate bending (constant curvature triangle)
-        Db = (E * t**3 / (12 * (1 - nu**2))) * np.array([[1, nu, 0], [nu, 1, 0], [0, 0, (1-nu)/2]])
+        Db = (self.r12 * E * t**3 / (12 * (1 - nu**2))) * np.array([[1, nu, 0], [nu, 1, 0], [0, 0, (1-nu)/2]])
         Bb = (1/A2) * np.array([
             [0, 0, -b1, 0, 0, -b2, 0, 0, -b3],
             [0, c1, 0, 0, c2, 0, 0, c3, 0],
@@ -118,7 +121,7 @@ class CTria3Element(BaseElement):
         return k
 
     def _local_mass(self):
-        total_mass = self.rho * self.t * self.area
+        total_mass = (self.rho * self.t + self.nsm) * self.area
         m_per_node = total_mass / 3.0
         m = np.zeros((18, 18))
         for n_idx in range(3):

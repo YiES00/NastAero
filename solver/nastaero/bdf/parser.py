@@ -59,6 +59,18 @@ class BDFParser:
                     else:
                         logger.warning("INCLUDE not found: %s", inc_path)
                     continue
+                # 탭은 열 위치를 무너뜨려 고정 필드 해석과 연속행
+                # 판정을 모두 깨뜨린다. 8칸 기준으로 전개한다.
+                if "\t" in line:
+                    line = line.expandtabs(8)
+                # 인라인 $ 주석 제거 (INCLUDE 경로는 위에서 이미 처리됨).
+                # 전체 주석 줄은 뒤 단계에서 걸러진다.
+                if not line.lstrip().startswith("$"):
+                    idx = line.find("$")
+                    if idx >= 0:
+                        line = line[:idx].rstrip()
+                        if not line.strip():
+                            continue
                 lines.append(line)
         self._include_depth -= 1
         return lines

@@ -38,6 +38,12 @@ class CBAR:
             if offt_str: e.offt = offt_str
         if len(fields) > 9: e.pa = nastran_int(fields[9])
         if len(fields) > 10: e.pb = nastran_int(fields[10])
+        # 연속행 필드 11~16 = W1A W2A W3A W1B W2B W3B (단부 오프셋)
+        def _w(i0):
+            return np.array([nastran_float(fields[i]) if len(fields) > i else 0.0
+                             for i in (i0, i0 + 1, i0 + 2)])
+        if len(fields) > 11: e.wa = _w(11)
+        if len(fields) > 14: e.wb = _w(14)
         return e
 
 @dataclass
@@ -175,6 +181,12 @@ class CBEAM:
             if offt_str: e.offt = offt_str
         if len(fields) > 9: e.pa = nastran_int(fields[9])
         if len(fields) > 10: e.pb = nastran_int(fields[10])
+        # 연속행 필드 11~16 = W1A W2A W3A W1B W2B W3B (단부 오프셋)
+        def _w(i0):
+            return np.array([nastran_float(fields[i]) if len(fields) > i else 0.0
+                             for i in (i0, i0 + 1, i0 + 2)])
+        if len(fields) > 11: e.wa = _w(11)
+        if len(fields) > 14: e.wb = _w(14)
         return e
 
 

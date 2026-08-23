@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
-from ..field_parser import nastran_int
+from ..field_parser import nastran_int, expand_thru
 
 @dataclass
 class RBE2:
@@ -27,11 +27,8 @@ class RBE2:
         r = cls(); r.eid = nastran_int(fields[1])
         r.independent_node = nastran_int(fields[2])
         r.components = fields[3].strip()
-        for f in fields[4:]:
-            s = f.strip()
-            if s:
-                try: r.dependent_nodes.append(int(s))
-                except ValueError: pass
+        # THRU 범위 지원 (GM 목록에 a THRU b 가능)
+        r.dependent_nodes = expand_thru(fields[4:])
         return r
 
 

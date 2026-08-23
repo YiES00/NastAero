@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Tuple
-from ..field_parser import nastran_int, nastran_float
+from ..field_parser import nastran_int, nastran_float, expand_thru
 
 @dataclass
 class SPC:
@@ -30,14 +30,9 @@ class SPC1:
     @classmethod
     def from_fields(cls, fields: List[str]) -> SPC1:
         spc = cls(); spc.sid = nastran_int(fields[1]); spc.components = fields[2].strip()
-        node_strs = [f.strip() for f in fields[3:] if f.strip()]
-        if len(node_strs) >= 3 and node_strs[1].upper() == "THRU":
-            spc.node_ids = list(range(int(node_strs[0]), int(node_strs[2]) + 1))
-        else:
-            for ns in node_strs:
-                if ns and ns.upper() != "THRU":
-                    try: spc.node_ids.append(int(ns))
-                    except ValueError: pass
+        # THRU는 목록 어디에나 올 수 있다 (선두만 처리하면 중간
+        # 범위의 내부 ID가 통째로 빠진다)
+        spc.node_ids = expand_thru(fields[3:])
         return spc
 
 

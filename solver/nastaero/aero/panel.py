@@ -183,6 +183,18 @@ def generate_panel_mesh(caero1, start_id: int = 0, use_nastran_eid: bool = False
     return boxes
 
 
+def _caero_in_basic(caero, coord):
+    """CAERO1의 P1/P4를 CP 좌표계에서 기본좌표계로 옮긴 사본을 만든다."""
+    import copy
+    out = copy.copy(caero)
+    R = np.asarray(coord.transform, dtype=float)
+    origin = np.asarray(getattr(coord, 'origin', np.zeros(3)), dtype=float)
+    out.p1 = origin + R @ np.asarray(caero.p1, dtype=float)
+    out.p4 = origin + R @ np.asarray(caero.p4, dtype=float)
+    out.cp = 0
+    return out
+
+
 def generate_all_panels(bdf_model, use_nastran_eid: bool = True) -> List[AeroBox]:
     """Generate all DLM boxes from all CAERO1 cards in the model.
 
@@ -201,8 +213,14 @@ def generate_all_panels(bdf_model, use_nastran_eid: bool = True) -> List[AeroBox
     all_boxes = []
     box_id = 0
     aefacts = getattr(bdf_model, 'aefacts', None)
+    coords = getattr(bdf_model, 'coords', None) or {}
     for eid in sorted(bdf_model.caero_panels.keys()):
         caero = bdf_model.caero_panels[eid]
+        cp = int(getattr(caero, 'cp', 0) or 0)
+        if cp and cp in coords:
+            # CAERO1의 P1/P4는 CP 좌표계 성분이다. 기하는 기본
+            # 좌표계에서 세워야 하므로 먼저 환산한 사본을 쓴다.
+            caero = _caero_in_basic(caero, coords[cp])
         boxes = generate_panel_mesh(caero, start_id=box_id,
                                      use_nastran_eid=use_nastran_eid,
                                      aefacts=aefacts)

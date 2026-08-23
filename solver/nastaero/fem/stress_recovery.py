@@ -337,13 +337,10 @@ def _recover_cbar(elem, model, dof_mgr, f_dof_index, u_free):
     if L < 1e-12:
         return np.zeros(3), np.zeros(3)
 
-    # Orientation vector
-    if hasattr(elem, 'g0') and elem.g0 > 0 and elem.g0 in model.nodes:
-        v_vec = model.nodes[elem.g0].xyz_global - n1_xyz
-    else:
-        v_vec = elem.x.copy() if hasattr(elem, 'x') else np.array([0., 0., 1.])
-        if np.linalg.norm(v_vec) < 1e-12:
-            v_vec = np.array([0., 0., 1.])
+    # Orientation vector — 조립부와 동일하게 GA의 CD 좌표계로 해석
+    from .assembly import _resolve_bar_orientation
+    n1_node = model.nodes[nids[0]]
+    v_vec = _resolve_bar_orientation(elem, model, n1_node)
 
     Lambda = build_beam_transform(n1_xyz, n2_xyz, v_vec)
     T12 = build_transform_12x12(Lambda)

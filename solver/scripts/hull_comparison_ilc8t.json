@@ -15,6 +15,7 @@
   29,
   30,
   31,
+  34,
   40,
   41,
   42,
@@ -62,10 +63,13 @@
   5,
   6,
   10,
+  19,
   20,
+  21,
   22,
   23,
   24,
+  25,
   26,
   27,
   28,
@@ -78,6 +82,7 @@
   42,
   43,
   44,
+  46,
   47,
   48,
   51,
@@ -98,8 +103,6 @@
   20055,
   20056,
   20057,
-  20059,
-  20060,
   20083,
   20084,
   20085,
@@ -122,36 +125,42 @@
    "case_id": 20034,
    "label": "Tilt conv V=23.2m/s s=2.0deg nz=1.5 h=0m",
    "category": "vtol_tilt_transition",
-   "exceedance_pct": 0.43
+   "exceedance_pct": 0.9
+  },
+  {
+   "case_id": 46,
+   "label": "One-wheel right nz=3.08 MTOW",
+   "category": "landing",
+   "exceedance_pct": 0.15
+  },
+  {
+   "case_id": 19,
+   "label": "Yaw Right VA RUD=25.0° β=0 MTOW",
+   "category": "yaw",
+   "exceedance_pct": 0.06
+  },
+  {
+   "case_id": 21,
+   "label": "Yaw Left VA RUD=-25.0° β=0 MTOW",
+   "category": "yaw",
+   "exceedance_pct": 0.05
   },
   {
    "case_id": 23,
    "label": "Yaw Right VC RUD=22.2° β=0 MTOW",
    "category": "yaw",
-   "exceedance_pct": 0.27
+   "exceedance_pct": 0.05
   },
   {
-   "case_id": 20060,
-   "label": "Tilt stuck R4 s=90deg (sched 1.8deg) V=7.5m/s h=0m",
-   "category": "vtol_tilt_stuck",
-   "exceedance_pct": 0.08
-  },
-  {
-   "case_id": 20059,
-   "label": "Tilt stuck R3 s=90deg (sched 1.8deg) V=7.5m/s h=0m",
-   "category": "vtol_tilt_stuck",
-   "exceedance_pct": 0.07
+   "case_id": 25,
+   "label": "Yaw Left VC RUD=-22.2° β=0 MTOW",
+   "category": "yaw",
+   "exceedance_pct": 0.04
   },
   {
    "case_id": 20057,
    "label": "Tilt stuck R1 s=90deg (sched 1.8deg) V=7.5m/s h=0m",
    "category": "vtol_tilt_stuck",
-   "exceedance_pct": 0.04
-  },
-  {
-   "case_id": 34,
-   "label": "Checked VC nz=3.80 MTOW",
-   "category": "checked",
    "exceedance_pct": 0.0
   }
  ],
@@ -169,13 +178,13 @@
  "categories_3d": {
   "gust": 1,
   "symmetric": 5,
-  "yaw": 9,
+  "yaw": 12,
+  "landing": 12,
   "vtol_retrim": 8,
   "vtol_tilt_transition": 12,
-  "landing": 11,
   "checked": 2,
-  "vtol_rotor_jam": 8,
   "vtol_hover": 1,
-  "vtol_tilt_stuck": 3
+  "vtol_rotor_jam": 8,
+  "vtol_tilt_stuck": 1
  }
 }

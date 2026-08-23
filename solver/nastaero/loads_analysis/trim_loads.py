@@ -62,7 +62,7 @@ def compute_node_masses(bdf_model: BDFModel) -> Dict[int, float]:
             d13 = coords[2] - coords[0]
             d24 = coords[3] - coords[1]
             area = 0.5 * np.linalg.norm(np.cross(d13, d24))
-            em = rho * t * area
+            em = (rho * t + float(getattr(prop, 'nsm', 0.0) or 0.0)) * area
             m_per_node = em / 4.0
             for nid in nids:
                 node_mass[nid] = node_mass.get(nid, 0.0) + m_per_node
@@ -83,7 +83,7 @@ def compute_node_masses(bdf_model: BDFModel) -> Dict[int, float]:
             v1 = coords[1] - coords[0]
             v2 = coords[2] - coords[0]
             area = 0.5 * np.linalg.norm(np.cross(v1, v2))
-            em = rho * t * area
+            em = (rho * t + float(getattr(prop, 'nsm', 0.0) or 0.0)) * area
             m_per_node = em / 3.0
             for nid in nids:
                 node_mass[nid] = node_mass.get(nid, 0.0) + m_per_node
@@ -94,6 +94,56 @@ def compute_node_masses(bdf_model: BDFModel) -> Dict[int, float]:
         node_mass[nid] = node_mass.get(nid, 0.0) + mass_elem.mass
 
     return node_mass
+
+
+def compute_node_mass_centroids(bdf_model: BDFModel) -> Dict[int, np.ndarray]:
+    """절점별 집중질량이 실제로 작용하는 위치(기본좌표계).
+
+    구조 요소에서 집중된 질량은 절점 위치에 있지만, CONM2는 자체
+    CG가 절점에서 떨어져 있을 수 있다(CID>0 오프셋, CID=0 기본
+    좌표계 오프셋, CID=-1 절대좌표). 질량 중심을 절점 위치로
+    간주하면 CG와 관성 하중의 모멘트 팔이 그만큼 어긋난다.
+
+    Returns
+    -------
+    Dict[int, ndarray(3)]
+        절점 ID -> 그 절점 집중질량의 질량중심 위치. CONM2 오프셋이
+        없으면 절점 좌표와 같다.
+    """
+    node_mass = compute_node_masses(bdf_model)
+    moment: Dict[int, np.ndarray] = {}
+    conm2_mass: Dict[int, float] = {}
+
+    for mass_elem in bdf_model.masses.values():
+        nid = mass_elem.node_id
+        node = bdf_model.nodes.get(nid)
+        if node is None or mass_elem.mass <= 0.0:
+            continue
+        offset = np.asarray(getattr(mass_elem, 'offset', np.zeros(3)),
+                            dtype=float)
+        cid = int(getattr(mass_elem, 'cid', 0) or 0)
+        if cid == -1:
+            pos = offset                       # 기본좌표계 절대 CG
+        else:
+            if cid > 0 and cid in bdf_model.coords:
+                offset = bdf_model.coords[cid].transform @ offset
+            pos = node.xyz_global + offset
+        moment[nid] = moment.get(nid, np.zeros(3)) + mass_elem.mass * pos
+        conm2_mass[nid] = conm2_mass.get(nid, 0.0) + mass_elem.mass
+
+    centroids: Dict[int, np.ndarray] = {}
+    for nid, m_tot in node_mass.items():
+        node = bdf_model.nodes.get(nid)
+        if node is None:
+            continue
+        xyz = node.xyz_global
+        m_c = conm2_mass.get(nid, 0.0)
+        if m_c <= 0.0 or m_tot <= 1e-30:
+            centroids[nid] = xyz
+            continue
+        # 구조 요소 몫은 절점에, CONM2 몫은 자기 CG에 있다
+        centroids[nid] = (moment[nid] + (m_tot - m_c) * xyz) / m_tot
+    return centroids
 
 
 def compute_nodal_aero_forces(
@@ -284,6 +334,8 @@ def compute_nodal_inertial_forces(
     node_mass = compute_node_masses(bdf_model)
     nodal_forces: Dict[int, np.ndarray] = {}
 
+    centroids = compute_node_mass_centroids(bdf_model)
+
     for nid in bdf_model.nodes:
         f = np.zeros(6)
         m = node_mass.get(nid, 0.0)
@@ -293,9 +345,34 @@ def compute_nodal_inertial_forces(
             # Lateral inertial load for yaw/roll maneuvers
             if abs(ny) > 1e-6:
                 f[1] = -m * ny * g
+            # 질량 중심이 절점에서 떨어져 있으면(CONM2 오프셋) 그 힘을
+            # 절점으로 옮기며 팔에 해당하는 모멘트가 생긴다.
+            d = centroids.get(nid)
+            if d is not None:
+                d = d - bdf_model.nodes[nid].xyz_global
+                if np.any(np.abs(d) > 1e-12):
+                    f[3:6] += np.cross(d, f[:3])
         nodal_forces[nid] = f
 
     return nodal_forces
+
+
+def _distribute_box_forces(aero_forces, G_force_node, dof_mgr
+                            ) -> Dict[int, np.ndarray]:
+    """박스 공력을 물리공간 스플라인 가중치로 절점에 분배한다.
+
+    자유도 소거(RBE2 종속/SPC)와 무관한 행렬이므로 박스별 가중치 합이
+    1로 유지되고, 뒤따르는 보존 재스케일이 사실상 항등이 된다.
+    """
+    node_ids = list(dof_mgr.node_ids)
+    nodal: Dict[int, np.ndarray] = {nid: np.zeros(6) for nid in node_ids}
+    GT = G_force_node.T
+    for comp in range(3):
+        f_nodal = GT @ np.real(aero_forces[:, comp]).astype(float)
+        f_nodal = np.asarray(f_nodal).ravel()
+        for k, nid in enumerate(node_ids):
+            nodal[nid][comp] += f_nodal[k]
+    return nodal
 
 
 def compute_trim_nodal_loads(
@@ -308,6 +385,7 @@ def compute_trim_nodal_loads(
     nz: float = 1.0,
     g: float = 9810.0,
     ny: float = 0.0,
+    G_force_node=None,
 ) -> Tuple[Dict[int, np.ndarray], Dict[int, np.ndarray], Dict[int, np.ndarray]]:
     """Compute all three nodal force sets for a trimmed condition.
 
@@ -325,6 +403,11 @@ def compute_trim_nodal_loads(
         Gravitational acceleration.
     ny : float
         Lateral load factor (0.0 for symmetric flight).
+    G_force_node : sparse (n_boxes, n_nodes), optional
+        물리공간 힘 분배 행렬. 주어지면 자유도 소거의 영향을 받지 않는
+        이 행렬로 박스 힘을 분배한다(권장). 없으면 자유 자유도만 담은
+        G_eff로 되돌아가며, 이 경우 RBE2 종속/SPC 절점의 가중치가
+        빠져 분포가 왜곡될 수 있다.
 
     Returns
     -------
@@ -335,8 +418,11 @@ def compute_trim_nodal_loads(
     logger.info("Computing nodal trim loads...")
 
     # Aerodynamic forces
-    aero_nodal = compute_nodal_aero_forces_fast(
-        bdf_model, boxes, aero_forces, G_eff_sparse, f_dofs, dof_mgr)
+    if G_force_node is not None:
+        aero_nodal = _distribute_box_forces(aero_forces, G_force_node, dof_mgr)
+    else:
+        aero_nodal = compute_nodal_aero_forces_fast(
+            bdf_model, boxes, aero_forces, G_eff_sparse, f_dofs, dof_mgr)
 
     # --- Post-spline force conservation ---
     # The spline transpose G_z.T may not perfectly conserve total force
@@ -355,10 +441,14 @@ def compute_trim_nodal_loads(
         if abs(total_nodal_raw[comp]) > 1.0 and abs(total_panel[comp]) > 1.0:
             scale = total_panel[comp] / total_nodal_raw[comp]
             if abs(scale - 1.0) > 1e-6:
-                logger.info("  Spline force conservation [%s]: "
-                            "panel=%.1f, nodal=%.1f, scale=%.6f",
-                            "XYZ"[comp], total_panel[comp],
-                            total_nodal_raw[comp], scale)
+                # 재스케일은 미세 보정용이다. 크게 벗어나면 분배
+                # 가중치 자체가 결손된 것이므로(예: 자유도 소거로
+                # 빠진 SET 절점) 균등 스케일이 분포를 왜곡한다.
+                emit = logger.warning if abs(scale - 1.0) > 0.01 else logger.info
+                emit("  Spline force conservation [%s]: "
+                     "panel=%.1f, nodal=%.1f, scale=%.6f",
+                     "XYZ"[comp], total_panel[comp],
+                     total_nodal_raw[comp], scale)
                 for nid in aero_nodal:
                     aero_nodal[nid][comp] *= scale
 
@@ -481,12 +571,15 @@ def apply_inertia_relief(
         F_res += f[:3]
         M_res += np.cross(r, f[:3]) + f[3:6]
 
-    # CG 기준 관성텐서 I = Σ m (|r|²E - r⊗r)
+    # CG 기준 관성텐서 I = Σ m (|r|²E - r⊗r).
+    # 팔은 절점이 아니라 그 절점 집중질량의 질량중심 기준이어야
+    # Σm·r = 0 과 relief 합모멘트 상쇄가 정확히 성립한다.
+    centroids = compute_node_mass_centroids(bdf_model)
     inertia = np.zeros((3, 3))
     for nid, m in node_mass.items():
-        if nid not in bdf_model.nodes:
+        if nid not in centroids:
             continue
-        r = bdf_model.nodes[nid].xyz_global - cg
+        r = centroids[nid] - cg
         inertia += m * (np.dot(r, r) * np.eye(3) - np.outer(r, r))
 
     a_lin = F_res / total_mass                       # 선형 가속도
@@ -498,22 +591,19 @@ def apply_inertia_relief(
 
     # relief 분포 하중: 합력 -F_res, 합모멘트 -M_res 정확 (Σm·r=0, I 정의)
     for nid, m in node_mass.items():
-        if nid not in bdf_model.nodes or m <= 0:
+        if nid not in centroids or m <= 0:
             continue
-        r = bdf_model.nodes[nid].xyz_global - cg
+        r = centroids[nid] - cg
         f_rel = -m * (a_lin + np.cross(omega_dot, r))
-        if nid in inertial_nodal:
-            inertial_nodal[nid][:3] += f_rel
-        else:
-            v = np.zeros(6)
-            v[:3] = f_rel
-            inertial_nodal[nid] = v
-        if nid in combined_nodal:
-            combined_nodal[nid][:3] += f_rel
-        else:
-            v = np.zeros(6)
-            v[:3] = f_rel
-            combined_nodal[nid] = v
+        # 질량중심에 작용하는 힘을 절점으로 옮기는 오프셋 모멘트
+        d = centroids[nid] - bdf_model.nodes[nid].xyz_global
+        m_rel = np.cross(d, f_rel) if np.any(np.abs(d) > 1e-12) else None
+        for target in (inertial_nodal, combined_nodal):
+            if nid not in target:
+                target[nid] = np.zeros(6)
+            target[nid][:3] += f_rel
+            if m_rel is not None:
+                target[nid][3:6] += m_rel
 
     logger.info("  Inertia relief closure: |F_res|=%.2f, |M_res|=%.3e -> "
                 "a=%s, omega_dot=%s",
@@ -544,7 +634,8 @@ def verify_trim_balance(
     bdf_model : BDFModel
     combined_forces : Dict[int, ndarray(6)]
     ref_point : ndarray(3), optional
-        Moment reference point. Defaults to CG.
+        Moment reference point. Defaults to the basic origin (0,0,0).
+        (호출부가 CG를 원하면 명시적으로 넘긴다.)
 
     Returns
     -------

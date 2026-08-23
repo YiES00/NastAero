@@ -22,13 +22,13 @@ jobs:
         include:
           - profile: solver
             extras: "dev,plot"
-            expect_total: 816
-            expect_passed: 790
+            expect_total: 897
+            expect_passed: 871
             expect_skipped: 26
           - profile: full
             extras: "dev,plot,gui"
-            expect_total: 866
-            expect_passed: 840
+            expect_total: 947
+            expect_passed: 921
             expect_skipped: 26
 
     steps:

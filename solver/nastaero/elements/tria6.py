@@ -21,7 +21,7 @@ _TRI_GW = np.array([1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0])
 
 class CTria6Element(BaseElement):
     def __init__(self, node_xyz: np.ndarray, E: float, nu: float, t: float,
-                 rho: float = 0.0):
+                 rho: float = 0.0, r12: float = 1.0, nsm: float = 0.0):
         """
         Args:
             node_xyz: (6, 3) array of node coordinates in global frame.
@@ -31,6 +31,8 @@ class CTria6Element(BaseElement):
         """
         self.nodes = node_xyz  # (6, 3)
         self.E = E; self.nu = nu; self.t = t; self.rho = rho
+        # PSHELL 12I/T^3(굽힘 관성비)과 단위면적당 비구조 질량
+        self.r12 = float(r12); self.nsm = float(nsm)
         self._build_local_system()
 
     def _build_local_system(self):
@@ -120,7 +122,7 @@ class CTria6Element(BaseElement):
         # Constitutive matrices
         Dm = (E * t / (1 - nu**2)) * np.array(
             [[1, nu, 0], [nu, 1, 0], [0, 0, (1 - nu) / 2]])
-        Db = (E * t**3 / (12 * (1 - nu**2))) * np.array(
+        Db = (self.r12 * E * t**3 / (12 * (1 - nu**2))) * np.array(
             [[1, nu, 0], [nu, 1, 0], [0, 0, (1 - nu) / 2]])
         kappa = 5.0 / 6.0
         Ds = kappa * (E * t / (2 * (1 + nu))) * np.eye(2)
@@ -180,34 +182,36 @@ class CTria6Element(BaseElement):
                 for jj in range(12):
                     k[bend_dofs[ii], bend_dofs[jj]] += kb[ii, jj]
 
-        # 1-point reduced integration for transverse shear (centroid)
-        # gamma_xz = dw/dx - ry, gamma_yz = dw/dy + rx
-        L1_c, L2_c = 1.0 / 3.0, 1.0 / 3.0
-        w_c = 1.0  # weight for single centroid rule
-        N_c, dNdL1_c, dNdL2_c = self.shape_functions(L1_c, L2_c)
+        # 횡전단: 막/굽힘과 같은 3점 규칙으로 적분한다.
+        # 1점 축약은 CTRIA3(선형)에는 맞지만 2차 요소에서는 전단
+        # 랭크가 2밖에 안 나와 판 부분에 스퓨리어스 영에너지 모드가
+        # 4개 남고, 조립하면 계가 특이해진다(감사 2026-08).
+        # gamma_xz = dw/dx + theta_y, gamma_yz = dw/dy - theta_x
+        for (L1, L2), w in zip(_TRI_GP, _TRI_GW):
+            N_g, dNdL1_g, dNdL2_g = self.shape_functions(L1, L2)
 
-        J_c = np.zeros((2, 2))
-        J_c[0, 0] = dNdL1_c @ xy[:, 0]
-        J_c[0, 1] = dNdL1_c @ xy[:, 1]
-        J_c[1, 0] = dNdL2_c @ xy[:, 0]
-        J_c[1, 1] = dNdL2_c @ xy[:, 1]
-        detJ_c = np.linalg.det(J_c)
-        Jinv_c = np.linalg.inv(J_c)
+            J_g = np.zeros((2, 2))
+            J_g[0, 0] = dNdL1_g @ xy[:, 0]
+            J_g[0, 1] = dNdL1_g @ xy[:, 1]
+            J_g[1, 0] = dNdL2_g @ xy[:, 0]
+            J_g[1, 1] = dNdL2_g @ xy[:, 1]
+            detJ_g = np.linalg.det(J_g)
+            Jinv_g = np.linalg.inv(J_g)
 
-        dNdx_c = Jinv_c[0, 0] * dNdL1_c + Jinv_c[0, 1] * dNdL2_c
-        dNdy_c = Jinv_c[1, 0] * dNdL1_c + Jinv_c[1, 1] * dNdL2_c
+            dNdx_g = Jinv_g[0, 0] * dNdL1_g + Jinv_g[0, 1] * dNdL2_g
+            dNdy_g = Jinv_g[1, 0] * dNdL1_g + Jinv_g[1, 1] * dNdL2_g
 
-        Bs = np.zeros((2, 18))
-        for nd in range(6):
-            Bs[0, 3 * nd] = dNdx_c[nd]        # dw/dx
-            Bs[0, 3 * nd + 2] = N_c[nd]       # +theta_y (Nastran)
-            Bs[1, 3 * nd] = dNdy_c[nd]         # dw/dy
-            Bs[1, 3 * nd + 1] = -N_c[nd]       # -theta_x (Nastran)
+            Bs = np.zeros((2, 18))
+            for nd in range(6):
+                Bs[0, 3 * nd] = dNdx_g[nd]        # dw/dx
+                Bs[0, 3 * nd + 2] = N_g[nd]       # +theta_y (Nastran)
+                Bs[1, 3 * nd] = dNdy_g[nd]        # dw/dy
+                Bs[1, 3 * nd + 1] = -N_g[nd]      # -theta_x (Nastran)
 
-        ks = Bs.T @ Ds @ Bs * detJ_c * w_c * 0.5
-        for ii in range(18):
-            for jj in range(18):
-                k[shear_dofs[ii], shear_dofs[jj]] += ks[ii, jj]
+            ks = Bs.T @ Ds @ Bs * detJ_g * w * 0.5
+            for ii in range(18):
+                for jj in range(18):
+                    k[shear_dofs[ii], shear_dofs[jj]] += ks[ii, jj]
 
         # Drilling DOF stabilization
         area = self._compute_area()
@@ -220,7 +224,7 @@ class CTria6Element(BaseElement):
 
     def _local_mass(self):
         area = self._compute_area()
-        total_mass = self.rho * self.t * area
+        total_mass = (self.rho * self.t + self.nsm) * area
         m_per_node = total_mass / 6.0
         m = np.zeros((36, 36))
         for nd in range(6):

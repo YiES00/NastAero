@@ -26,7 +26,7 @@ def solve_modes(bdf_model: BDFModel) -> ResultData:
         if eigrl is None:
             logger.warning("METHOD %d not found, using default (10 modes)", effective.method_id)
             nd = 10
-            v1, v2, norm = 0.0, 0.0, "MAX"
+            v1, v2, norm = 0.0, 0.0, "MASS"   # MSC 기본 정규화
         else:
             nd = eigrl.nd if eigrl.nd > 0 else 10
             v1, v2, norm = eigrl.v1, eigrl.v2, eigrl.norm

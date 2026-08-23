@@ -12,7 +12,8 @@ _GP2 = np.array([-1/np.sqrt(3), 1/np.sqrt(3)])
 _GW2 = np.array([1.0, 1.0])
 
 class CQuad4Element(BaseElement):
-    def __init__(self, node_xyz: np.ndarray, E: float, nu: float, t: float, rho: float = 0.0):
+    def __init__(self, node_xyz: np.ndarray, E: float, nu: float, t: float, rho: float = 0.0,
+                 r12: float = 1.0, nsm: float = 0.0):
         """
         Args:
             node_xyz: (4, 3) array of node coordinates in global frame.
@@ -20,6 +21,8 @@ class CQuad4Element(BaseElement):
         """
         self.nodes = node_xyz  # (4, 3)
         self.E = E; self.nu = nu; self.t = t; self.rho = rho
+        # PSHELL 12I/T^3(굽힘 관성비)과 단위면적당 비구조 질량
+        self.r12 = float(r12); self.nsm = float(nsm)
         # Build local coordinate system from element geometry
         self._build_local_system()
 
@@ -86,7 +89,7 @@ class CQuad4Element(BaseElement):
         # Membrane constitutive (plane stress)
         Dm = (E * t / (1 - nu**2)) * np.array([[1, nu, 0], [nu, 1, 0], [0, 0, (1-nu)/2]])
         # Bending constitutive
-        Db = (E * t**3 / (12 * (1 - nu**2))) * np.array([[1, nu, 0], [nu, 1, 0], [0, 0, (1-nu)/2]])
+        Db = (self.r12 * E * t**3 / (12 * (1 - nu**2))) * np.array([[1, nu, 0], [nu, 1, 0], [0, 0, (1-nu)/2]])
         # Shear constitutive
         kappa = 5.0/6.0  # shear correction factor
         Ds = kappa * (E * t / (2 * (1 + nu))) * np.eye(2)
@@ -182,7 +185,7 @@ class CQuad4Element(BaseElement):
     def _local_mass(self):
         """24x24 lumped mass matrix in local coordinates."""
         area = self._compute_area()
-        total_mass = self.rho * self.t * area
+        total_mass = (self.rho * self.t + self.nsm) * area
         m_per_node = total_mass / 4.0
         m = np.zeros((24, 24))
         for n_idx in range(4):

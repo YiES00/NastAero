@@ -135,6 +135,19 @@ def main() -> None:
                            "min_cat": lo[1][1],
                            "max": hi[0], "max_case": hi[1][0],
                            "max_cat": hi[1][1]}
+            # 범주별 극값 — 계열 단독 경계(예: 틸트 회랑만) 인용용
+            by_cat = {}
+            for cid, cd in vmt.items():
+                if comp not in cd:
+                    continue
+                import numpy as _np
+                arr = _np.asarray(cd[comp][qty], float)
+                cat = labels.get(cid, ("", "?"))[1]
+                d = by_cat.setdefault(cat, [float("inf"), float("-inf")])
+                d[0] = min(d[0], float(arr.min()))
+                d[1] = max(d[1], float(arr.max()))
+            entry[name]["by_category"] = {
+                k: {"min": v[0], "max": v[1]} for k, v in sorted(by_cat.items())}
         out[f"{comp}/{qty}"] = entry
 
     with open(os.path.join(HERE, "ilc8t_comparison.json"), "w") as f:

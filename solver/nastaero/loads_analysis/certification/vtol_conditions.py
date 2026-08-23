@@ -388,7 +388,7 @@ def tilt_allocation(V: float, sigma_deg: float, nz: float,
     s = _m.sin(_m.radians(max(sigma_deg, 1e-3)))
     c = _m.cos(_m.radians(sigma_deg))
     F = D / s
-    q = 0.5 * 1.225 * V ** 2
+    q = 0.5 * rho * V ** 2
     L_cap = CL_transition * q * wing_area_m2
     L_wing = min(L_cap, max(0.0, nz * W - F * c))
     A = max(0.0, nz * W - F * c - L_wing)

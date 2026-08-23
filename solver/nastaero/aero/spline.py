@@ -213,49 +213,6 @@ def build_beam_spline(struct_nodes: np.ndarray, aero_points: np.ndarray,
     return G_ka
 
 
-def build_spline_matrix(bdf_model, boxes: List[AeroBox],
-                        struct_node_ids: List[int]) -> np.ndarray:
-    """Build the full structural-to-aero interpolation matrix.
-
-    Maps structural z-displacements at SETG nodes to
-    aerodynamic z-displacements at box control points.
-
-    Parameters
-    ----------
-    bdf_model : BDFModel
-    boxes : list of AeroBox
-    struct_node_ids : list of int
-        Structural node IDs in the spline set.
-
-    Returns
-    -------
-    G_ka : ndarray (n_aero, n_struct)
-        Interpolation matrix.
-    """
-    # Collect structural node coordinates
-    struct_xyz = np.array([bdf_model.nodes[nid].xyz_global
-                           for nid in struct_node_ids])
-
-    # Collect aerodynamic control points
-    aero_pts = np.array([box.control_point for box in boxes])
-
-    # Determine spline type from model splines
-    # Default to IPS
-    use_ips = True
-    dz = 0.0
-    for sid, spline in bdf_model.splines.items():
-        if hasattr(spline, 'method'):
-            if spline.method == "IPS" or spline.method == "FPS":
-                use_ips = True
-            dz = getattr(spline, 'dz', 0.0)
-            break
-
-    if use_ips:
-        return build_ips_spline(struct_xyz, aero_pts, dz)
-    else:
-        return build_beam_spline(struct_xyz, aero_pts)
-
-
 def _green_function(r: float) -> float:
     """Thin-plate Green's function: G(r) = r^2 * (ln(r) - 1) / (8*pi)."""
     if r < 1e-12:

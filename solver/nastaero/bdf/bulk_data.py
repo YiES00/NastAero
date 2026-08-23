@@ -121,7 +121,10 @@ def parse_bulk_card(fields: List[str], model: BDFModel) -> None:
         elif card_name == "CAERO1":
             c = CAERO1.from_fields(fields); model.caero_panels[c.eid] = c
         elif card_name == "PAERO1":
-            p = PAERO1.from_fields(fields); model.properties[p.pid] = p
+            # PAERO ID 공간은 구조 물성과 분리돼 있다(MSC). 같은 dict에
+            # 넣으면 PID가 겹치는 유효 덱에서 구조 물성을 덮어써
+            # 그 요소가 조용히 조립에서 빠진다.
+            p = PAERO1.from_fields(fields); model.paeros[p.pid] = p
         elif card_name == "SPLINE1":
             s = SPLINE1.from_fields(fields); model.splines[s.eid] = s
         elif card_name == "SPLINE2":

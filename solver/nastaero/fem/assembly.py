@@ -193,13 +193,17 @@ def assemble_global_matrices(model: BDFModel, dof_mgr: DOFManager):
         m = mass_elem.mass
         offset = mass_elem.offset.copy()
 
-        # Inertia tensor at CG (symmetric, Nastran lower-triangular convention):
-        #   [[I11, I21, I31],
-        #    [I21, I22, I32],
-        #    [I31, I32, I33]]
-        I_cg = np.array([[mass_elem.I11, mass_elem.I21, mass_elem.I31],
-                         [mass_elem.I21, mass_elem.I22, mass_elem.I32],
-                         [mass_elem.I31, mass_elem.I32, mass_elem.I33]])
+        # Inertia tensor at CG. MSC의 I21/I31/I32는 관성곱의 크기
+        # (양의 적분 integral xi*xj dm)이고, 텐서로 조립할 때 음부호를
+        # 자동으로 붙인다:
+        #   [[ I11, -I21, -I31],
+        #    [-I21,  I22, -I32],
+        #    [-I31, -I32,  I33]]
+        # 아래 평행축 항 m*(r.r*I - r x r)의 비대각 성분이 -m*ri*rj로
+        # 이미 물리 텐서 규약이므로, 카드 항도 같은 규약이어야 한다.
+        I_cg = np.array([[mass_elem.I11, -mass_elem.I21, -mass_elem.I31],
+                         [-mass_elem.I21, mass_elem.I22, -mass_elem.I32],
+                         [-mass_elem.I31, -mass_elem.I32, mass_elem.I33]])
 
         # CID coordinate transform: rotate offset and inertia to basic
         cid = mass_elem.cid
@@ -207,6 +211,13 @@ def assemble_global_matrices(model: BDFModel, dof_mgr: DOFManager):
             R = model.coords[cid].transform  # 3x3 rotation
             offset = R @ offset
             I_cg = R @ I_cg @ R.T
+        elif cid == -1:
+            # QRG: X1~X3는 오프셋이 아니라 기본좌표계 기준 질량 CG의
+            # 절대좌표다. 관성은 이미 그 CG 기준 기본축이므로 회전 없이
+            # 절점 기준 오프셋으로만 환산한다.
+            node = model.nodes.get(nid)
+            if node is not None:
+                offset = offset - node.xyz_global
 
         # Translational mass
         for i in range(3):
@@ -228,8 +239,11 @@ def assemble_global_matrices(model: BDFModel, dof_mgr: DOFManager):
                     conm2_cols.append(node_dofs[3 + j])
                     conm2_vals.append(val)
 
-        # Translation-rotation coupling from offset: M_tr = m * skew(r)
-        # M[trans, rot] = m * skew(r), M[rot, trans] = -m * skew(r) = (m*skew(r))^T
+        # Translation-rotation coupling from offset: M_tr = -m * skew(r)
+        # v_cg = u_dot + omega x r = u_dot - skew(r) omega 이므로 운동
+        # 에너지의 교차항은 -m u_dot^T skew(r) omega 다. 따라서
+        # M[trans, rot] = -m*skew(r), M[rot, trans] = +m*skew(r).
+        # 부호가 반대면 오프셋이 절점을 통해 반전된 것과 같아진다.
         # skew(r) = [[0, -r3, r2], [r3, 0, -r1], [-r2, r1, 0]]
         if m > 0 and np.linalg.norm(r) > 1e-15:
             S = np.array([[0, -r[2], r[1]],
@@ -240,14 +254,14 @@ def assemble_global_matrices(model: BDFModel, dof_mgr: DOFManager):
                 for j in range(3):
                     val = mS[i, j]
                     if abs(val) > 1e-30:
-                        # Upper-right block: trans-rot
+                        # Upper-right block: trans-rot = -m*skew(r)
                         conm2_rows.append(node_dofs[i])
                         conm2_cols.append(node_dofs[3 + j])
-                        conm2_vals.append(val)
-                        # Lower-left block: rot-trans (transpose)
+                        conm2_vals.append(-val)
+                        # Lower-left block: rot-trans = +m*skew(r)
                         conm2_rows.append(node_dofs[3 + j])
                         conm2_cols.append(node_dofs[i])
-                        conm2_vals.append(val)
+                        conm2_vals.append(-val)
 
     if conm2_rows:
         rows_m = np.concatenate([rows_m, np.array(conm2_rows, dtype=np.int64)])
@@ -272,6 +286,9 @@ def assemble_global_matrices(model: BDFModel, dof_mgr: DOFManager):
     for rid, rbe in model.rigids.items():
         if rbe.type == "RBE2":
             _build_rbe2_slave_deps(rbe, model, dof_mgr, slave_deps)
+    for rid, rbe in model.rigids.items():
+        if rbe.type == "RBE3":
+            _build_rbe3_slave_deps(rbe, model, dof_mgr, slave_deps)
 
     # --- MPC constraints (elimination method) ---
     for mpc_sid, mpc_list in model.mpcs.items():
@@ -280,9 +297,11 @@ def assemble_global_matrices(model: BDFModel, dof_mgr: DOFManager):
 
     if slave_deps:
         n_rbe2 = sum(1 for r in model.rigids.values() if r.type == "RBE2")
+        n_rbe3 = sum(1 for r in model.rigids.values() if r.type == "RBE3")
         n_mpc = sum(len(v) for v in model.mpcs.values())
-        logger.info("  RBE2/MPC elimination: %d slave DOFs "
-                     "(%d RBE2, %d MPC)", len(slave_deps), n_rbe2, n_mpc)
+        logger.info("  RBE2/RBE3/MPC elimination: %d slave DOFs "
+                     "(%d RBE2, %d RBE3, %d MPC)",
+                     len(slave_deps), n_rbe2, n_rbe3, n_mpc)
 
         # Build transformation matrix G and apply elimination
         K, M = _apply_elimination(K, M, slave_deps, ndof)
@@ -412,6 +431,8 @@ def _assemble_cquad4_batch(elems, model, dof_mgr,
     all_nu = np.empty(n_elem)
     all_t = np.empty(n_elem)
     all_rho = np.empty(n_elem)
+    all_r12 = np.ones(n_elem)    # PSHELL 12I/T^3 (굽힘 관성비)
+    all_nsm = np.zeros(n_elem)   # 단위면적당 비구조 질량
     valid = np.ones(n_elem, dtype=bool)
 
     for idx, (eid, elem) in enumerate(elems):
@@ -426,6 +447,8 @@ def _assemble_cquad4_batch(elems, model, dof_mgr,
                 mat = prop.material_ref
                 E = mat.E; nu = mat.nu; t = prop.t; rho = mat.rho
             all_E[idx] = E; all_nu[idx] = nu; all_t[idx] = t; all_rho[idx] = rho
+            all_r12[idx] = float(getattr(prop, 'ratio_12it3', 1.0) or 1.0)
+            all_nsm[idx] = float(getattr(prop, 'nsm', 0.0) or 0.0)
         except Exception as exc:
             logger.warning("Error collecting CQUAD4 %d: %s", eid, exc)
             valid[idx] = False
@@ -437,6 +460,7 @@ def _assemble_cquad4_batch(elems, model, dof_mgr,
         all_xyz = all_xyz[mask]
         all_E = all_E[mask]; all_nu = all_nu[mask]
         all_t = all_t[mask]; all_rho = all_rho[mask]
+        all_r12 = all_r12[mask]; all_nsm = all_nsm[mask]
         n_elem = int(mask.sum())
 
     if n_elem == 0:
@@ -470,7 +494,8 @@ def _assemble_cquad4_batch(elems, model, dof_mgr,
     E_ = all_E; nu_ = all_nu; t_ = all_t
 
     # --- Compute all ke in batch ---
-    ke_all = _batch_cquad4_stiffness(xy_local, E_, nu_, t_, n_elem)  # (ne, 24, 24)
+    ke_all = _batch_cquad4_stiffness(xy_local, E_, nu_, t_, n_elem,
+                                     r12_=all_r12)  # (ne, 24, 24)
 
     # --- Transform to global: ke_global = T24.T @ ke_local @ T24 ---
     # Instead of building full (ne, 24, 24) T24 matrix and doing triple einsum,
@@ -492,7 +517,8 @@ def _assemble_cquad4_batch(elems, model, dof_mgr,
     dl24 = xy_local[:, 3] - xy_local[:, 1]
     area = 0.5 * np.abs(dl13[:, 0]*dl24[:, 1] - dl13[:, 1]*dl24[:, 0])
 
-    total_mass = all_rho * t_ * area           # (ne,)
+    # 비구조 질량(단위면적당)은 구조 질량과 같은 경로로 실린다
+    total_mass = (all_rho * t_ + all_nsm) * area   # (ne,)
     m_per_node = total_mass / 4.0              # (ne,)
     rot_inertia = m_per_node * t_**2 / 12.0   # (ne,)
 
@@ -536,7 +562,7 @@ def _assemble_cquad4_batch(elems, model, dof_mgr,
     return ptr_k, ptr_m
 
 
-def _batch_cquad4_stiffness(xy_local, E_, nu_, t_, n_elem):
+def _batch_cquad4_stiffness(xy_local, E_, nu_, t_, n_elem, r12_=1.0):
     """Compute 24x24 local stiffness for all CQUAD4 elements simultaneously.
 
     Uses fully vectorized Gauss integration over all elements in parallel.
@@ -557,7 +583,8 @@ def _batch_cquad4_stiffness(xy_local, E_, nu_, t_, n_elem):
     # Membrane: Dm = E*t/(1-nu^2) * [[1, nu, 0], [nu, 1, 0], [0, 0, (1-nu)/2]]
     fac_m = E_ * t_ / (1.0 - nu_**2)   # (ne,)
     # Bending:  Db = E*t^3/(12*(1-nu^2)) * same pattern
-    fac_b = E_ * t_**3 / (12.0 * (1.0 - nu_**2))  # (ne,)
+    # PSHELL 12I/T^3: 실제 굽힘 관성 / (T^3/12) 비율 (기본 1.0)
+    fac_b = r12_ * E_ * t_**3 / (12.0 * (1.0 - nu_**2))  # (ne,)
     # Shear:    Ds = kappa * E*t / (2*(1+nu)) * I_2
     kappa = 5.0 / 6.0
     fac_s = kappa * E_ * t_ / (2.0 * (1.0 + nu_))  # (ne,)
@@ -711,7 +738,9 @@ def _assemble_ctria3_batch(elems, model, dof_mgr,
                 mat = prop.material_ref
                 E = mat.E; nu = mat.nu; t = prop.t; rho = mat.rho
             node_xyz = np.array([model.nodes[nid].xyz_global for nid in elem.node_ids])
-            tri = CTria3Element(node_xyz, E, nu, t, rho)
+            tri = CTria3Element(node_xyz, E, nu, t, rho,
+                                r12=float(getattr(prop, 'ratio_12it3', 1.0) or 1.0),
+                                nsm=float(getattr(prop, 'nsm', 0.0) or 0.0))
             ke = tri.stiffness_matrix()
             me = tri.mass_matrix()
         except Exception as exc:
@@ -741,6 +770,25 @@ def _assemble_ctria3_batch(elems, model, dof_mgr,
     return ptr_k, ptr_m
 
 
+def _resolve_bar_orientation(elem, model, n1):
+    """CBAR/CBEAM 방향 벡터 v를 기본좌표계로 환산한다.
+
+    MSC 규약(QRG): X1~X3는 OFFT 첫 글자가 'B'가 아닌 한 GA의 변위
+    좌표계(CD) 성분이다(기본값 OFFT=GGG). G0 분기는 절점 좌표
+    차이라 이미 기본좌표계다.
+    """
+    if elem.g0 > 0 and elem.g0 in model.nodes:
+        return model.nodes[elem.g0].xyz_global - n1.xyz_global
+    v = np.asarray(elem.x, dtype=float).copy()
+    if np.linalg.norm(v) < 1e-12:
+        return np.array([0., 0., 1.])
+    offt = (getattr(elem, 'offt', None) or 'GGG')
+    cd = int(getattr(n1, 'cd', 0) or 0)
+    if str(offt)[:1].upper() != 'B' and cd != 0 and cd in model.coords:
+        v = model.coords[cd].transform @ v
+    return v
+
+
 def _assemble_cbar_batch(elems, model, dof_mgr,
                           rows_k, cols_k, vals_k,
                           rows_m, cols_m, vals_m,
@@ -757,15 +805,14 @@ def _assemble_cbar_batch(elems, model, dof_mgr,
             mat = prop.material_ref
             n1 = model.nodes[elem.node_ids[0]]
             n2 = model.nodes[elem.node_ids[1]]
-            if elem.g0 > 0 and elem.g0 in model.nodes:
-                v_vector = model.nodes[elem.g0].xyz_global - n1.xyz_global
-            else:
-                v_vector = elem.x.copy()
-                if np.linalg.norm(v_vector) < 1e-12:
-                    v_vector = np.array([0., 0., 1.])
+            v_vector = _resolve_bar_orientation(elem, model, n1)
             bar = CBarElement(n1.xyz_global, n2.xyz_global, v_vector,
                               mat.E, mat.G, prop.A, prop.I1, prop.I2, prop.J,
-                              mat.rho, prop.nsm)
+                              mat.rho, prop.nsm,
+                              pa=getattr(elem, 'pa', 0),
+                              pb=getattr(elem, 'pb', 0),
+                              wa=getattr(elem, 'wa', None),
+                              wb=getattr(elem, 'wb', None))
             ke = bar.stiffness_matrix()
             me = bar.mass_matrix()
         except Exception as exc:
@@ -855,6 +902,15 @@ def _assemble_crod_batch(elems, model, dof_mgr,
     return ptr_k, ptr_m
 
 
+def _cd_rotation(nid, model):
+    """절점의 CD 좌표계 -> 기본좌표계 3x3 회전 (CD=0이면 항등)."""
+    node = model.nodes.get(nid)
+    cd = int(getattr(node, 'cd', 0) or 0) if node is not None else 0
+    if cd and cd in model.coords:
+        return np.asarray(model.coords[cd].transform, dtype=float)
+    return np.eye(3)
+
+
 def _build_rbe2_slave_deps(rbe, model, dof_mgr, slave_deps):
     """Build slave DOF dependency map for RBE2 (elimination method).
 
@@ -905,46 +961,32 @@ def _build_rbe2_slave_deps(rbe, model, dof_mgr, slave_deps):
         ind_dofs = dof_mgr.get_node_dofs(ind_nid)
         dep_dofs = dof_mgr.get_node_dofs(dep_nid)
 
-        if has_trans:
-            offset_mag = np.linalg.norm(r)
+        # 강체 운동학은 기본좌표계에서 정의되지만, 조립된 K/M의
+        # 자유도는 CD!=0 절점에서 CD 성분이다(_apply_cd_transforms).
+        # 따라서 계수는 두 절점의 CD 회전을 함께 태워야 한다:
+        #   D = blkdiag(R_dep,R_dep)^T [[I, -S(r)],[0, I]] blkdiag(R_ind,R_ind)
+        R_ind = _cd_rotation(ind_nid, model)
+        R_dep = _cd_rotation(dep_nid, model)
+        S = np.array([[0.0, -r[2], r[1]],
+                      [r[2], 0.0, -r[0]],
+                      [-r[1], r[0], 0.0]])
+        block = np.zeros((6, 6))
+        block[0:3, 0:3] = np.eye(3)
+        block[0:3, 3:6] = -S
+        block[3:6, 3:6] = np.eye(3)
+        T_ind = np.zeros((6, 6)); T_dep = np.zeros((6, 6))
+        T_ind[0:3, 0:3] = R_ind; T_ind[3:6, 3:6] = R_ind
+        T_dep[0:3, 0:3] = R_dep; T_dep[3:6, 3:6] = R_dep
+        D = T_dep.T @ block @ T_ind
 
-            if offset_mag < 1e-10:
-                # Coincident: u_slave = u_master (no rotation coupling)
-                for comp in [1, 2, 3]:
-                    if comp in cm_set:
-                        slave_deps[dep_dofs[comp - 1]] = [
-                            (ind_dofs[comp - 1], 1.0)]
-            else:
-                # u_d = u_i + theta_i × r
-                if 1 in cm_set:
-                    terms = [(ind_dofs[0], 1.0)]
-                    if abs(r[2]) > 1e-15:
-                        terms.append((ind_dofs[4], r[2]))   # +theta_iy * rz
-                    if abs(r[1]) > 1e-15:
-                        terms.append((ind_dofs[5], -r[1]))  # -theta_iz * ry
-                    slave_deps[dep_dofs[0]] = terms
-
-                if 2 in cm_set:
-                    terms = [(ind_dofs[1], 1.0)]
-                    if abs(r[0]) > 1e-15:
-                        terms.append((ind_dofs[5], r[0]))   # +theta_iz * rx
-                    if abs(r[2]) > 1e-15:
-                        terms.append((ind_dofs[3], -r[2]))  # -theta_ix * rz
-                    slave_deps[dep_dofs[1]] = terms
-
-                if 3 in cm_set:
-                    terms = [(ind_dofs[2], 1.0)]
-                    if abs(r[1]) > 1e-15:
-                        terms.append((ind_dofs[3], r[1]))   # +theta_ix * ry
-                    if abs(r[0]) > 1e-15:
-                        terms.append((ind_dofs[4], -r[0]))  # -theta_iy * rx
-                    slave_deps[dep_dofs[2]] = terms
-
-        # Rotation: theta_slave = theta_master
-        for comp in [4, 5, 6]:
-            if comp in cm_set:
-                slave_deps[dep_dofs[comp - 1]] = [
-                    (ind_dofs[comp - 1], 1.0)]
+        for comp in range(1, 7):
+            if comp not in cm_set:
+                continue
+            row = comp - 1
+            terms = [(ind_dofs[col], D[row, col])
+                     for col in range(6) if abs(D[row, col]) > 1e-14]
+            if terms:
+                slave_deps[dep_dofs[row]] = terms
 
 
 def _assemble_spring(spring, model, dof_mgr, rows_k, cols_k, vals_k):
@@ -995,6 +1037,78 @@ def _assemble_spring(spring, model, dof_mgr, rows_k, cols_k, vals_k):
         vals_k.append(k)
 
 
+def _build_rbe3_slave_deps(rbe, model, dof_mgr, slave_deps):
+    """RBE3의 REFGRID 자유도를 독립 절점 병진의 가중 최소자승 보간으로
+    표현한다 (소거법, RBE2와 같은 slave_deps 구조).
+
+    가중 도심 r_c = sum(w_i r_i)/W 를 기준으로
+      u_bar   = sum(w_i u_i)/W
+      theta_bar = J^-1 sum(w_i rho_i x u_i),  rho_i = r_i - r_c
+      J = sum(w_i (|rho_i|^2 I - rho_i rho_i^T))
+    이고 REFGRID 값은
+      u_ref = u_bar - S(d) theta_bar   (d = r_ref - r_c)
+      theta_ref = theta_bar
+    이다. 독립 절점의 회전 성분은 참여시키지 않는다(Ci=123 관행).
+    J가 특이한 배치(단일/공선 절점)에서는 유사역행렬을 쓴다.
+    """
+    ref_nid = rbe.refgrid
+    if ref_nid not in dof_mgr._nid_to_index or ref_nid not in model.nodes:
+        return
+
+    nids, weights = [], []
+    for wt, comp, grids in rbe.weight_sets:
+        for gid in grids:
+            if gid in dof_mgr._nid_to_index and gid in model.nodes:
+                nids.append(gid)
+                weights.append(float(wt))
+    if not nids:
+        logger.warning("  RBE3 %d: 독립 절점 없음 — 건너뜀", rbe.eid)
+        return
+
+    w = np.array(weights, dtype=float)
+    W = w.sum()
+    if W <= 0:
+        return
+    xyz = np.array([model.nodes[n].xyz_global for n in nids], dtype=float)
+    r_c = (w[:, None] * xyz).sum(axis=0) / W
+    rho = xyz - r_c
+    d = model.nodes[ref_nid].xyz_global - r_c
+
+    J = np.zeros((3, 3))
+    for wi, p in zip(w, rho):
+        J += wi * (float(p @ p) * np.eye(3) - np.outer(p, p))
+    J_inv = np.linalg.pinv(J)
+
+    def skew(v):
+        return np.array([[0.0, -v[2], v[1]],
+                         [v[2], 0.0, -v[0]],
+                         [-v[1], v[0], 0.0]])
+
+    Sd = skew(d)
+    ref_comps = {int(c) for c in rbe.refc if c.isdigit() and 1 <= int(c) <= 6}
+
+    # 성분별 계수: u_ref = sum_i C_i u_i, theta_ref = sum_i D_i u_i
+    for k_local, (nid, wi, p) in enumerate(zip(nids, w, rho)):
+        Sp = skew(p)
+        D_i = wi * (J_inv @ Sp)              # theta_ref <- u_i
+        C_i = (wi / W) * np.eye(3) - Sd @ D_i  # u_ref   <- u_i
+        for row in range(3):
+            if (row + 1) in ref_comps:
+                dof_s = dof_mgr.get_dof(ref_nid, row + 1)
+                terms = slave_deps.setdefault(dof_s, [])
+                for col in range(3):
+                    c = C_i[row, col]
+                    if abs(c) > 1e-14:
+                        terms.append((dof_mgr.get_dof(nid, col + 1), c))
+            if (row + 4) in ref_comps:
+                dof_s = dof_mgr.get_dof(ref_nid, row + 4)
+                terms = slave_deps.setdefault(dof_s, [])
+                for col in range(3):
+                    c = D_i[row, col]
+                    if abs(c) > 1e-14:
+                        terms.append((dof_mgr.get_dof(nid, col + 1), c))
+
+
 def _build_mpc_slave_deps(mpc, dof_mgr, slave_deps):
     """Build slave DOF dependency for an MPC constraint (elimination method).
 
@@ -1028,6 +1142,33 @@ def _build_mpc_slave_deps(mpc, dof_mgr, slave_deps):
             terms.append((dof, -coeff / slave_coeff))
 
     slave_deps[slave_dof] = terms
+
+
+def apply_load_elimination(F, slave_deps):
+    """소거된 종속 자유도의 하중을 주 자유도로 옮긴다 (F_new = G^T F).
+
+    _apply_elimination이 K, M을 G^T(.)G로 줄이는 것과 짝이 되는
+    연산이다. 이걸 빼면 RBE2/RBE3/MPC 종속 자유도에 실린 하중이
+    구속 집합에 들어가면서 그대로 사라진다(MSC는 P_n = P_n + G_m^T P_m).
+
+    Parameters
+    ----------
+    F : ndarray
+        전체 하중 벡터 (in-place로 수정하지 않고 사본을 반환).
+    slave_deps : dict
+        {slave_dof: [(master_dof, coeff), ...]}
+    """
+    if not slave_deps:
+        return F
+    F_new = np.asarray(F, dtype=float).copy()
+    for s_dof, terms in slave_deps.items():
+        fs = F_new[s_dof]
+        if fs == 0.0:
+            continue
+        for m_dof, coeff in terms:
+            F_new[m_dof] += coeff * fs
+        F_new[s_dof] = 0.0
+    return F_new
 
 
 def _apply_elimination(K, M, slave_deps, ndof):
@@ -1100,7 +1241,9 @@ def _assemble_cquad8_batch(elems, model, dof_mgr,
                 mat = prop.material_ref
                 E = mat.E; nu = mat.nu; t = prop.t; rho = mat.rho
             node_xyz = np.array([model.nodes[nid].xyz_global for nid in elem.node_ids])
-            q8 = CQuad8Element(node_xyz, E, nu, t, rho)
+            q8 = CQuad8Element(node_xyz, E, nu, t, rho,
+                     r12=float(getattr(prop, 'ratio_12it3', 1.0) or 1.0),
+                     nsm=float(getattr(prop, 'nsm', 0.0) or 0.0))
             ke = q8.stiffness_matrix()
             me = q8.mass_matrix()
         except Exception as exc:
@@ -1149,7 +1292,9 @@ def _assemble_ctria6_batch(elems, model, dof_mgr,
                 mat = prop.material_ref
                 E = mat.E; nu = mat.nu; t = prop.t; rho = mat.rho
             node_xyz = np.array([model.nodes[nid].xyz_global for nid in elem.node_ids])
-            t6 = CTria6Element(node_xyz, E, nu, t, rho)
+            t6 = CTria6Element(node_xyz, E, nu, t, rho,
+                     r12=float(getattr(prop, 'ratio_12it3', 1.0) or 1.0),
+                     nsm=float(getattr(prop, 'nsm', 0.0) or 0.0))
             ke = t6.stiffness_matrix()
             me = t6.mass_matrix()
         except Exception as exc:

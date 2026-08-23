@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List
-from ..field_parser import nastran_int
+from ..field_parser import nastran_int, expand_thru
 
 
 @dataclass
@@ -18,19 +18,5 @@ class SET1:
     def from_fields(cls, fields: List[str]) -> SET1:
         s = cls()
         s.sid = nastran_int(fields[1])
-        raw = [f.strip() for f in fields[2:] if f.strip()]
-        i = 0
-        while i < len(raw):
-            token = raw[i].upper()
-            if token == "THRU" and i >= 1 and i + 1 < len(raw):
-                start = s.ids[-1]  # already appended
-                end = int(raw[i + 1])
-                s.ids.extend(range(start + 1, end + 1))
-                i += 2
-            else:
-                try:
-                    s.ids.append(int(token))
-                except ValueError:
-                    pass
-                i += 1
+        s.ids = expand_thru(fields[2:])
         return s

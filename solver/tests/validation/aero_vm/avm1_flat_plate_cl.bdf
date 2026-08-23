@@ -65,6 +65,7 @@ AESTAT, 502, URDD3
 $
 $ Trim: level flight, solve for alpha
 $ q = 0.5 * 1.225 * 100^2 = 6125 Pa
-TRIM, 1, 0.0, 6125.0, URDD3, 0.0
+$ NOTE(2026-08): URDD3는 하중배수 nz다. 1g는 0.0이 아니라 1.0으로 쓴다.
+TRIM, 1, 0.0, 6125.0, URDD3, 1.0
 $
 ENDDATA

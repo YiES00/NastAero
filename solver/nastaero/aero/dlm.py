@@ -30,21 +30,14 @@ _DESMARAIS_B = np.array([2**n * _DESMARAIS_B_BASE for n in range(12)])
 
 def build_aic_matrix(boxes: List[AeroBox], mach: float = 0.0,
                      reduced_freq: float = 0.0,
-                     sym_xz: int = 0,
-                     kernel: str = 'dlm') -> np.ndarray:
+                     sym_xz: int = 0) -> np.ndarray:
     """Build the Aerodynamic Influence Coefficient (AIC) matrix.
 
-    Two kernel options are available:
-
-    kernel='vlm' (legacy):
-        Horseshoe vortex with Prandtl-Glauert coordinate scaling
-        (y,z → y/β, z/β). Fast, but over-predicts at high Mach.
-
-    kernel='dlm' (default, Nastran-compatible):
-        Compressibility handled inside the kernel function per
-        Rodden, Giesing & Kalman (1972b). The subsonic distance
-        uses r₁ = √(x₀² + β²y₀²) instead of scaling all coords.
-        Matches MSC Nastran's steady DLM implementation.
+    조향(k=0)은 마제형 와류 + Prandtl-Glauert(Goethert) 유선 방향
+    신장(x → x/β; y, z 불변)으로 푼다. 이는 MSC 조향 DLM 커널의
+    거리 R = √(x₀² + β²r₁²)와 같은 변환이다. 진동(k>0)은 Rodden,
+    Taylor & McIntosh (1998) 커널을 쓰며 같은 조향 기저 위에 증분을
+    얹는다.
 
     Parameters
     ----------
@@ -56,8 +49,6 @@ def build_aic_matrix(boxes: List[AeroBox], mach: float = 0.0,
         Reduced frequency k = omega*c/(2*V). k=0 for steady.
     sym_xz : int
         XZ symmetry flag: 0=none, 1=symmetric, -1=antisymmetric.
-    kernel : str
-        'vlm' for horseshoe+PG, 'dlm' for Nastran DLM kernel.
 
     Returns
     -------
@@ -71,9 +62,9 @@ def build_aic_matrix(boxes: List[AeroBox], mach: float = 0.0,
     beta = np.sqrt(max(1.0 - mach**2, 0.01))
 
     if reduced_freq < 1e-10:
-        # Steady case: VLM with Prandtl-Glauert coordinate scaling
-        # (y,z → y/β, z/β).  This is the standard approach matching
-        # MSC Nastran's steady DLM at k=0.
+        # Steady case: VLM with the Prandtl-Glauert (Goethert)
+        # streamwise stretch x → x/β, equivalent to MSC's steady DLM
+        # kernel distance R = sqrt(x0^2 + beta^2*r1^2).
         D = _build_steady_aic_vectorized(boxes, beta)
     else:
         # Oscillatory case: full DLM kernel with complex AIC
@@ -119,8 +110,11 @@ def _build_steady_aic_vectorized(boxes: List[AeroBox], beta: float) -> np.ndarra
     xc_all = np.array([b.control_point for b in boxes])  # (n, 3)
     nrm_all = np.array([b.normal for b in boxes])         # (n, 3)
 
-    # Prandtl-Glauert transformation: scale y, z by 1/beta
-    pg_scale = np.array([1.0, 1.0 / beta, 1.0 / beta])
+    # Prandtl-Glauert (Goethert) transformation: stretch the streamwise
+    # coordinate x by 1/beta (y, z unchanged). Circulation and downwash
+    # map 1:1, and forces use the physical chord/span, so no Cp rescale
+    # is needed; the 2D limit reproduces CL_alpha = 2*pi/beta exactly.
+    pg_scale = np.array([1.0 / beta, 1.0, 1.0])
     xc_pg = xc_all * pg_scale   # (n, 3)
     a_pg = a_pts * pg_scale     # (n, 3)
     b_pg = b_pts * pg_scale     # (n, 3)
@@ -186,15 +180,18 @@ def _build_steady_aic_image_xz(boxes: List[AeroBox], beta: float) -> np.ndarray:
     a_mirror = a_pts * mirror  # original inboard → still near y=0
     b_mirror = b_pts * mirror  # original outboard → now at negative y
 
-    # Prandtl-Glauert
-    pg_scale = np.array([1.0, 1.0 / beta, 1.0 / beta])
+    # Prandtl-Glauert (Goethert): streamwise stretch, same as the
+    # direct AIC path
+    pg_scale = np.array([1.0 / beta, 1.0, 1.0])
     xc_pg = xc_all * pg_scale
     a_pg = a_mirror * pg_scale
     b_pg = b_mirror * pg_scale
 
     xc_i = xc_pg[:, np.newaxis, :]
-    a_j = a_pg[np.newaxis, :, :]
-    b_j = b_pg[np.newaxis, :, :]
+    # Mirroring flips the circulation handedness (vorticity is a
+    # pseudovector), so the image horseshoe runs B->A: swap endpoints
+    a_j = b_pg[np.newaxis, :, :]
+    b_j = a_pg[np.newaxis, :, :]
 
     v_bound = _biot_savart_segment_vec(xc_i, a_j, b_j)
     v_trail_a = _semi_infinite_vortex_vec(xc_i, a_j)
@@ -630,94 +627,6 @@ def _build_dlm_oscillatory_aic_image_xz(boxes: List[AeroBox], mach: float,
 # ============================================================
 # DLM Steady Kernel (legacy experimental, NOT used by default)
 # ============================================================
-
-def _build_dlm_steady_aic(boxes: List[AeroBox], beta: float) -> np.ndarray:
-    """Steady DLM kernel per Rodden, Giesing & Kalman (1972b).
-
-    Unlike VLM+PG (which scales all coordinates by 1/β), the DLM kernel
-    applies the compressibility correction *inside* the kernel function.
-    The subsonic distance uses:  r₁ = √(x₀² + β²·y₀²)
-    instead of VLM's:           r  = √((x₀/β)² + (y₀/β)²)
-
-    For β=1 (M=0), both methods give identical results.
-    For β<1 (M>0), the DLM kernel produces smaller AIC values, matching
-    MSC Nastran's published stability derivatives.
-
-    The horseshoe vortex geometry is the same as VLM (bound segment at
-    1/4 chord, control point at 3/4 chord), but the induced velocity
-    calculation uses the compressible kernel.
-    """
-    n = len(boxes)
-
-    corners = np.array([b.corners for b in boxes])
-    c0 = corners[:, 0]
-    c1 = corners[:, 1]
-    c2 = corners[:, 2]
-    c3 = corners[:, 3]
-
-    a_pts = c0 + 0.25 * (c1 - c0)  # inboard 1/4 chord
-    b_pts = c3 + 0.25 * (c2 - c3)  # outboard 1/4 chord
-    xc_all = np.array([b.control_point for b in boxes])
-    nrm_all = np.array([b.normal for b in boxes])
-
-    # NO coordinate scaling — β is applied inside kernel
-    xc_i = xc_all[:, np.newaxis, :]  # (n, 1, 3)
-    a_j = a_pts[np.newaxis, :, :]    # (1, n, 3)
-    b_j = b_pts[np.newaxis, :, :]    # (1, n, 3)
-
-    # Bound vortex with compressible Biot-Savart
-    v_bound = _dlm_biot_savart_segment(xc_i, a_j, b_j, beta)
-
-    # Trailing legs with compressible semi-infinite vortex
-    v_trail_a = _dlm_semi_infinite_vortex(xc_i, a_j, beta)
-    v_trail_b = _dlm_semi_infinite_vortex(xc_i, b_j, beta)
-
-    v_total = v_bound - v_trail_a + v_trail_b
-
-    nrm_i = nrm_all[:, np.newaxis, :]
-    D = np.sum(v_total * nrm_i, axis=2)
-
-    return D
-
-
-def _build_dlm_steady_aic_image_xz(boxes: List[AeroBox], beta: float) -> np.ndarray:
-    """DLM steady kernel contribution from XZ-plane image vortices.
-
-    Swap A and B for the image horseshoe (same fix as the VLM image)
-    to get the correct circulation sense for the mirrored left wing.
-    """
-    n = len(boxes)
-
-    corners = np.array([b.corners for b in boxes])
-    c0 = corners[:, 0]
-    c1 = corners[:, 1]
-    c2 = corners[:, 2]
-    c3 = corners[:, 3]
-
-    a_pts = c0 + 0.25 * (c1 - c0)
-    b_pts = c3 + 0.25 * (c2 - c3)
-    xc_all = np.array([b.control_point for b in boxes])
-    nrm_all = np.array([b.normal for b in boxes])
-
-    mirror = np.array([1.0, -1.0, 1.0])
-    a_mirror = a_pts * mirror
-    b_mirror = b_pts * mirror
-
-    xc_i = xc_all[:, np.newaxis, :]
-    a_j = a_mirror[np.newaxis, :, :]
-    b_j = b_mirror[np.newaxis, :, :]
-
-    v_bound = _dlm_biot_savart_segment(xc_i, a_j, b_j, beta)
-    v_trail_a = _dlm_semi_infinite_vortex(xc_i, a_j, beta)
-    v_trail_b = _dlm_semi_infinite_vortex(xc_i, b_j, beta)
-
-    v_total = v_bound - v_trail_a + v_trail_b
-
-    nrm_i = nrm_all[:, np.newaxis, :]
-    D_image = np.sum(v_total * nrm_i, axis=2)
-
-    return D_image
-
 
 def _dlm_biot_savart_segment(xc, p1, p2, beta):
     """Compressible Biot-Savart for finite vortex segment.

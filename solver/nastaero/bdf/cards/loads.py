@@ -19,8 +19,11 @@ class FORCE:
             nastran_float(fields[7]) if len(fields) > 7 else 0.0])
         return l
     def get_force_vector(self) -> np.ndarray:
-        n = np.linalg.norm(self.direction)
-        return self.mag * self.direction / n if n > 0 else np.zeros(3)
+        """f = F * N (MSC 규약 — N을 정규화하지 않는다).
+
+        좌표계 CID 성분이므로 조립 단계에서 기본좌표계로 환산한다.
+        """
+        return self.mag * np.asarray(self.direction, dtype=float)
 
 @dataclass
 class MOMENT:
@@ -36,8 +39,8 @@ class MOMENT:
             nastran_float(fields[7]) if len(fields) > 7 else 0.0])
         return l
     def get_moment_vector(self) -> np.ndarray:
-        n = np.linalg.norm(self.direction)
-        return self.mag * self.direction / n if n > 0 else np.zeros(3)
+        """m = M * N (MSC 규약 — N을 정규화하지 않는다)."""
+        return self.mag * np.asarray(self.direction, dtype=float)
 
 @dataclass
 class GRAV:
@@ -53,8 +56,8 @@ class GRAV:
             nastran_float(fields[6]) if len(fields) > 6 else 0.0])
         return l
     def get_acceleration_vector(self) -> np.ndarray:
-        n = np.linalg.norm(self.direction)
-        return self.scale * self.direction / n if n > 0 else np.zeros(3)
+        """a = A * N (MSC 규약 — N을 정규화하지 않는다)."""
+        return self.scale * np.asarray(self.direction, dtype=float)
 
 @dataclass
 class LoadCombination:

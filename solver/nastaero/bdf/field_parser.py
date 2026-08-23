@@ -139,3 +139,32 @@ def parse_card_fields(lines: List[str]) -> List[str]:
         else:
             all_fields.extend(raw[1:9])
     return all_fields
+
+
+def expand_thru(tokens) -> list:
+    """'THRU'가 섞인 ID 토큰 목록을 정수 목록으로 전개한다.
+
+    Nastran의 리스트형 필드(SET1, SPC1, RBE2 등)는 어디서든
+    ``a THRU b`` 를 쓸 수 있고 그 앞뒤에 낱개 ID가 더 올 수 있다.
+    선두 한 번만 처리하면 중간 범위의 내부 ID가 통째로 빠진다.
+    """
+    ids: list = []
+    raw = [str(t).strip() for t in tokens if str(t).strip()]
+    i = 0
+    while i < len(raw):
+        token = raw[i].upper()
+        if token == "THRU" and ids and i + 1 < len(raw):
+            try:
+                end = int(raw[i + 1])
+            except ValueError:
+                i += 1
+                continue
+            ids.extend(range(ids[-1] + 1, end + 1))
+            i += 2
+            continue
+        try:
+            ids.append(int(raw[i]))
+        except ValueError:
+            pass
+        i += 1
+    return ids

@@ -16,7 +16,7 @@ class EIGRL:
     msglvl: int = 0
     maxset: int = 0
     shfscl: float = 0.0
-    norm: str = "MAX"     # Normalization method
+    norm: str = "MASS"   # Normalization method (MSC 기본값)
 
     @classmethod
     def from_fields(cls, fields: List[str]) -> EIGRL:

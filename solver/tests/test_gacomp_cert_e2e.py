@@ -534,14 +534,22 @@ class TestGACOMPE2ERealSolver:
         assert os.path.exists(crit_csv)
 
         # ---- Verify physical reasonableness ----
-        # The nz=3.8 case should have larger combined forces
-        # than the nz=1.0 case
+        # nz=3.8 케이스의 하중 크기가 nz=1.0보다 커야 한다.
+        # 합산 하중은 관성해제로 정확히 자기평형이므로 성분 합은
+        # 두 경우 모두 0이다(그 합을 비교하면 수치 잡음을 비교하게
+        # 된다). 크기 척도로 비교한다.
         f1g = case_results[0].nodal_forces
         f3g = case_results[1].nodal_forces
-        total_fz_1g = abs(sum(f[2] for f in f1g.values()))
-        total_fz_3g = abs(sum(f[2] for f in f3g.values()))
-        assert total_fz_3g > total_fz_1g, \
+        mag_fz_1g = sum(abs(f[2]) for f in f1g.values())
+        mag_fz_3g = sum(abs(f[2]) for f in f3g.values())
+        assert mag_fz_3g > mag_fz_1g, \
             "3.8g forces should exceed 1g forces"
+
+        # 자기평형 확인: 두 경우 모두 합력이 0이어야 한다
+        for tag, ff in (("1g", f1g), ("3.8g", f3g)):
+            scale = max(sum(abs(f[2]) for f in ff.values()), 1.0)
+            assert abs(sum(f[2] for f in ff.values())) / scale < 1e-9, \
+                f"{tag} 합산 하중이 자기평형이 아니다"
 
         # ---- Verify VMT physical reasonableness ----
         # For any wing-like component, nz=3.8 should produce
