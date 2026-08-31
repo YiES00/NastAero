@@ -14,8 +14,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 
+import logging
+
 from .blade import BladeDef
 from .bemt_solver import BEMTSolver, RotorLoads
+
+logger = logging.getLogger(__name__)
 from ..config import logger
 
 
@@ -162,8 +166,35 @@ class ForwardFlightBEMT:
         axial_result = self._axial_solver.solve(rpm, V_axial, rho, collective_rad)
         CT_est = axial_result.CT
 
-        # Glauert mean inflow
+        # CT–lambda 고정점 폐합: 블레이드 적분이 주는 CT로 Glauert 평균
+        # 유입을 다시 풀어 잔차가 수렴할 때까지 반복한다. 1회 계산만
+        # 하면 초기 축류 추정과 최종 블레이드 하중이 폐합되지 않아
+        # 중간 전진비에서 유입이 10~20% 어긋난다(2026-08 검토 지적).
         lambda_i_mean = self._glauert_inflow(mu, lambda_c, CT_est)
+        # 웜스타트: 직전 해의 유입을 초기값으로 쓰면(이분법 반복 중
+        # collective만 조금씩 변함) 폐합이 1~2회에 수렴한다.
+        warm = getattr(self, "_lambda_cache", None)
+        if warm is not None and abs(warm[0] - mu) < 0.05:
+            lambda_i_mean = warm[1]
+        for _closure_it in range(12):
+            chi = (np.arctan2(mu, lambda_c + lambda_i_mean)
+                   if (lambda_c + lambda_i_mean) > 1e-10 else np.pi / 4)
+            CT_bl = self._blade_CT(omega, R, A, rho, mu, lambda_c,
+                                   lambda_i_mean, chi, V_plane,
+                                   collective_rad)
+            lam_new = self._glauert_inflow(mu, lambda_c, CT_bl)
+            if abs(lam_new - lambda_i_mean) <= 1e-5 * max(
+                    abs(lambda_i_mean), 1e-6):
+                lambda_i_mean = lam_new
+                CT_est = CT_bl
+                break
+            # 완화 고정점 (진동 방지)
+            lambda_i_mean = 0.5 * (lambda_i_mean + lam_new)
+            CT_est = CT_bl
+        else:
+            logger.debug("FF BEMT closure not converged (mu=%.3f)", mu)
+
+        self._lambda_cache = (mu, lambda_i_mean)
 
         # Wake skew angle
         lambda_total = lambda_c + lambda_i_mean
@@ -250,6 +281,39 @@ class ForwardFlightBEMT:
             CP=CQ,
             collective_rad=collective_rad,
         )
+
+    def _blade_CT(self, omega, R, A, rho, mu, lambda_c, lambda_i_mean,
+                  chi, V_plane, collective_rad):
+        """폐합 반복용 블레이드 적분 추력계수 (본 해석 루프와 동일 물리).
+
+        본 루프와 같은 국부 유입·받음각·힘 분해를 방위각×반경으로
+        벡터화했다(폐합 반복이 이중 파이썬 루프면 수십 배 느려진다).
+        """
+        psi = np.linspace(0, 2 * np.pi, self.n_azimuth,
+                          endpoint=False)[:, None]          # (na,1)
+        rR = np.asarray(self.blade.get_stations())[None, :]  # (1,nr)
+        dr = self.blade.get_dr()
+        r = rR * R
+        c = np.array([self.blade.chord_at(x) for x in rR[0]])[None, :]
+        theta = (np.array([self.blade.twist_at(x) for x in rR[0]])[None, :]
+                 + collective_rad)
+        kx = (15.0 * np.pi / 23.0) * np.tan(chi / 2.0)
+        lam_loc = np.maximum(
+            lambda_i_mean * (1.0 + kx * rR * np.cos(psi)), 0.0)
+        U_T = omega * r + V_plane * np.sin(psi)
+        U_P = (lambda_c + lam_loc) * omega * R
+        mask = np.abs(U_T) >= 1e-6
+        phi = np.arctan2(U_P, U_T)
+        alpha = theta - phi
+        cl = self.blade.airfoil.cl_array(alpha)
+        cd = self.blade.airfoil.cd_array(alpha)
+        W2 = U_T ** 2 + U_P ** 2
+        dL = 0.5 * rho * W2 * c * cl * dr
+        dD = 0.5 * rho * W2 * c * cd * dr
+        dFz = np.where(mask, dL * np.cos(phi) - dD * np.sin(phi), 0.0)
+        total_T = self.n_blades * dFz.sum() / self.n_azimuth
+        denom_T = rho * A * (omega * R) ** 2
+        return total_T / denom_T if denom_T > 0 else 0.0
 
     def solve_for_thrust(self, target_thrust_N: float, rpm: float,
                          V_inf: float, alpha_shaft: float, rho: float,

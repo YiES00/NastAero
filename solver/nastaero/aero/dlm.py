@@ -475,18 +475,24 @@ def _quartic_integration(xbar: float, ybar: float, zbar: float,
 
         f[p] = F1_val + F2_val
 
-    # Quartic polynomial fit from 5 equally-spaced evaluations
-    # F(eta) = A + B*(eta/e) + C*(eta/e)^2 + D*(eta/e)^3 + E*(eta/e)^4
+    # Quartic polynomial fit from 5 equally-spaced evaluations.
+    # 샘플은 eta = {-e, -e/2, 0, e/2, e}, 즉 노드 간격 h = e/2 이므로
+    # 기저 변수는 x = eta/h = 2*eta/e (x = -2..2) 다.
+    #   F = A + B*x + C*x^2 + D*x^3 + E*x^4
+    # 계수는 간격 1의 표준 5점 유한차분식이다. (2026-08 검토에서
+    # C가 3점식으로, 적분식이 x = eta/e 기준으로 잘못 쓰여 x^2
+    # 성분이 4배, x^4 성분이 16배 과소 적분되던 것을 정정.)
     A = f[2]  # eta = 0
     B = 2.0 / 3.0 * (f[3] - f[1]) - 1.0 / 12.0 * (f[4] - f[0])
-    C = 0.5 * (f[3] + f[1]) - f[2]
+    C = (-(f[4] + f[0]) + 16.0 * (f[3] + f[1]) - 30.0 * f[2]) / 24.0
     D_coeff = 1.0 / 6.0 * (f[4] - f[0]) - 1.0 / 3.0 * (f[3] - f[1])
     E = 0.25 * f[2] - 1.0 / 6.0 * (f[3] + f[1]) + 1.0 / 24.0 * (f[4] + f[0])
 
-    # Analytical integral of quartic over [-e, e]:
-    # integral = 2*e*A + (2/3)*e*C + (2/5)*e*E
-    # (B and D terms vanish for symmetric limits)
-    D_total = 2.0 * e * (A + C / 3.0 + E / 5.0)
+    # Integral over eta in [-e, e] = h * integral over x in [-2, 2]:
+    #   = (e/2) * (4A + (16/3)C + (64/5)E)
+    #   = 2e * (A + (4/3)C + (16/5)E)
+    # (odd terms vanish for symmetric limits)
+    D_total = 2.0 * e * (A + 4.0 * C / 3.0 + 16.0 * E / 5.0)
 
     # Scale by 1/(8*pi) per DLM normalwash convention
     D_total *= 1.0 / (8.0 * np.pi)

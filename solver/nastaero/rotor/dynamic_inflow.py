@@ -48,7 +48,36 @@ class PittPetersInflow:
             reduce the induced-velocity requirement
         z_dot(t) is the body vertical velocity (positive = climbing)
 
-    Time constant tau_nu = 0.85 * R / nu_steady (Pitt-Peters 1981).
+    Time constant tau_nu = [4/(3*pi)] * R / nu_steady (Pitt-Peters 1981).
+
+    유도: 원판의 겉보기 질량 m_a = (8/3) rho R^3 을 동결 질량유량
+    추력 기울기 dT/d(nu) = 2 rho A U (A = pi R^2) 로 나눈다.
+        tau = (8/3) rho R^3 / (2 rho pi R^2 U) = 4/(3 pi) * R / U
+            = 0.4244 * R / U
+    무차원 Pitt-Peters로도 같다. M11 = 8/(3 pi) 를 호버 유입류 이득
+    L^-1_11 = 2 lambda_h 로 나누면 무차원 시상수 0.4244/lambda_h 이고,
+    lambda_h = nu_s/(Omega R) 을 대입하면 0.4244 R/nu_s 가 된다.
+    (v1.2까지 쓰이던 0.85는 무차원 계수 8/(3 pi)를 차원 겉보기 질량으로
+    혼동한 값으로, 정확히 2배 과대였다.)
+
+    계수 선택에 관한 주의 (2026-08 검토 반영). 위 8/(3 pi)는
+    Pitt-Peters (1981) Table 3의 '비보정(uncorrected)' 균일 유입
+    겉보기 질량이다. 같은 표는 압력분포를 보정한 값
+    M11 = 128/(75 pi) (tau = 64/(75 pi) R/U = 0.2716 R/U)도 제시하며
+    이후의 권장 해석행렬은 보정값을 쓴다. 본 모델은 불투과 원판
+    겉보기 질량과 동결 질량유량 기울기라는 자기일관한 1차
+    유도를 따르는 것이므로 비보정 계수를 채택하되, 두 계수는
+    모델 불확실성 범위로 함께 보고한다(ILC-8 기준 tau 13.7 ms 대
+    8.8 ms; 돌풍 주기 T_g = 0.5 s 대비 어느 쪽도 tau << T_g라
+    최대하중 민감도는 2% 미만 — 논문 3 민감도 절 참조).
+
+    모델 정체성. 이 클래스는 표준 Pitt-Peters 유한상태 유입
+    모형(하중계수 C가 입력, 유도유동 lambda가 상태)의 완전 구현이
+    아니라, 그 겉보기 질량 계수를 쓰는 1차 지연 돌풍
+    대체모형(apparent-mass gust surrogate)이다. 상태 강제는
+    nu_eff = nu_s - w_g - z_dot 로 이루어지고 추력 증분은 상태로부터
+    역산된다. 전진비행 확장도 wake-skew 결합 L 행렬이 아니라
+    유효속도 U = sqrt(V^2 + nu^2)의 스칼라 축약이다.
 
     Parameters
     ----------
@@ -95,7 +124,7 @@ class PittPetersInflow:
         self.mass_flow = float(np.sqrt(self.V_forward ** 2
                                        + self.nu_steady ** 2))
         if self.mass_flow > 0:
-            self.tau_nu = 0.85 * self.rotor_radius / self.mass_flow
+            self.tau_nu = (4.0 / (3.0 * np.pi)) * self.rotor_radius / self.mass_flow
         else:
             # Fallback for trivial / numerical cases
             self.tau_nu = 0.05  # 50 ms typical

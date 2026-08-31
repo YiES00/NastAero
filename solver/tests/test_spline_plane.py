@@ -75,3 +75,67 @@ class TestFinDegeneracy:
                 d3 = np.linalg.norm(nodes[i] - nodes[j])
                 d2 = np.linalg.norm(proj[i] - proj[j])
                 assert d2 == pytest.approx(d3, rel=1e-12)
+
+
+class TestFinFlexibleCoupling:
+    """수직면의 유연 공탄성 결합 (2026-08 검토 P1).
+
+    구조 자유도가 전역 z/theta_y로 고정돼 있으면 수직 핀의 유연
+    되먹임이 0이 된다. 일반화 후에는 패널 법선 방향 병진이 면외
+    변위를, 유선방향 기울기장이 워시를 만들어야 한다.
+    """
+
+    def _fin_system(self):
+        from nastaero.aero.spline import (build_ips_spline,
+                                          build_ips_spline_slope)
+        from nastaero.fem.dof_manager import DOFManager
+        from nastaero.solvers.sol144 import (_fill_geff, _project_plane,
+                                             _spline_plane_frame)
+        fin = _panel([0, 0, 0], [0, 0, 900], 400.0, 400.0, nspan=3, nchord=2)
+        idx = list(range(len(fin)))
+        e1, e2 = _spline_plane_frame(fin, idx)
+        nids = [1, 2, 3, 4, 5, 6]
+        xyz = np.array([[x, 0.0, z] for z in (0.0, 450.0, 900.0)
+                        for x in (100.0, 300.0)])
+        dm = DOFManager(nids)
+        f_dofs = list(range(dm.total_dof))
+        fdi = {d: i for i, d in enumerate(f_dofs)}
+        wash = np.array([b.control_point for b in fin])
+        force = np.array([b.doublet_point for b in fin])
+        s2 = _project_plane(xyz, e1, e2)
+        G_w = np.zeros((len(fin), len(f_dofs)))
+        G_d = np.zeros_like(G_w)
+        _fill_geff(G_w, G_d,
+                   build_ips_spline(s2, _project_plane(wash, e1, e2), 0.0),
+                   build_ips_spline(s2, _project_plane(force, e1, e2), 0.0),
+                   idx, nids, force, xyz, dm, fdi,
+                   G_ka_slope=build_ips_spline_slope(
+                       s2, _project_plane(wash, e1, e2), 0.0),
+                   frame=(e1, e2))
+        return G_w, G_d, dm, nids, xyz
+
+    def test_rigid_out_of_plane_translation_gives_zero_wash(self):
+        """균일 면외(y) 병진은 기울기가 없으므로 워시가 0이어야 한다."""
+        G_w, G_d, dm, nids, _ = self._fin_system()
+        u = np.zeros(dm.total_dof)
+        for nid in nids:
+            u[dm.get_dof(nid, 2)] = 1.0
+        assert np.abs(G_w @ u).max() < 1e-12
+        np.testing.assert_allclose(np.abs(G_d @ u), 1.0, atol=1e-9)
+
+    def test_streamwise_gradient_field_gives_wash(self):
+        """면외 변위가 x에 비례하면 워시 = 그 기울기여야 한다."""
+        G_w, _, dm, nids, xyz = self._fin_system()
+        u = np.zeros(dm.total_dof)
+        for nid, p in zip(nids, xyz):
+            u[dm.get_dof(nid, 2)] = 1e-3 * p[0]
+        np.testing.assert_allclose(np.abs(G_w @ u), 1e-3, rtol=1e-6)
+
+    def test_global_z_translation_is_inert_on_fin(self):
+        """핀 면내 방향(z) 병진은 면외 변위·워시를 만들지 않아야 한다."""
+        G_w, G_d, dm, nids, _ = self._fin_system()
+        u = np.zeros(dm.total_dof)
+        for nid in nids:
+            u[dm.get_dof(nid, 3)] = 1.0
+        assert np.abs(G_w @ u).max() < 1e-12
+        assert np.abs(G_d @ u).max() < 1e-12

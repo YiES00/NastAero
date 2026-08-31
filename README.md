@@ -112,7 +112,7 @@ python -m nastaero.gui                     # desktop workbench
 cd solver && python -m pytest tests/ -q
 ```
 
-The suite has 954 tests and takes about 5–6 minutes on the reference
+The suite has 966 tests and takes about 5–6 minutes on the reference
 workstation. What your clone reports depends on two things: whether
 the proprietary comparison-model data is present, and whether the
 optional `gui` extra is installed — the 51 GUI tests are not collected
@@ -120,8 +120,8 @@ without it.
 
 | Install | Collected | Public clone reports |
 |---|---|---|
-| `pip install -e ".[dev,plot]"` | 904 | **878 passed, 26 skipped** |
-| `pip install -e ".[dev,plot,gui]"` | 954 | **928 passed, 26 skipped** |
+| `pip install -e ".[dev,plot]"` | 916 | **890 passed, 26 skipped** |
+| `pip install -e ".[dev,plot,gui]"` | 966 | **940 passed, 26 skipped** |
 
 Both rows are asserted by the CI workflow above on every push, on
 Python 3.10 and 3.12. The two `26`s are not the same 26: in the first
@@ -133,7 +133,7 @@ That data is **not redistributable and therefore not part of this
 repository**. If you hold it under your own agreement, place it at
 `solver/tests/validation/GACOMP/` (the path is git-ignored) and those
 tests run automatically — no configuration needed. With the data and
-the `gui` extra both present the suite reports 954 passed.
+the `gui` extra both present the suite reports 966 passed.
 
 ## Reproducing the published results
 
@@ -172,7 +172,19 @@ macOS 26.3.1 (arm64, 11 cores, 18 GB RAM).
   panel-force application point, the plate nodal-rotation
   convention, the CBAR bending-plane assignment, the direction of
   the Prandtl–Glauert transform, and the sign of the aeroelastic
-  feedback stiffness. All five are fixed in this release.
+  feedback stiffness. All five are fixed as of v1.2.
+- An independent external review (2026-08) exposed a further set,
+  fixed in this release (v1.3): the rotor shaft-angle convention was
+  passed as its complement by the load-case generators (axial and
+  edgewise flow swapped for tilted and vertical rotors in forward
+  flight), the forward-flight BEMT lacked a CT--inflow closure
+  iteration, the spline coupling wired structural DOFs to global
+  z/theta-y regardless of panel orientation (zero flexible feedback
+  on vertical fins), the oscillatory-DLM quartic integration mixed
+  node spacings, and beam stress recovery used sqrt(I/A) for the
+  extreme-fiber distance (half the true value even for a circular
+  section). Each fix carries a regression test against an
+  independent analytic expectation.
 - Full aircraft, archived: a 22,640-node solver-to-solver comparison
   is retained as evidence that the framework runs at that scale.
   It predates the corrections above and used an unmatched W2GJ

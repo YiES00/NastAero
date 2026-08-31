@@ -29,6 +29,15 @@ class PBAR:
         p.A = nastran_float(fields[3]); p.I1 = nastran_float(fields[4])
         p.I2 = nastran_float(fields[5]); p.J = nastran_float(fields[6])
         p.nsm = nastran_float(fields[7]) if len(fields) > 7 else 0.0
+        # 연속행 필드 9~16 = C1 C2 D1 D2 E1 E2 F1 F2 (응력 회수점).
+        # 종전에는 파싱하지 않아 응력 회수가 c ~ sqrt(I/A) 근사를
+        # 썼고, 이는 원형 단면에서도 최외곽 거리의 절반이다.
+        def f(i):
+            return nastran_float(fields[i]) if len(fields) > i else 0.0
+        p.c1, p.c2 = f(9), f(10)
+        p.d1, p.d2 = f(11), f(12)
+        p.e1, p.e2 = f(13), f(14)
+        p.f1, p.f2 = f(15), f(16)
         return p
 
 @dataclass

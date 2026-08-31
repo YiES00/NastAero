@@ -87,6 +87,22 @@ class RotorAirfoil:
 
         return self.Cd_0 + self.Cd_1 * abs(alpha) + self.Cd_2 * alpha ** 2
 
+    def cl_array(self, alpha: np.ndarray) -> np.ndarray:
+        """cl()의 벡터판 — 같은 모델(테이블 보간 또는 선형+실속 클램프)."""
+        a = np.asarray(alpha, dtype=float)
+        if self.alpha_table is not None and self.Cl_table is not None:
+            return np.interp(a, self.alpha_table, self.Cl_table)
+        cl_val = self.Cl_alpha * (a - self.alpha_0)
+        cl_max = self.Cl_alpha * (self.alpha_stall - self.alpha_0)
+        return np.clip(cl_val, -cl_max, cl_max)
+
+    def cd_array(self, alpha: np.ndarray) -> np.ndarray:
+        """cd()의 벡터판."""
+        a = np.asarray(alpha, dtype=float)
+        if self.alpha_table is not None and self.Cd_table is not None:
+            return np.interp(a, self.alpha_table, self.Cd_table)
+        return self.Cd_0 + self.Cd_1 * np.abs(a) + self.Cd_2 * a ** 2
+
     def cm(self, alpha: float) -> float:
         """Pitching moment coefficient (about quarter-chord).
 

@@ -156,10 +156,14 @@ class VTOLLoadCaseMatrix:
                 # Use forward-flight BEMT for non-zero V
                 if condition.V_eas > 1.0:
                     solver = self._get_ff_solver(rotor)
+                    # 수직축 로터의 수평 전진류는 면내류다. BEMT 규약은
+                    # alpha_shaft = 자유류와 디스크면 사이 각(축류 90도,
+                    # 면내류 0)이므로 0을 넘긴다. 종전 pi/2는 전진속도
+                    # 전체를 축류 상승으로 오인해 유입·토크를 크게
+                    # 왜곡했다(2026-08 검토 P0).
                     loads = solver.solve_for_thrust(
                         thrust_per_lift, rpm, condition.V_eas,
-                        alpha_shaft=np.pi / 2,  # Vertical shaft
-                        rho=rho)
+                        alpha_shaft=0.0, rho=rho)
                 else:
                     solver = self._get_bemt_solver(rotor)
                     loads = solver.solve_for_thrust(
@@ -196,9 +200,11 @@ class VTOLLoadCaseMatrix:
 
         배분은 vtol_conditions.tilt_allocation의 Fx/Fz 2식 평형을
         따르고, 전열 추력은 축 a(σ) = [sinσ, 0, cosσ](전방 틸트,
-        추력 +x)로 회전 조립한다. BEMT는 축 경사각
-        alpha_shaft = 90° − σ의 전진비행 해로 달성 추력·토크를
-        구한다(포화 시 달성값 사용 — 파이프라인 관례)."""
+        추력 +x)로 회전 조립한다. BEMT의 alpha_shaft는 자유류와
+        디스크면 사이 각(축류 90°, 면내류 0°)이며, 축·자유류의
+        내적 V·a = V sinσ 에서 alpha_shaft = σ 다. 종전의 90° − σ는
+        여각 반전으로 축류/면내류를 뒤바꿨다(2026-08 검토 P0).
+        포화 시 달성값 사용 — 파이프라인 관례."""
         import math
 
         from .vtol_conditions import tilt_allocation
@@ -275,11 +281,11 @@ class VTOLLoadCaseMatrix:
                     nid = r.hub_node_id
                     forces[nid] = forces.get(nid, np.zeros(6)) + fvec
 
-            _apply_s(healthy, T_cmd, axis_f, math.pi / 2 - s_r)
-            _apply_s(stuck, T_cmd, axis_s, math.pi / 2 - s_s)
+            _apply_s(healthy, T_cmd, axis_f, s_r)
+            _apply_s(stuck, T_cmd, axis_s, s_s)
             if aft_rotors and A > 0:
                 _apply_s(aft_rotors, A / len(aft_rotors), axis_a,
-                         math.pi / 2)
+                         0.0)
             return forces
 
         forces: Dict[int, np.ndarray] = {}
@@ -306,10 +312,10 @@ class VTOLLoadCaseMatrix:
                 forces[nid] = forces.get(nid, np.zeros(6)) + fvec
 
         _apply(tilt_rotors, F / len(tilt_rotors), axis_f,
-               math.pi / 2 - s_r)
+               s_r)
         if aft_rotors:
             _apply(aft_rotors, A / len(aft_rotors), axis_a,
-                   math.pi / 2)
+                   0.0)
         return forces
 
     @staticmethod

@@ -2,7 +2,7 @@
 
 Verifies:
 1. Pitt-Peters momentum theory consistency (ν = √(T/(2ρA)))
-2. Time constant scaling τ_ν = 0.85 r / ν
+2. Time constant scaling τ_ν = [4/(3π)] r / ν
 3. Thrust perturbation linearity
 4. Multi-rotor aggregate state dimension
 5. Body acceleration feedback
@@ -29,7 +29,7 @@ from nastaero.rotor.dynamic_inflow import (
 # ============================================================
 
 class TestPittPetersMomentumTheory:
-    """Verify ν = √(T/(2ρA)) and τ_ν = 0.85 r / ν."""
+    """Verify ν = √(T/(2ρA)) and τ_ν = [4/(3π)] r / ν."""
 
     def test_inflow_NASA_LC_lift_rotor(self):
         """NASA L+C / GACOMP lift rotor: T=2330 N, r=0.75 m → ν=23.2 m/s."""
@@ -41,12 +41,16 @@ class TestPittPetersMomentumTheory:
         assert rotor.nu_steady == pytest.approx(nu_expected, rel=1e-9)
 
     def test_time_constant_scaling(self):
-        """τ_ν = 0.85 · r / ν (Pitt-Peters 1981)."""
+        """τ_ν = [4/(3π)] · r / ν (Pitt-Peters 1981).
+
+        겉보기 질량 (8/3)ρR³ 을 추력 기울기 2ρAU 로 나눈 값이며,
+        무차원 Pitt-Peters의 M11/(2λ_h) 와도 일치한다.
+        """
         rotor = PittPetersInflow(rotor_radius=0.75, rho=1.225, T_steady=2330.0)
-        tau_expected = 0.85 * 0.75 / rotor.nu_steady
+        tau_expected = (4.0 / (3.0 * np.pi)) * 0.75 / rotor.nu_steady
         assert rotor.tau_nu == pytest.approx(tau_expected, rel=1e-9)
-        # Numerical magnitude check (~27.5 ms for GACOMP rotor)
-        assert rotor.tau_nu == pytest.approx(0.0275, rel=0.05)
+        # Numerical magnitude check (~13.7 ms for the ILC-8 lift rotor)
+        assert rotor.tau_nu == pytest.approx(0.0137, rel=0.05)
 
     def test_radius_consistency_for_small_inflow(self):
         """If ν=16.5 m/s claimed, what radius would actually give it?"""

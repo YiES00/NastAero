@@ -298,6 +298,47 @@ def _recover_ctria3(elem, model, dof_mgr, f_dof_index, u_free):
     return sigma_mem, sigma_bend
 
 
+def _extreme_fiber_distances(prop):
+    """보 단면의 각 굽힘 평면 최외곽 거리 (c1: 평면1, c2: 평면2).
+
+    PBAR 응력점이 있으면 그 최대 절대좌표를, PBARL/PBEAML이면 형상
+    치수에서 계산한다. 아무 정보도 없으면 (0, 0)을 돌려주고 호출부가
+    경고 후 굽힘응력을 0으로 남긴다.
+    """
+    # PBAR 응력점: (C1,C2) (D1,D2) (E1,E2) (F1,F2) — 1은 평면1 좌표
+    pts = [(getattr(prop, a, 0.0) or 0.0, getattr(prop, b, 0.0) or 0.0)
+           for a, b in (("c1", "c2"), ("d1", "d2"),
+                        ("e1", "e2"), ("f1", "f2"))]
+    c1 = max(abs(p[0]) for p in pts)
+    c2 = max(abs(p[1]) for p in pts)
+    if c1 > 0.0 or c2 > 0.0:
+        return c1, c2
+
+    tname = getattr(prop, "type_name", "")
+    dims = list(getattr(prop, "dims", []) or [])
+    if tname and dims:
+        if tname == "ROD":
+            return dims[0], dims[0]
+        if tname in ("TUBE", "TUBE2"):
+            return dims[0], dims[0]
+        if tname == "BAR":
+            # BAR: DIM1=폭(평면2 방향), DIM2=깊이(평면1 방향)
+            return dims[1] / 2.0, dims[0] / 2.0
+        if tname == "BOX" and len(dims) >= 2:
+            return dims[1] / 2.0, dims[0] / 2.0
+        if tname in ("I", "CHAN", "CHAN1", "CHAN2", "I1", "Z", "HAT",
+                     "T", "L") and dims:
+            # 깊이 방향 최외곽만 신뢰 (약축은 형상별 도심 위치가 달라
+            # 보수적으로 깊이 절반을 함께 사용)
+            depth = {"I": dims[0], "CHAN": dims[1], "CHAN1": dims[3],
+                     "CHAN2": dims[2], "I1": dims[3], "Z": dims[3],
+                     "HAT": dims[0], "T": dims[1] if len(dims) > 1 else 0.0,
+                     "L": max(dims[0], dims[1]) if len(dims) > 1 else 0.0,
+                     }.get(tname, 0.0)
+            return depth / 2.0, depth / 2.0
+    return 0.0, 0.0
+
+
 def _recover_cbar(elem, model, dof_mgr, f_dof_index, u_free):
     """Recover stress for CBAR/CBEAM element.
 
@@ -352,9 +393,17 @@ def _recover_cbar(elem, model, dof_mgr, f_dof_index, u_free):
     sigma_axial = E * (u_local[6] - u_local[0]) / L
 
     # Bending: approximate extreme fiber distance from I and A
-    #   c ≈ sqrt(I / A) (exact for circular section, approximate otherwise)
-    c1_fiber = np.sqrt(I1 / A) if I1 > 0 else 0.0
-    c2_fiber = np.sqrt(I2 / A) if I2 > 0 else 0.0
+    # 최외곽 거리는 단면 정보에서 얻는다. 우선순위:
+    #  1) PBAR 응력 회수점 C/D/E/F (각 평면의 최대 |좌표|)
+    #  2) PBARL/PBEAML 형상 치수(타입별 반깊이)
+    #  3) 없으면 회수 불가 — 0 응력 + 경고 (sqrt(I/A)는 원형에서도
+    #     실제 최외곽의 절반이라 굽힘응력을 50% 과소평가한다)
+    c1_fiber, c2_fiber = _extreme_fiber_distances(prop)
+    if (I1 > 0 and c1_fiber <= 0.0) or (I2 > 0 and c2_fiber <= 0.0):
+        logger.warning(
+            "CBAR/CBEAM %s: 응력 회수점(C1..F2)도 단면 형상도 없어 "
+            "굽힘응력을 회수하지 않는다 (PBAR 연속행에 응력점을 "
+            "지정할 것)", getattr(elem, 'eid', '?'))
 
     # Curvature at beam center from Hermite interpolation:
     #   d²v/dx² at x=L/2 = (θ₂ - θ₁) / L

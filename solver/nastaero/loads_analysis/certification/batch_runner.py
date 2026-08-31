@@ -243,13 +243,21 @@ class BatchRunner:
                  n_workers: int = 0,
                  batch_size: int = 50,
                  checkpoint_dir: Optional[str] = None,
-                 airfoil_config=None):
+                 airfoil_config=None,
+                 units: Optional[str] = None):
         self.matrix = matrix
         self.bdf_model = bdf_model
         self.n_workers = n_workers
         self.batch_size = batch_size
         self.checkpoint_dir = checkpoint_dir
         self.airfoil_config = airfoil_config
+        # 모델 단위계. 'mm'(N-mm-s) | 'm'(N-m-kg-s) | None(자동 추정).
+        # 자동 추정은 REFC>100 휴리스틱이라 소형 mm 모델(REFC<100)
+        # 이나 대형 m 모델에서 10^6배 오류가 날 수 있다 — 명시가
+        # 안전하며, 자동일 때는 경고를 남긴다.
+        if units not in (None, 'mm', 'm'):
+            raise ValueError(f"units must be 'mm', 'm', or None: {units!r}")
+        self.units = units
         self._batch_result = BatchResult(config=matrix.config)
         self._q_scale = self._detect_q_scale()
 
@@ -264,6 +272,10 @@ class BatchRunner:
 
         Detection heuristic: AEROS.REFC > 100 → mm-based model.
         """
+        if self.units == 'mm':
+            return 1e-6
+        if self.units == 'm':
+            return 1.0
         if self.bdf_model is None:
             return 1.0
 
@@ -274,9 +286,15 @@ class BatchRunner:
             refc = self.bdf_model.aero.refc
 
         if refc > 100:  # mm-based model
-            logger.info("Model unit detection: mm-based (refc=%.1f), "
-                        "q_scale=1e-6 (Pa → N/mm²)", refc)
+            logger.warning(
+                "모델 단위를 REFC=%.1f 휴리스틱으로 mm로 추정했다 "
+                "(q_scale=1e-6). 소형 mm 모델·대형 m 모델에서는 "
+                "오판할 수 있으니 VTOLBatchRunner(units='mm'|'m')로 "
+                "명시할 것.", refc)
             return 1e-6
+        logger.warning(
+            "모델 단위를 REFC=%.1f 휴리스틱으로 m로 추정했다. "
+            "명시(units=)를 권장한다.", refc)
         return 1.0
 
     # ---------------------------------------------------------------
@@ -610,7 +628,11 @@ class BatchRunner:
     # ---------------------------------------------------------------
 
     def _detect_gravity(self) -> float:
-        """Detect gravitational acceleration from BDF model unit system."""
+        """모델 단위계의 중력가속도 (units 명시 우선, 아니면 휴리스틱)."""
+        if self.units == 'mm':
+            return 9810.0
+        if self.units == 'm':
+            return 9.81
         if self.bdf_model is None:
             return 9810.0  # Default N-mm-sec
         refc = 0.0

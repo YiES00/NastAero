@@ -1686,7 +1686,8 @@ def _build_geff_per_spline(bdf_model: BDFModel, boxes: List[AeroBox],
         # Fill both G matrices for this spline's boxes
         _fill_geff(G_w, G_d, G_ka_wash, G_ka_force, spline_box_indices,
                    spline_nids, force_pts, struct_xyz, dof_mgr, f_dof_index,
-                   G_ka_slope=G_ka_slope, node_force=node_force)
+                   G_ka_slope=G_ka_slope, node_force=node_force,
+                   frame=(e1, e2))
 
     return _finish(G_w, G_d)
 
@@ -1696,7 +1697,8 @@ def _fill_geff(G_w: np.ndarray, G_d: np.ndarray, G_ka_wash: np.ndarray,
                force_pts: np.ndarray, struct_xyz: np.ndarray,
                dof_mgr: DOFManager, f_dof_index: dict,
                G_ka_slope: np.ndarray = None,
-               node_force: tuple = None) -> None:
+               node_force: tuple = None,
+               frame: tuple = None) -> None:
     """Fill both normalwash (G_w) and displacement (G_d) coupling matrices.
 
     G_w: normalwash matrix — maps structural DOFs to normalwash (slope dz/dx),
@@ -1740,20 +1742,38 @@ def _fill_geff(G_w: np.ndarray, G_d: np.ndarray, G_ka_wash: np.ndarray,
                     continue
                 rows.append(i_box); cols.append(j); vals.append(w)
 
+    # 패널 국부 좌표계: n = 면외(법선), e2 = 스팬방향. 구조 자유도의
+    # 면외 변위는 n·(T1,T2,T3)이고, 회전의 워시 기여는 -(theta·e2)다.
+    # 수평면(n=+z, e2=+y)에서는 종전의 T3/theta_y 배선과 일치한다.
+    # 전역 z/theta_y 하드코딩은 수직 핀에서 유연 되먹임을 0으로
+    # 만들었다(2026-08 검토 P1).
+    if frame is None:
+        e2_p = np.array([0.0, 1.0, 0.0])
+        n_p = np.array([0.0, 0.0, 1.0])
+    else:
+        e1_p, e2_p = np.asarray(frame[0]), np.asarray(frame[1])
+        n_p = np.cross(e1_p, e2_p)
+
+    def _add_translations(G, i_box, nid, w):
+        for comp in (1, 2, 3):
+            nk = n_p[comp - 1]
+            if abs(nk) < 1e-12:
+                continue
+            d = dof_mgr.get_dof(nid, comp)
+            if d in f_dof_index:
+                G[i_box, f_dof_index[d]] += w * nk
+
     if G_ka_slope is not None:
         # ── surface (SPLINE1) mode: translations only ──
         for i_local, i_box in enumerate(box_indices):
             for j_node in range(n_spline):
                 nid = struct_nids[j_node]
-                z_dof = dof_mgr.get_dof(nid, 3)
-                if z_dof not in f_dof_index:
-                    continue
                 w_disp = G_ka_force[i_local, j_node]
                 w_slope = G_ka_slope[i_local, j_node]
                 if abs(w_disp) > 1e-15:
-                    G_d[i_box, f_dof_index[z_dof]] += w_disp
+                    _add_translations(G_d, i_box, nid, w_disp)
                 if abs(w_slope) > 1e-15:
-                    G_w[i_box, f_dof_index[z_dof]] += w_slope
+                    _add_translations(G_w, i_box, nid, w_slope)
         return
 
     for i_local, i_box in enumerate(box_indices):
@@ -1764,10 +1784,9 @@ def _fill_geff(G_w: np.ndarray, G_d: np.ndarray, G_ka_wash: np.ndarray,
             if abs(w_wash) < 1e-15 and abs(w_force) < 1e-15:
                 continue
 
-            # DOF 3 (z-translation): contributes to displacement only
-            z_dof = dof_mgr.get_dof(nid, 3)
-            if z_dof in f_dof_index and abs(w_force) > 1e-15:
-                G_d[i_box, f_dof_index[z_dof]] += w_force
+            # 면외 병진: displacement only
+            if abs(w_force) > 1e-15:
+                _add_translations(G_d, i_box, nid, w_force)
 
             # DOF 5 (theta_y): contributes to BOTH normalwash and displacement.
             # 미소회전 운동학 u = theta x r 에서 r = (dx, 0, 0)이면
@@ -1776,14 +1795,22 @@ def _fill_geff(G_w: np.ndarray, G_d: np.ndarray, G_ka_wash: np.ndarray,
             # z 변위도 -theta_y*dx 다. 양부호로 넣으면 탄성 비틀림의
             # 공탄성 되먹임이 반대로 돌고, 그 공액인 힘 전달도 절점
             # 뒤쪽 양력에 기수-업 모멘트를 주게 된다(물리는 기수-다운).
-            ry_dof = dof_mgr.get_dof(nid, 5)  # theta_y = pitch/torsion
-            if ry_dof in f_dof_index:
+            # 회전: 워시 = -(theta·e2), 힘 작용점 면외 변위 = -(theta·e2)*d
+            # (d = 유선방향 거리; 수평면에서 e2=y라 종전 -theta_y와 일치)
+            e1_dir = (np.asarray(frame[0]) if frame is not None
+                      else np.array([1.0, 0.0, 0.0]))
+            dx = float((force_pts[i_local] - struct_xyz[j_node]) @ e1_dir)
+            for comp in (4, 5, 6):
+                ek = e2_p[comp - 4]
+                if abs(ek) < 1e-12:
+                    continue
+                d_rot = dof_mgr.get_dof(nid, comp)
+                if d_rot not in f_dof_index:
+                    continue
                 if abs(w_wash) > 1e-15:
-                    G_w[i_box, f_dof_index[ry_dof]] -= w_wash  # normalwash
-
-                dx = force_pts[i_local, 0] - struct_xyz[j_node, 0]
+                    G_w[i_box, f_dof_index[d_rot]] -= w_wash * ek
                 if abs(w_force) > 1e-15 and abs(dx) > 1e-12:
-                    G_d[i_box, f_dof_index[ry_dof]] -= w_force * dx
+                    G_d[i_box, f_dof_index[d_rot]] -= w_force * dx * ek
 
 
 # ---------------------------------------------------------------------------

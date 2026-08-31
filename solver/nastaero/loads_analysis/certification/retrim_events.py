@@ -518,7 +518,7 @@ class RetrimScreen:
             solver = matrix._get_ff_solver(rotor)
             loads = solver.solve_for_thrust(
                 T_ref, rotor.rpm_hover, V,
-                alpha_shaft=math.pi / 2 - a_r, rho=rho)
+                alpha_shaft=a_r, rho=rho)
         else:
             solver = matrix._get_bemt_solver(rotor)
             loads = solver.solve_for_thrust(T_ref, rotor.rpm_hover,
