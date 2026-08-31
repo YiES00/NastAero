@@ -1,0 +1,986 @@
+{
+  "propulsion_limit": {
+    "n_infeasible": 17,
+    "n_exceedances": 92,
+    "n_appended": 11,
+    "exceedances": [
+      {
+        "case_id": 20024,
+        "component": "Fuselage",
+        "station": 9150.0,
+        "quantity": "M",
+        "value": 20384.908319370108,
+        "feasible_bound": 19983.415853226856,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20025,
+        "component": "Fuselage",
+        "station": 9150.0,
+        "quantity": "M",
+        "value": 20379.26679981783,
+        "feasible_bound": 19983.415853226856,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20026,
+        "component": "Fuselage",
+        "station": 9150.0,
+        "quantity": "M",
+        "value": 20030.05077957106,
+        "feasible_bound": 19983.415853226856,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20027,
+        "component": "Fuselage",
+        "station": 9150.0,
+        "quantity": "M",
+        "value": 20025.95759848158,
+        "feasible_bound": 19983.415853226856,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20034,
+        "component": "Right Wing",
+        "station": 808.1632653061224,
+        "quantity": "V",
+        "value": 8770.382080842282,
+        "feasible_bound": 8645.83001735267,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20034,
+        "component": "Right Wing",
+        "station": 916.3265306122449,
+        "quantity": "V",
+        "value": 8770.382080842282,
+        "feasible_bound": 8645.83001735267,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20034,
+        "component": "Right Wing",
+        "station": 1781.6326530612246,
+        "quantity": "V",
+        "value": 10147.458793424452,
+        "feasible_bound": 9917.424194332605,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20034,
+        "component": "Right Wing",
+        "station": 1889.795918367347,
+        "quantity": "V",
+        "value": 10178.983445883521,
+        "feasible_bound": 9975.748999654796,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20034,
+        "component": "Right Wing",
+        "station": 1997.9591836734694,
+        "quantity": "V",
+        "value": 10305.053635142365,
+        "feasible_bound": 10209.054438236384,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20034,
+        "component": "Left Wing",
+        "station": -1781.6326530612246,
+        "quantity": "V",
+        "value": 9984.279394454486,
+        "feasible_bound": 9918.941314367994,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20034,
+        "component": "Left Wing",
+        "station": -1889.795918367347,
+        "quantity": "V",
+        "value": 10016.349681938635,
+        "feasible_bound": 9977.275582457245,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Right Wing",
+        "station": 808.1632653061224,
+        "quantity": "V",
+        "value": 9117.968162422549,
+        "feasible_bound": 8645.83001735267,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Right Wing",
+        "station": 916.3265306122449,
+        "quantity": "V",
+        "value": 9117.968162422549,
+        "feasible_bound": 8645.83001735267,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Right Wing",
+        "station": 1781.6326530612246,
+        "quantity": "V",
+        "value": 10549.304280574053,
+        "feasible_bound": 9917.424194332605,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Right Wing",
+        "station": 1889.795918367347,
+        "quantity": "V",
+        "value": 10582.976509045786,
+        "feasible_bound": 9975.748999654796,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Right Wing",
+        "station": 1997.9591836734694,
+        "quantity": "V",
+        "value": 10717.632596634832,
+        "feasible_bound": 10209.054438236384,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Right Wing",
+        "station": 3620.4081632653065,
+        "quantity": "V",
+        "value": 6212.9132869696805,
+        "feasible_bound": 5999.8271492588965,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Right Wing",
+        "station": 3728.571428571429,
+        "quantity": "V",
+        "value": 6212.9132869696805,
+        "feasible_bound": 5999.8271492588965,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Right Wing",
+        "station": 3836.7346938775513,
+        "quantity": "V",
+        "value": 6212.9132869696805,
+        "feasible_bound": 5999.8271492588965,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Right Wing",
+        "station": 3944.8979591836737,
+        "quantity": "V",
+        "value": 6312.921560129991,
+        "feasible_bound": 6174.787128356281,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Left Wing",
+        "station": -808.1632653061224,
+        "quantity": "V",
+        "value": 8904.806295533297,
+        "feasible_bound": 8614.088667507584,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Left Wing",
+        "station": -916.3265306122449,
+        "quantity": "V",
+        "value": 8904.806295533297,
+        "feasible_bound": 8614.088667507584,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Left Wing",
+        "station": -1781.6326530612246,
+        "quantity": "V",
+        "value": 10362.460605963674,
+        "feasible_bound": 9918.941314367994,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Left Wing",
+        "station": -1889.795918367347,
+        "quantity": "V",
+        "value": 10396.757642298919,
+        "feasible_bound": 9977.275582457245,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Left Wing",
+        "station": -1997.9591836734694,
+        "quantity": "V",
+        "value": 10533.986507693839,
+        "feasible_bound": 10210.619985972702,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Left Wing",
+        "station": -3620.4081632653065,
+        "quantity": "V",
+        "value": 6133.116659296742,
+        "feasible_bound": 6002.505977238069,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Left Wing",
+        "station": -3728.571428571429,
+        "quantity": "V",
+        "value": 6133.116659296742,
+        "feasible_bound": 6002.505977238069,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Left Wing",
+        "station": -3836.7346938775513,
+        "quantity": "V",
+        "value": 6133.116659296742,
+        "feasible_bound": 6002.505977238069,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20036,
+        "component": "Left Wing",
+        "station": -3944.8979591836737,
+        "quantity": "V",
+        "value": 6237.014668009438,
+        "feasible_bound": 6177.524866703933,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Right Wing",
+        "station": 808.1632653061224,
+        "quantity": "V",
+        "value": 9458.681244840354,
+        "feasible_bound": 8645.83001735267,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Right Wing",
+        "station": 916.3265306122449,
+        "quantity": "V",
+        "value": 9458.681244840354,
+        "feasible_bound": 8645.83001735267,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Right Wing",
+        "station": 1565.3061224489797,
+        "quantity": "V",
+        "value": 10912.817659895838,
+        "feasible_bound": 10725.743764437822,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Right Wing",
+        "station": 1673.4693877551022,
+        "quantity": "V",
+        "value": 10912.817659895838,
+        "feasible_bound": 10725.743764437822,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Right Wing",
+        "station": 1781.6326530612246,
+        "quantity": "V",
+        "value": 10942.977046263813,
+        "feasible_bound": 9917.424194332605,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Right Wing",
+        "station": 1889.795918367347,
+        "quantity": "V",
+        "value": 10978.72544717745,
+        "feasible_bound": 9975.748999654796,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Right Wing",
+        "station": 1997.9591836734694,
+        "quantity": "V",
+        "value": 11121.68231078426,
+        "feasible_bound": 10209.054438236384,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Right Wing",
+        "station": 3620.4081632653065,
+        "quantity": "V",
+        "value": 6447.271714023031,
+        "feasible_bound": 5999.8271492588965,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Right Wing",
+        "station": 3728.571428571429,
+        "quantity": "V",
+        "value": 6447.271714023031,
+        "feasible_bound": 5999.8271492588965,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Right Wing",
+        "station": 3836.7346938775513,
+        "quantity": "V",
+        "value": 6447.271714023031,
+        "feasible_bound": 5999.8271492588965,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Right Wing",
+        "station": 3944.8979591836737,
+        "quantity": "V",
+        "value": 6553.394544972132,
+        "feasible_bound": 6174.787128356281,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Left Wing",
+        "station": -808.1632653061224,
+        "quantity": "V",
+        "value": 9221.236680779404,
+        "feasible_bound": 8614.088667507584,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Left Wing",
+        "station": -916.3265306122449,
+        "quantity": "V",
+        "value": 9221.236680779404,
+        "feasible_bound": 8614.088667507584,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Left Wing",
+        "station": -1781.6326530612246,
+        "quantity": "V",
+        "value": 10735.02025711374,
+        "feasible_bound": 9918.941314367994,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Left Wing",
+        "station": -1889.795918367347,
+        "quantity": "V",
+        "value": 10771.464130433242,
+        "feasible_bound": 9977.275582457245,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Left Wing",
+        "station": -1997.9591836734694,
+        "quantity": "V",
+        "value": 10917.284747963295,
+        "feasible_bound": 10210.619985972702,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Left Wing",
+        "station": -3620.4081632653065,
+        "quantity": "V",
+        "value": 6358.470218064167,
+        "feasible_bound": 6002.505977238069,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Left Wing",
+        "station": -3728.571428571429,
+        "quantity": "V",
+        "value": 6358.470218064167,
+        "feasible_bound": 6002.505977238069,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Left Wing",
+        "station": -3836.7346938775513,
+        "quantity": "V",
+        "value": 6358.470218064167,
+        "feasible_bound": 6002.505977238069,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Left Wing",
+        "station": -3944.8979591836737,
+        "quantity": "V",
+        "value": 6468.922706017884,
+        "feasible_bound": 6177.524866703933,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20040,
+        "component": "Right Wing",
+        "station": 808.1632653061224,
+        "quantity": "V",
+        "value": 9766.45841059467,
+        "feasible_bound": 8645.83001735267,
+        "extreme": "max"
+      }
+    ],
+    "saturated_cases": [
+      [
+        20013,
+        "Transition V=7.5m/s nz=1.5 h=0m",
+        "vtol_transition",
+        0.151838663998857
+      ],
+      [
+        20015,
+        "Transition V=11.4m/s nz=1.5 h=0m",
+        "vtol_transition",
+        0.12484757528098606
+      ],
+      [
+        20017,
+        "Transition V=15.4m/s nz=1.5 h=0m",
+        "vtol_transition",
+        0.06478656073693362
+      ],
+      [
+        20024,
+        "Transition V=31.1m/s nz=1.0 h=0m",
+        "vtol_transition",
+        0.0517792515879805
+      ],
+      [
+        20025,
+        "Transition V=31.1m/s nz=1.5 h=0m",
+        "vtol_transition",
+        0.0517792515879805
+      ],
+      [
+        20026,
+        "Transition V=35.0m/s nz=1.0 h=0m",
+        "vtol_transition",
+        0.2658208558695065
+      ],
+      [
+        20027,
+        "Transition V=35.0m/s nz=1.5 h=0m",
+        "vtol_transition",
+        0.2658208558695065
+      ],
+      [
+        20028,
+        "Transition gust+ V=7.5m/s nz=1.61 h=0m",
+        "vtol_transition",
+        0.21171103435290436
+      ],
+      [
+        20030,
+        "Transition gust+ V=11.4m/s nz=1.77 h=0m",
+        "vtol_transition",
+        0.2588454918792493
+      ],
+      [
+        20032,
+        "Transition gust+ V=15.4m/s nz=1.92 h=0m",
+        "vtol_transition",
+        0.27070486746211
+      ],
+      [
+        20034,
+        "Transition gust+ V=19.3m/s nz=2.07 h=0m",
+        "vtol_transition",
+        0.2575206338487065
+      ],
+      [
+        20036,
+        "Transition gust+ V=23.2m/s nz=2.21 h=0m",
+        "vtol_transition",
+        0.2139684109405812
+      ],
+      [
+        20038,
+        "Transition gust+ V=27.1m/s nz=2.35 h=0m",
+        "vtol_transition",
+        0.12557441196374253
+      ],
+      [
+        20040,
+        "Transition gust+ V=31.1m/s nz=2.48 h=0m",
+        "vtol_transition",
+        0.0517792515879805
+      ],
+      [
+        20041,
+        "Transition gust- V=31.1m/s nz=-0.48 h=0m",
+        "vtol_transition",
+        0.0517792515879805
+      ],
+      [
+        20042,
+        "Transition gust+ V=35.0m/s nz=2.61 h=0m",
+        "vtol_transition",
+        0.2658208558695065
+      ],
+      [
+        20043,
+        "Transition gust- V=35.0m/s nz=-0.61 h=0m",
+        "vtol_transition",
+        0.2658208558695065
+      ]
+    ]
+  },
+  "n_design_cases": 65,
+  "n_design_feasible": 54,
+  "n_critical": 8450,
+  "critical_category_distribution": {
+    "symmetric": 1915,
+    "landing": 1673,
+    "vtol_retrim": 497,
+    "gust": 1118,
+    "vtol_rotor_jam": 459,
+    "yaw": 2441,
+    "checked": 105,
+    "vtol_transition": 157,
+    "vtol_hover": 52,
+    "flap": 33
+  },
+  "wing_tmin_station_split": {
+    "vtol_retrim": 13,
+    "vtol_rotor_jam": 18,
+    "symmetric": 2,
+    "gust": 17
+  },
+  "stress_preservation": {
+    "n_cases_full": 101,
+    "n_cases_design": 54,
+    "n_nodes_significant": 592,
+    "min_preservation_ratio": 1.0,
+    "worst_node": 100001,
+    "n_nodes_below_0.99": 0,
+    "n_nodes_below_0.95": 0,
+    "pct_nodes_fully_preserved": 100.0
+  },
+  "local6_root_rows": [
+    {
+      "component": "Right Wing",
+      "case_id": 10,
+      "legacy_V": -7998.224813581204,
+      "legacy_M": -15968901.745762618,
+      "legacy_T": -3516128.6211862434,
+      "local_N": -124.05290717076727,
+      "local_Vy": -0.018340881121072697,
+      "local_Vz": -7997.262722611558,
+      "local_Mx": -2045684.3752125297,
+      "local_My": 16931758.4577578,
+      "local_Mz": 31732.903121426003
+    },
+    {
+      "component": "Right Wing",
+      "case_id": 5,
+      "legacy_V": 18900.28016371145,
+      "legacy_M": 38176068.78508357,
+      "legacy_T": 8255422.39155389,
+      "local_N": 292.9411706780788,
+      "local_Vy": 0.0812592692437063,
+      "local_Vz": 18898.00984037741,
+      "local_Mx": 4740585.127840382,
+      "local_My": -40444580.10812483,
+      "local_Mz": -73484.24906798941
+    },
+    {
+      "component": "Right Wing",
+      "case_id": 1,
+      "legacy_V": 18878.977403865007,
+      "legacy_M": 37530515.94889688,
+      "legacy_T": 8318906.4557140935,
+      "local_N": 292.87614363842494,
+      "local_Vy": 0.0316921787840972,
+      "local_Vz": 18876.70552318353,
+      "local_Mx": 4862855.269012356,
+      "local_My": -39805713.16844477,
+      "local_Mz": -75449.25920488109
+    },
+    {
+      "component": "Right Wing",
+      "case_id": 28,
+      "legacy_V": 3849.6512051177524,
+      "legacy_M": 6715520.419392278,
+      "legacy_T": 1895030.3843390045,
+      "local_N": 1153.5298831390921,
+      "local_Vy": 1144.5086707315395,
+      "local_Vz": 3832.207416902353,
+      "local_Mx": 1543478.101073021,
+      "local_My": -7406871.017354239,
+      "local_Mz": 3422361.612353466
+    },
+    {
+      "component": "Right Wing",
+      "case_id": 30,
+      "legacy_V": 6096.824245245747,
+      "legacy_M": 13374076.835809195,
+      "legacy_T": 2449671.431845562,
+      "local_N": -998.4018790435362,
+      "local_Vy": -1143.4008431872971,
+      "local_Vz": 6113.0582772836315,
+      "local_Mx": 951840.0986634188,
+      "local_My": -13876757.829316378,
+      "local_Mz": -3457848.335925903
+    },
+    {
+      "component": "Right Wing",
+      "case_id": 47,
+      "legacy_V": -7465.185705711644,
+      "legacy_M": -14882953.033721197,
+      "legacy_T": 693628.4190678752,
+      "local_N": -2624.580307372171,
+      "local_Vy": -577.8662679499678,
+      "local_Vz": -7425.340662702349,
+      "local_Mx": 1907577.9051143567,
+      "local_My": 15888664.265997898,
+      "local_Mz": -2021722.6730697858
+    },
+    {
+      "component": "Right Wing",
+      "case_id": 48,
+      "legacy_V": -2530.130515251417,
+      "legacy_M": -4200026.171519508,
+      "legacy_T": 395921.1170217181,
+      "local_N": 2407.7560943077574,
+      "local_Vy": -93.10950983171026,
+      "local_Vz": -2567.813901874185,
+      "local_Mx": 768546.5249043375,
+      "local_My": 3910875.6608792935,
+      "local_Mz": 593251.9600651229
+    },
+    {
+      "component": "Right Wing",
+      "case_id": 29,
+      "legacy_V": 5077.20094857348,
+      "legacy_M": 10336494.486564742,
+      "legacy_T": 2198729.8008686327,
+      "local_N": 41.48836371551718,
+      "local_Vy": -112.94735757522334,
+      "local_Vz": 5077.16864332004,
+      "local_Mx": 1220988.297420564,
+      "local_My": -10936830.268257454,
+      "local_Mz": -340965.15401809284
+    },
+    {
+      "component": "Right Wing",
+      "case_id": 27,
+      "legacy_V": 4870.148191736871,
+      "legacy_M": 9755705.59771136,
+      "legacy_T": 2146187.0409846306,
+      "local_N": 112.74858418877464,
+      "local_Vy": 113.17221505167345,
+      "local_Vz": 4868.984679034309,
+      "local_Mx": 1274099.2758919813,
+      "local_My": -10349317.729518665,
+      "local_Mz": 302807.6504513223
+    },
+    {
+      "component": "Right Wing",
+      "case_id": 42,
+      "legacy_V": -9074.293643367155,
+      "legacy_M": -17324570.135704875,
+      "legacy_T": 989152.5401403366,
+      "local_N": -196.84485561468662,
+      "local_Vy": -609.1484351848782,
+      "local_Vz": -9072.331173708988,
+      "local_Mx": 2429531.829443058,
+      "local_My": 17975103.071100697,
+      "local_Mz": -1296843.684001578
+    },
+    {
+      "component": "Right V-Tail",
+      "case_id": 10,
+      "legacy_V": -761.7536407984785,
+      "legacy_M": -668947.5008100234,
+      "legacy_T": 188103.01644730254,
+      "local_N": 111.50524776142612,
+      "local_Vy": 313.9924498043342,
+      "local_Vz": -1047.5162400467723,
+      "local_Mx": 122758.99482447276,
+      "local_My": 1226857.936590184,
+      "local_Mz": 388207.74472728954
+    },
+    {
+      "component": "Right V-Tail",
+      "case_id": 5,
+      "legacy_V": 1782.0975762646526,
+      "legacy_M": 1565527.491454058,
+      "legacy_T": -462301.65976217436,
+      "local_N": -263.27643000312014,
+      "local_Vy": -735.8895421479524,
+      "local_Vz": 2452.4892581078457,
+      "local_Mx": -314995.36440648197,
+      "local_My": -2881483.9326800085,
+      "local_Mz": -912581.4910941584
+    },
+    {
+      "component": "Right V-Tail",
+      "case_id": 1,
+      "legacy_V": 1804.6080785581669,
+      "legacy_M": 1584473.0464835193,
+      "legacy_T": -437442.94320781424,
+      "local_N": -263.27579493894154,
+      "local_Vy": -743.3732945063377,
+      "local_Vz": 2480.9051890013175,
+      "local_Mx": -280620.58934923063,
+      "local_My": -2902233.6266901395,
+      "local_Mz": -918046.1454848088
+    },
+    {
+      "component": "Right V-Tail",
+      "case_id": 28,
+      "legacy_V": 2475.3625590948222,
+      "legacy_M": 2445772.34770239,
+      "legacy_T": -1295345.7690597556,
+      "local_N": -14.634049952660462,
+      "local_Vy": -816.1904152005353,
+      "local_Vz": 3136.080038109215,
+      "local_Mx": -1098877.9385098699,
+      "local_My": -4222836.726296904,
+      "local_Mz": -1100502.3902628662
+    },
+    {
+      "component": "Right V-Tail",
+      "case_id": 30,
+      "legacy_V": -1535.6995115277707,
+      "legacy_M": -1619779.1538786732,
+      "legacy_T": 1050414.103836245,
+      "local_N": -123.8829116648144,
+      "local_Vy": 428.34997763628957,
+      "local_Vz": -1843.1669964422395,
+      "local_Mx": 931556.6885347877,
+      "local_My": 2702794.696123878,
+      "local_Mz": 619329.7124854284
+    },
+    {
+      "component": "Right V-Tail",
+      "case_id": 47,
+      "legacy_V": -235.21752065584653,
+      "legacy_M": -182089.0594575663,
+      "legacy_T": 78844.17965448741,
+      "local_N": -201.17144994091976,
+      "local_Vy": -52.417671559479324,
+      "local_Vz": -141.94166248057007,
+      "local_Mx": 27047.793103540324,
+      "local_My": 171694.7205644283,
+      "local_Mz": -100081.3399039979
+    },
+    {
+      "component": "Right V-Tail",
+      "case_id": 48,
+      "legacy_V": -181.3631842836253,
+      "legacy_M": -120794.80397898526,
+      "legacy_T": 56611.01536805485,
+      "local_N": -44.15621238097775,
+      "local_Vy": 26.34018095477626,
+      "local_Vz": -194.92693677326002,
+      "local_Mx": 42337.8299971676,
+      "local_My": 203571.80151639902,
+      "local_Mz": 15223.246925589225
+    },
+    {
+      "component": "Right V-Tail",
+      "case_id": 29,
+      "legacy_V": 470.03196628357045,
+      "legacy_M": 27347.270419060216,
+      "legacy_T": 687212.157055799,
+      "local_N": -72.98588953354351,
+      "local_Vy": -197.40166764857958,
+      "local_Vz": 649.5812531826077,
+      "local_Mx": 797868.0874999642,
+      "local_My": -88301.23285068812,
+      "local_Mz": -67750.99125298281
+    },
+    {
+      "component": "Right V-Tail",
+      "case_id": 27,
+      "legacy_V": 467.9124196617744,
+      "legacy_M": 797234.5415706091,
+      "legacy_T": -931832.603527114,
+      "local_N": -65.57468448132647,
+      "local_Vy": -189.90257883049907,
+      "local_Vz": 641.1958142540947,
+      "local_Mx": -965074.7830239777,
+      "local_My": -1429349.1763553624,
+      "local_Mz": -412832.9440884382
+    },
+    {
+      "component": "Right V-Tail",
+      "case_id": 42,
+      "legacy_V": -378.19470232002845,
+      "legacy_M": -274974.50364766753,
+      "legacy_T": 122973.61964158942,
+      "local_N": -222.7218426647474,
+      "local_Vy": -23.67456936809431,
+      "local_Vz": -305.8277018237759,
+      "local_Mx": 62992.05595149849,
+      "local_My": 340687.4320538967,
+      "local_Mz": -77038.80864592081
+    },
+    {
+      "component": "Right Boom",
+      "case_id": 10,
+      "legacy_V": 556.3510199666979,
+      "legacy_M": -1388631.0952692223,
+      "legacy_T": 232.0663148514177,
+      "local_N": 0.0009724062912611585,
+      "local_Vy": -556.3510199666979,
+      "local_Vz": 0.004658350609038903,
+      "local_Mx": 2169.7921094342373,
+      "local_My": -10.619976524550642,
+      "local_Mz": -1389548.6894786595
+    },
+    {
+      "component": "Right Boom",
+      "case_id": 5,
+      "legacy_V": -1313.5252033175811,
+      "legacy_M": 3278509.189148202,
+      "legacy_T": -520.7560452324433,
+      "local_N": -0.004308245832062968,
+      "local_Vy": 1313.5252033175811,
+      "local_Vz": -0.020638821238147986,
+      "local_Mx": -5095.658540210222,
+      "local_My": 47.0518034040168,
+      "local_Mz": 3280675.6366995834
+    },
+    {
+      "component": "Right Boom",
+      "case_id": 1,
+      "legacy_V": -1313.6292189715475,
+      "legacy_M": 3278768.832683046,
+      "legacy_T": -556.2489430904352,
+      "local_N": -0.001680272274193442,
+      "local_Vy": 1313.6292189715475,
+      "local_Vz": -0.008049410454241348,
+      "local_Mx": -5131.513713806218,
+      "local_My": 18.350819256528602,
+      "local_Mz": 3280935.399713273
+    },
+    {
+      "component": "Right Boom",
+      "case_id": 28,
+      "legacy_V": -463.9164934156484,
+      "legacy_M": 1154758.4848563243,
+      "legacy_T": -42030.53395277214,
+      "local_N": -131.16015317951627,
+      "local_Vy": 463.9164934156484,
+      "local_Vz": 78.99743082702386,
+      "local_Mx": -43641.63127759793,
+      "local_My": -333106.89131033013,
+      "local_Mz": 1155462.1712934673
+    },
+    {
+      "component": "Right Boom",
+      "case_id": 30,
+      "legacy_V": -227.5217282313516,
+      "legacy_M": 571042.2170549891,
+      "legacy_T": 41717.87676147557,
+      "local_N": 131.03635273424413,
+      "local_Vy": 227.5217282313516,
+      "local_Vz": -78.9395650092417,
+      "local_Mx": 40920.75478933963,
+      "local_My": 332834.15782610537,
+      "local_Mz": 571478.889625326
+    },
+    {
+      "component": "Right Boom",
+      "case_id": 47,
+      "legacy_V": -722.4427466142695,
+      "legacy_M": 1895719.8768042866,
+      "legacy_T": -82312.4984172124,
+      "local_N": 65.67714860837177,
+      "local_Vy": 722.4427466142695,
+      "local_Vz": -255.84713707483513,
+      "local_Mx": -84964.54565489128,
+      "local_My": 690354.5160944829,
+      "local_Mz": 1896790.8340281423
+    },
+    {
+      "component": "Right Boom",
+      "case_id": 48,
+      "legacy_V": -200.8360495307103,
+      "legacy_M": 591649.2153522443,
+      "legacy_T": 82002.11744299704,
+      "local_N": -34.04989279327611,
+      "local_Vy": 200.8360495307103,
+      "local_Vz": 255.89359725807057,
+      "local_Mx": 81169.78040464119,
+      "local_My": -690346.4623420929,
+      "local_Mz": 592100.9417163692
+    },
+    {
+      "component": "Right Boom",
+      "case_id": 29,
+      "legacy_V": -335.1561504886468,
+      "legacy_M": 836832.2194627416,
+      "legacy_T": 3453.271341591091,
+      "local_N": 12.251046718831127,
+      "local_Vy": 335.1561504886468,
+      "local_Vz": -1.4513621621757296,
+      "local_Mx": 2285.512014685697,
+      "local_My": 16318.547912233975,
+      "local_Mz": 837390.2730651362
+    },
+    {
+      "component": "Right Boom",
+      "case_id": 27,
+      "legacy_V": -356.1898418879923,
+      "legacy_M": 888740.7335790424,
+      "legacy_T": -3733.14054030592,
+      "local_N": -12.273062977654392,
+      "local_Vy": 356.1898418879923,
+      "local_Vz": 1.4428302582971075,
+      "local_Mx": -4973.282920393247,
+      "local_My": -16320.067010317636,
+      "local_Mz": 889322.9349757284
+    },
+    {
+      "component": "Right Boom",
+      "case_id": 42,
+      "legacy_V": -838.2028868023967,
+      "legacy_M": 2258169.4308305904,
+      "legacy_T": -281.7807900285734,
+      "local_N": 28.712949150939256,
+      "local_Vy": 838.2028868023967,
+      "local_Vz": 0.042179090293375354,
+      "local_Mx": -3445.095025225852,
+      "local_My": 7.311636022153152,
+      "local_Mz": 2259551.8061049534
+    }
+  ]
+}

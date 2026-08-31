@@ -291,3 +291,181 @@ def identify_components_manual(
         ))
 
     return components
+
+
+# ---------------------------------------------------------------------------
+# Classification audit and fail-closed enforcement (r3 MC8)
+# ---------------------------------------------------------------------------
+
+class ComponentClassificationError(RuntimeError):
+    """Raised in strict mode when loaded nodes escape classification."""
+
+
+@dataclass
+class ClassificationAudit:
+    """Bookkeeping of how completely the components cover the model.
+
+    A certification-oriented run must not silently drop loads: every
+    node that CARRIES load has to belong to exactly one component, and
+    the classified force/moment totals must reproduce the model totals.
+    """
+    n_nodes: int = 0
+    n_classified: int = 0
+    unclassified_nids: List[int] = field(default_factory=list)
+    multi_assigned: Dict[int, List[str]] = field(default_factory=dict)
+    loaded_unclassified: List[tuple] = field(default_factory=list)
+    force_total: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    moment_total: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    force_classified: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    moment_classified: np.ndarray = field(default_factory=lambda: np.zeros(3))
+
+    @property
+    def force_residual(self) -> np.ndarray:
+        return self.force_total - self.force_classified
+
+    @property
+    def moment_residual(self) -> np.ndarray:
+        return self.moment_total - self.moment_classified
+
+    def ok(self) -> bool:
+        return not self.loaded_unclassified and not self.multi_assigned
+
+    def summary(self) -> str:
+        lines = [
+            f"nodes {self.n_nodes}, classified {self.n_classified}, "
+            f"unclassified {len(self.unclassified_nids)}",
+            f"multi-assigned {len(self.multi_assigned)}, "
+            f"loaded-unclassified {len(self.loaded_unclassified)}",
+            f"|F residual| = {np.linalg.norm(self.force_residual):.6g} N, "
+            f"|M residual| = {np.linalg.norm(self.moment_residual):.6g} N-mm",
+        ]
+        return "; ".join(lines)
+
+
+def audit_classification(
+    model: Any,
+    components: ComponentSet,
+    nodal_forces: Optional[Dict[int, np.ndarray]] = None,
+    moment_ref: Optional[np.ndarray] = None,
+) -> ClassificationAudit:
+    """Audit component coverage of the model (and of a load set).
+
+    Reports unclassified nodes, nodes assigned to more than one
+    component, unclassified nodes that carry load, and the classified
+    vs. total force/moment sums (moments transported to ``moment_ref``,
+    default the origin). A clean audit has zero loaded-unclassified
+    nodes, zero multi-assigned nodes, and zero residuals.
+    """
+    audit = ClassificationAudit(n_nodes=len(model.nodes))
+    ref = np.zeros(3) if moment_ref is None else np.asarray(moment_ref,
+                                                            dtype=float)
+
+    assigned: Dict[int, List[str]] = {}
+    for comp in components.components:
+        for nid in comp.node_ids:
+            assigned.setdefault(nid, []).append(comp.name)
+
+    audit.n_classified = len(assigned)
+    audit.multi_assigned = {nid: names for nid, names in assigned.items()
+                            if len(names) > 1}
+    audit.unclassified_nids = sorted(
+        nid for nid in model.nodes if nid not in assigned)
+
+    if nodal_forces:
+        for nid, f6 in nodal_forces.items():
+            if nid not in model.nodes:
+                continue
+            f = np.asarray(f6[:3], dtype=float)
+            m = np.asarray(f6[3:6], dtype=float)
+            r = np.asarray(model.nodes[nid].xyz_global, dtype=float) - ref
+            audit.force_total += f
+            audit.moment_total += np.cross(r, f) + m
+            if nid in assigned:
+                audit.force_classified += f
+                audit.moment_classified += np.cross(r, f) + m
+            elif np.linalg.norm(f) > 0 or np.linalg.norm(m) > 0:
+                audit.loaded_unclassified.append(
+                    (nid, float(np.linalg.norm(f)),
+                     float(np.linalg.norm(m))))
+    return audit
+
+
+def assert_classification_complete(
+    model: Any,
+    components: ComponentSet,
+    nodal_forces: Dict[int, np.ndarray],
+    moment_ref: Optional[np.ndarray] = None,
+) -> ClassificationAudit:
+    """Fail-closed gate: raise when loads sit on unclassified nodes.
+
+    Returns the audit when clean. Raises
+    :class:`ComponentClassificationError` when any loaded node escapes
+    classification or is assigned to more than one component -- the two
+    conditions under which section-load integration silently loses or
+    double-counts load.
+    """
+    audit = audit_classification(model, components, nodal_forces,
+                                 moment_ref)
+    if audit.loaded_unclassified:
+        worst = sorted(audit.loaded_unclassified,
+                       key=lambda t: -t[1])[:10]
+        raise ComponentClassificationError(
+            f"{len(audit.loaded_unclassified)} loaded node(s) are not "
+            f"assigned to any component (worst by |F|: {worst}). "
+            "Section-load integration would silently drop these loads; "
+            "supply manual node-ID ranges for the missing structure.")
+    if audit.multi_assigned:
+        sample = dict(list(audit.multi_assigned.items())[:5])
+        raise ComponentClassificationError(
+            f"{len(audit.multi_assigned)} node(s) assigned to more than "
+            f"one component (sample: {sample}). Loads on these nodes "
+            "would be double-counted.")
+    return audit
+
+
+def plot_classification(
+    model: Any,
+    components: ComponentSet,
+    path: str,
+    nodal_forces: Optional[Dict[int, np.ndarray]] = None,
+) -> str:
+    """Write a planform scatter of the classification for review.
+
+    Classified nodes are colored per component; unclassified nodes are
+    black crosses (and larger red crosses when they carry load).
+    """
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+    assigned = set()
+    for comp in components.components:
+        xy = np.array([model.nodes[n].xyz_global[:2]
+                       for n in comp.node_ids if n in model.nodes])
+        assigned.update(comp.node_ids)
+        if len(xy):
+            ax.scatter(xy[:, 0], xy[:, 1], s=3, label=comp.name,
+                       color=comp.color if comp.color else None)
+    un = [n for n in model.nodes if n not in assigned]
+    if un:
+        xy = np.array([model.nodes[n].xyz_global[:2] for n in un])
+        ax.scatter(xy[:, 0], xy[:, 1], s=10, marker='x', c='k',
+                   label=f'unclassified ({len(un)})')
+        if nodal_forces:
+            loaded = [n for n in un if n in nodal_forces
+                      and np.linalg.norm(nodal_forces[n]) > 0]
+            if loaded:
+                xy = np.array([model.nodes[n].xyz_global[:2]
+                               for n in loaded])
+                ax.scatter(xy[:, 0], xy[:, 1], s=40, marker='x', c='r',
+                           label=f'unclassified + loaded ({len(loaded)})')
+    ax.set_xlabel('X (mm)')
+    ax.set_ylabel('Y (mm)')
+    ax.set_aspect('equal', adjustable='datalim')
+    ax.legend(fontsize=7, loc='best')
+    ax.set_title('Component classification audit')
+    fig.tight_layout()
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
+    return path

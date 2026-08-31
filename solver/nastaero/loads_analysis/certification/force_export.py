@@ -41,6 +41,7 @@ def export_critical_forces(
     model,
     output_dir: str,
     include_all: bool = False,
+    extra_case_ids: Optional[List[int]] = None,
 ) -> Dict[str, Any]:
     """Export critical design loads as Nastran FORCE/MOMENT BDF cards.
 
@@ -77,7 +78,10 @@ def export_critical_forces(
             if cr.converged and cr.nodal_forces
         })
     else:
-        export_ids = sorted(critical_ids)
+        # extra_case_ids: propulsion-limit (saturated-command) cases that
+        # exceed the feasible envelope -- exported alongside, with their
+        # infeasibility flagged in the deck header (r3 MC2).
+        export_ids = sorted(critical_ids | set(extra_case_ids or ()))
 
     # 3. Write individual BDF files
     case_files: Dict[int, str] = {}
@@ -175,6 +179,14 @@ def _build_header(
     )
     if cr.weight_label:
         lines.append(f"$ Weight: {cr.weight_label}")
+    if not getattr(cr, "rotor_command_feasible", True):
+        sf = getattr(cr, "rotor_thrust_shortfall", 0.0)
+        lines.append(
+            f"$ ROTOR COMMAND INFEASIBLE: BEMT collective saturation, "
+            f"max thrust shortfall {sf * 100.0:.1f} %")
+        lines.append(
+            "$ PROPULSION-LIMIT CASE: not a realized flight condition; "
+            "loads may be unconservative vs the commanded maneuver")
     lines.append("$")
 
     if reasons:

@@ -47,6 +47,12 @@ from ..config import logger
 from typing import List, Dict, Tuple, Optional, Set, Any
 
 
+# Free-DOF count above which the Schur-complement iterative path replaces
+# the dense monolithic solve. Overridable so verification tests can force
+# both paths on the same model and compare them (r3 MC7).
+DENSE_DOF_LIMIT = 10000
+
+
 # ---------------------------------------------------------------------------
 # TrimSharedData: Mach-independent data shared across subcases
 # ---------------------------------------------------------------------------
@@ -509,7 +515,7 @@ def _build_shared_data(bdf_model: BDFModel,
     G_w_active_arr = None
     G_d_active_arr = None
 
-    if n_free > 10000:
+    if n_free > DENSE_DOF_LIMIT:
         # Active columns = union of nonzero columns in G_sp and G_disp
         G_w_csc = G_sp.tocsc()
         G_d_csc = G_disp.tocsc()
@@ -834,7 +840,7 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
         rhs_trim[j] = target - fixed_contrib
 
     # 6. Solve
-    use_iterative = n_free > 10000
+    use_iterative = n_free > DENSE_DOF_LIMIT
     logger.info("  [SC%d] Solver mode: %s (%d free DOFs, %d trim vars)",
                 subcase_id, "iterative" if use_iterative else "dense",
                 n_free, n_trim_free)
@@ -1168,7 +1174,7 @@ def _solve_trim_subcase(bdf_model: BDFModel, fe_model: FEModel,
     active_cols = None
     G_w_active_arr = None
     G_d_active_arr = None
-    if n_free > 10000:
+    if n_free > DENSE_DOF_LIMIT:
         G_w_csc = G_sp.tocsc()
         G_d_csc = G_disp.tocsc()
         col_nnz_w = np.diff(G_w_csc.indptr) > 0

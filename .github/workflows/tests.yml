@@ -22,13 +22,13 @@ jobs:
         include:
           - profile: solver
             extras: "dev,plot"
-            expect_total: 916
-            expect_passed: 890
+            expect_total: 947
+            expect_passed: 921
             expect_skipped: 26
           - profile: full
             extras: "dev,plot,gui"
-            expect_total: 966
-            expect_passed: 940
+            expect_total: 997
+            expect_passed: 971
             expect_skipped: 26
 
     steps:
@@ -61,7 +61,7 @@ jobs:
             print('numpy ', numpy.__version__); \
             print('scipy ', scipy.__version__)"
 
-      # 비교 검증 모델은 재배포 권리가 없어 저장소에 없다. 관련 시험 25건은
+      # 비교 검증 모델은 재배포 권리가 없어 저장소에 없다. 관련 시험 26건은
       # 자동으로 건너뛴다.
       - name: Run test suite
         env:

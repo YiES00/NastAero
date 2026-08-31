@@ -4,6 +4,31 @@ Computes sectional shear force (V), bending moment (M), and torsion (T)
 distributions along the span of structural components by integrating
 nodal forces from tip to root.
 
+Two recovery paths coexist:
+
+1. GLOBAL-AXIS path (legacy, unchanged): V/M/T are single global-axis
+   projections (component.shear_axis / bending_axis / torsion_axis),
+   stations parameterized on the global span axis, cut point third
+   coordinate = mean of ALL outboard nodes. All archived envelope and
+   paper numbers come from this path; it is preserved bit-for-bit.
+
+2. LOCAL 6-COMPONENT path (2026-09, peer-review r3 MC1): a per-component
+   orthonormal frame (e1 = span direction from the dominant principal
+   axis of the node cloud, oriented outboard; e3 = up-hint axis
+   orthogonalized against e1; e2 = e3 x e1, right-handed e1 x e2 = e3)
+   recovers the full section 6-vector
+       N  = F . e1   (axial)        Mx = M . e1   (torsion about span)
+       Vy = F . e2   (chord shear)  My = M . e2   (bending about e2)
+       Vz = F . e3   (normal shear) Mz = M . e3   (in-plane bending)
+   Stations parameterize the PROJECTION s = x . e1, the cut is the
+   half-space s >= s_cut (plane normal to the member axis, which for a
+   canted surface such as a 40-deg V-tail differs from a global-axis
+   cut), and the cut point lies on the elastic-axis estimate of a local
+   sliding window (chord: window min + frac * range on the global chord
+   axis; third coordinate: window mean), projected onto the cut plane.
+   For planar components aligned with global axes the two paths agree
+   exactly (see tests/test_vmt_local6.py).
+
 Usage:
     from nastaero.loads_analysis.component_id import identify_components
     from nastaero.loads_analysis.vmt import compute_vmt_all
@@ -26,7 +51,14 @@ _AXIS_LABELS = {0: 'X (mm)', 1: 'Y (mm)', 2: 'Z (mm)'}
 
 @dataclass
 class VMTCurve:
-    """VMT results for a single component and load condition."""
+    """VMT results for a single component and load condition.
+
+    The first four arrays are the legacy global-axis projections used by
+    the envelope machinery and all archived results. The ``local_*``
+    fields carry the component-local 6-component recovery (None when not
+    computed, e.g. for curves assembled by affine curve algebra rather
+    than from nodal forces).
+    """
     component_name: str
     stations: np.ndarray            # (n_stations,) span positions
     shear: np.ndarray               # (n_stations,) V - shear force [N]
@@ -36,6 +68,16 @@ class VMTCurve:
     station_label: str = 'Y (mm)'
     load_type: str = 'combined'
     subcase_id: int = 0
+    # --- component-local 6-component recovery (r3 MC1) ---
+    local_stations: Optional[np.ndarray] = None   # (n,) s = x . e1 [mm]
+    local_N: Optional[np.ndarray] = None          # (n,) axial F.e1 [N]
+    local_Vy: Optional[np.ndarray] = None         # (n,) chord shear F.e2 [N]
+    local_Vz: Optional[np.ndarray] = None         # (n,) normal shear F.e3 [N]
+    local_Mx: Optional[np.ndarray] = None         # (n,) torsion M.e1 [N-mm]
+    local_My: Optional[np.ndarray] = None         # (n,) bending M.e2 [N-mm]
+    local_Mz: Optional[np.ndarray] = None         # (n,) bending M.e3 [N-mm]
+    local_frame: Optional[np.ndarray] = None      # (3,3) rows = e1, e2, e3
+    local_cut_points: Optional[np.ndarray] = None  # (n, 3) global coords
 
 
 @dataclass
@@ -185,6 +227,8 @@ def compute_vmt(
         M[i] = sum_M[bend_ax]
         T[i] = sum_M[torsion_ax]
 
+    loc = _local6_recovery(all_xyz, all_f6, component, n_stations,
+                           elastic_axis_frac)
     return VMTCurve(
         component_name=component.name,
         stations=stations,
@@ -195,6 +239,15 @@ def compute_vmt(
         station_label=_AXIS_LABELS.get(span_ax, 'Station'),
         load_type=load_type,
         subcase_id=subcase_id,
+        local_stations=None if loc is None else loc['stations'],
+        local_N=None if loc is None else loc['N'],
+        local_Vy=None if loc is None else loc['Vy'],
+        local_Vz=None if loc is None else loc['Vz'],
+        local_Mx=None if loc is None else loc['Mx'],
+        local_My=None if loc is None else loc['My'],
+        local_Mz=None if loc is None else loc['Mz'],
+        local_frame=None if loc is None else loc['frame'],
+        local_cut_points=None if loc is None else loc['cut_points'],
     )
 
 
@@ -375,6 +428,127 @@ def compute_vmt_all(
                                 subcase_id=subcase_id)
         result.curves.append(curve)
     return result
+
+
+def component_local_frame(
+    all_xyz: np.ndarray,
+    component: ComponentDef,
+) -> tuple:
+    """Build the component-local orthonormal frame (e1, e2, e3).
+
+    e1: dominant principal axis of the node cloud (member/span axis),
+        oriented outboard (sign of integration_sign on the declared
+        global span axis).
+    e3: the component's "up hint" axis (the global axis that is neither
+        span nor chord: Z for wings/HTPs/V-tail halves, Y for VTPs and
+        fuselages) orthogonalized against e1.
+    e2: e3 x e1, completing a right-handed triad (e1 x e2 = e3). Note
+        that for mirrored components (left/right wing) e2 is NOT the
+        mirror image; the frame is fully reported in
+        VMTCurve.local_frame so signs are unambiguous.
+
+    Returns (frame, chord_ax, third_ax) where frame rows are e1, e2, e3.
+    """
+    span_ax = component.span_axis
+    if span_ax in (1, 2):
+        chord_ax = 0
+    else:
+        chord_ax = 2
+    third_ax = 3 - span_ax - chord_ax
+
+    ctr = all_xyz.mean(axis=0)
+    x = all_xyz - ctr
+    cov = x.T @ x
+    w, vec = np.linalg.eigh(cov)
+    e1 = vec[:, np.argmax(w)].copy()
+    if abs(e1[span_ax]) > 1e-9 and e1[span_ax] * component.integration_sign < 0:
+        e1 = -e1
+
+    hint = np.zeros(3)
+    hint[third_ax] = 1.0
+    e3 = hint - (hint @ e1) * e1
+    n3 = np.linalg.norm(e3)
+    if n3 < 1e-9:
+        hint = np.zeros(3)
+        hint[chord_ax] = 1.0
+        e3 = hint - (hint @ e1) * e1
+        n3 = np.linalg.norm(e3)
+    e3 = e3 / n3
+    e2 = np.cross(e3, e1)
+    return np.vstack([e1, e2, e3]), chord_ax, third_ax
+
+
+def _local6_recovery(
+    all_xyz: np.ndarray,
+    all_f6: np.ndarray,
+    component: ComponentDef,
+    n_stations: int,
+    elastic_axis_frac: float,
+) -> Optional[dict]:
+    """Component-local 6-component section-load recovery (r3 MC1).
+
+    Cuts are half-spaces s >= s_cut with s = x . e1 (plane normal to the
+    member axis). The cut point at each station is the elastic-axis
+    estimate of a sliding window (|s - s_cut| < half_bin): window chord
+    min + frac * chord range on the global chord axis, window mean on
+    the third axis, then projected onto the cut plane. All forces and
+    direct nodal moments outboard of the cut are transported to that
+    point and projected onto (e1, e2, e3).
+    """
+    frame, chord_ax, third_ax = component_local_frame(all_xyz, component)
+    e1, e2, e3 = frame
+    s = all_xyz @ e1
+    s_min, s_max = s.min(), s.max()
+    if s_max - s_min < 1e-6:
+        return None
+
+    stations = np.linspace(s_min, s_max, n_stations)
+    half_bin = max((s_max - s_min) / (n_stations * 0.8), 1.0)
+    # Frame chord/normal coordinates: chord measured IN the section plane
+    # (perpendicular to the member axis), so sweep-induced spread along
+    # the global chord axis does not contaminate the elastic-axis
+    # estimate. The chord-fraction datum stays "from the LE side": when
+    # e2 points opposite the global chord hint the fraction is measured
+    # from the max-c end instead.
+    c_all = all_xyz @ e2
+    n_all = all_xyz @ e3
+    frac_from_min = e2[chord_ax] >= 0.0
+
+    out = {k: np.zeros(n_stations) for k in ('N', 'Vy', 'Vz', 'Mx', 'My', 'Mz')}
+    cuts = np.zeros((n_stations, 3))
+
+    for i, s_cut in enumerate(stations):
+        mask = s >= s_cut - 1e-9
+        if not np.any(mask):
+            continue
+        nearby = np.abs(s - s_cut) < half_bin
+        if not np.any(nearby):
+            nearby = mask
+        c_min = c_all[nearby].min()
+        c_max = c_all[nearby].max()
+        if frac_from_min:
+            c_ea = c_min + elastic_axis_frac * (c_max - c_min)
+        else:
+            c_ea = c_max - elastic_axis_frac * (c_max - c_min)
+        cut = s_cut * e1 + c_ea * e2 + n_all[nearby].mean() * e3
+        cuts[i] = cut
+
+        f_out = all_f6[mask, :3]
+        m_out = all_f6[mask, 3:6]
+        r = all_xyz[mask] - cut
+        sum_f = f_out.sum(axis=0)
+        sum_m = np.cross(r, f_out).sum(axis=0) + m_out.sum(axis=0)
+
+        out['N'][i] = sum_f @ e1
+        out['Vy'][i] = sum_f @ e2
+        out['Vz'][i] = sum_f @ e3
+        out['Mx'][i] = sum_m @ e1
+        out['My'][i] = sum_m @ e2
+        out['Mz'][i] = sum_m @ e3
+
+    return {
+        'stations': stations, 'frame': frame, 'cut_points': cuts, **out,
+    }
 
 
 def _compute_elastic_axis(

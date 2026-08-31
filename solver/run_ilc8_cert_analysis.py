@@ -286,19 +286,33 @@ def main():
     comp_names = list(next(iter(vmt_data.values())).keys()) if vmt_data else []
     print(f"    Components: {', '.join(comp_names)}")
 
-    # ---- 9. Envelope + critical cases ----
+    # ---- 9. Envelope + critical cases + design-set selection ----
+    # select_critical_design_loads가 실현가능/추진계 한계 분리 정책
+    # (r3 MC2)까지 처리한다. 포화 지령 케이스는 실현가능 포락선
+    # 산정에서 제외되고, 그 포락선을 초과하는 경우에만 플래그된
+    # 추진계 한계 설계 케이스로 별도 편입된다.
     from nastaero.loads_analysis.certification.envelope import (
-        EnvelopeProcessor,
+        select_critical_design_loads,
     )
 
-    proc = EnvelopeProcessor(batch_result, vmt_data)
-    proc.compute_envelopes()
-    proc.identify_critical_cases()
-    # 평면 껍질은 두 양의 조합 파괴만 덮는다. 세 투영 모두에서 내부점이면서
-    # 혼합 (V,M,T) 방향으로 극값인 케이스를 잡으려면 3차원 껍질이 필요하다.
-    proc.add_interaction_critical_cases()
-    proc.add_interaction_critical_cases_3d()
+    force_dir = os.path.join(output_dir, "force_cards")
+    sel = select_critical_design_loads(
+        model, batch_result, output_dir=force_dir,
+        fuselage_cg_x=4450.0, infeasible_policy="separate",
+        components=components, vmt_data=vmt_data,
+    )
+    proc = sel["processor"]
     all_critical = proc.get_critical_cases()
+    pl = sel["propulsion_limit"]
+    print(f"    Design set: {sel['n_design_cases']} cases "
+          f"({sel['compression']:.1f}:1), critical records "
+          f"{sel['n_critical']}")
+    print(f"    Propulsion-limit screening: {pl['n_infeasible']} "
+          f"saturated case(s), {len(pl['exceedances'])} envelope "
+          f"exceedance(s), {pl['n_appended_design_cases']} appended")
+    n_plim_design = sum(1 for d in sel["design_cases"]
+                        if not d.rotor_command_feasible)
+    print(f"    Saturated cases in design set: {n_plim_design}")
 
     # 임계 케이스 표 (요약)
     print(f"    {'Component':14s} {'Qty':8s} {'Ext':6s} "
@@ -348,16 +362,12 @@ def main():
         n_plots += 1
     print(f"\n[11] Plots saved: {n_plots} -> {output_dir}/")
 
-    # ---- 11. FORCE card export ----
-    from nastaero.loads_analysis.certification.force_export import (
-        export_critical_forces,
-    )
-
-    force_dir = os.path.join(output_dir, "force_cards")
-    exp = export_critical_forces(batch_result, proc, model, force_dir)
+    # ---- 11. FORCE card export (9단계 선정에서 함께 수행) ----
+    exp = sel["export"]
     print(f"\n[12] FORCE export: {exp['n_cases']} cases, "
           f"{exp['n_force_cards']:,} FORCE / {exp['n_moment_cards']:,} MOMENT")
     print(f"    Master BDF: {exp['master_bdf']}")
+    print(f"    Design summary CSV: {sel.get('design_summary_csv')}")
 
     # ---- 12. Summary ----
     print(f"\n{'='*70}")
@@ -367,6 +377,15 @@ def main():
           f"critical {len(all_critical)}")
     print(f"  Wall time: {time.time()-t0:.1f}s | output: {output_dir}/")
     print(f"{'='*70}")
+
+    # 후속 분석 스크립트(r3 응력 보존·국부 6분력 비교)가 같은 실행
+    # 결과를 재사용할 수 있게 핵심 객체를 반환한다.
+    return {
+        "model": model, "config": config, "vtol_config": vtol_config,
+        "batch_result": batch_result, "components": components,
+        "vmt_data": vmt_data, "selection": sel, "processor": proc,
+        "output_dir": output_dir,
+    }
 
 
 if __name__ == "__main__":

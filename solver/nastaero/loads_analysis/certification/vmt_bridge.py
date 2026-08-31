@@ -34,6 +34,7 @@ def compute_vmt_for_batch(
     components: Optional[ComponentSet] = None,
     n_stations: int = 50,
     fuselage_cg_x: Optional[float] = None,
+    strict_classification: bool = False,
 ) -> Dict[int, Dict[str, dict]]:
     """Compute VMT curves for all converged cases in a BatchResult.
 
@@ -76,6 +77,14 @@ def compute_vmt_for_batch(
         if not cr.converged or cr.nodal_forces is None:
             n_skipped += 1
             continue
+
+        if strict_classification:
+            # Fail-closed gate (r3 MC8): loads on unclassified nodes or
+            # double-assigned nodes abort the run instead of silently
+            # corrupting the section integrals.
+            from ..component_id import assert_classification_complete
+            assert_classification_complete(model, components,
+                                           cr.nodal_forces)
 
         vmt_result = compute_vmt_all(
             model, cr.nodal_forces, components,

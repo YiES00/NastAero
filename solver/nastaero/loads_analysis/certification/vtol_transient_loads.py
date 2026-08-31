@@ -148,7 +148,11 @@ class VTOLTransientLoadsRunner:
 
     def __init__(self, bdf_model, vtol_config: VTOLConfig,
                  aircraft_config: AircraftConfig,
-                 airfoil_config=None, n_workers: int = 0):
+                 airfoil_config=None, n_workers: int = 0,
+                 inflow_tau_coeff: float = None):
+        # inflow_tau_coeff: Pitt-Peters 시정수 계수 재정의(민감도 스윕용,
+        # r3 MC4). None이면 PittPetersInflow 기본값 4/(3pi).
+        self.inflow_tau_coeff = inflow_tau_coeff
         self.bdf_model = bdf_model
         self.vtol_config = vtol_config
         self.aircraft_config = aircraft_config
@@ -548,8 +552,11 @@ class VTOLTransientLoadsRunner:
             raise ValueError("hover_rotors is empty")
         T_hover = self._weight_N / n
 
+        _tk = ({'tau_coeff': self.inflow_tau_coeff}
+               if self.inflow_tau_coeff else {})
         pps = [PittPetersInflow(rotor_radius=r.blade.radius, rho=self._rho,
-                                T_steady=T_hover) for r in lift_rotors]
+                                T_steady=T_hover, **_tk)
+               for r in lift_rotors]
         # hub_position은 모델 단위와 무관하게 설정 규약상 mm다
         # (rotor_config.RotorDef, rotor_dynamics의 1e-3 하드코딩과 동일).
         # 모델 단위 환산계수를 쓰면 미터 덱에서 1000배 어긋난다.
@@ -804,8 +811,10 @@ class VTOLTransientLoadsRunner:
                           for r in lift_rotors])   # 달성 수직 추력 [N]
         L0 = W - float(T_ach.sum())                # 날개 명목 양력 [N]
 
+        _tk = ({'tau_coeff': self.inflow_tau_coeff}
+               if self.inflow_tau_coeff else {})
         pps = [PittPetersInflow(rotor_radius=r.blade.radius, rho=rho,
-                                T_steady=float(T_i), V_forward=V)
+                                T_steady=float(T_i), V_forward=V, **_tk)
                for r, T_i in zip(lift_rotors, T_ach)]
         # hub_position은 설정 규약상 항상 mm (위 주석 참조)
         x_m = np.array([float(r.hub_position[0]) * 1e-3

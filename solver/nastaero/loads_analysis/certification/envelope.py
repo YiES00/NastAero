@@ -109,6 +109,12 @@ class DesignLoadCase:
     n_govern: int = 0
     governs: List[Tuple[str, float, str, str]] = field(default_factory=list)
     components: List[str] = field(default_factory=list)
+    # r3 MC2: physical realizability of the rotor thrust command. False
+    # means the BEMT saturated at the collective limit and the achieved
+    # thrust fell short of the command -- the case is a propulsion-limit
+    # state, not a realized flight condition.
+    rotor_command_feasible: bool = True
+    rotor_thrust_shortfall: float = 0.0
 
     @property
     def by_envelope(self) -> List[Tuple[str, float, str, str]]:
@@ -122,9 +128,19 @@ class DesignLoadCase:
 
     @property
     def basis(self) -> str:
-        """Selection basis: ``envelope``, ``interaction``, or ``both``."""
+        """Selection basis: ``envelope``, ``interaction``, ``both``, or
+        ``propulsion-limit`` (saturated command exceeding the feasible
+        envelope, r3 MC2)."""
         e, h = bool(self.by_envelope), bool(self.by_interaction)
-        return "both" if e and h else "envelope" if e else "interaction" if h else ""
+        if e and h:
+            return "both"
+        if e:
+            return "envelope"
+        if h:
+            return "interaction"
+        if any(g[3] == "propulsion-limit" for g in self.governs):
+            return "propulsion-limit"
+        return ""
 
     def why(self) -> str:
         """One-line human-readable reason this case is a design load.
@@ -135,12 +151,14 @@ class DesignLoadCase:
         """
         from collections import defaultdict
         per: Dict[str, Dict[str, set]] = defaultdict(
-            lambda: {"env": set(), "hull": set()})
+            lambda: {"env": set(), "hull": set(), "plim": set()})
         for comp, _sta, qty, ext in self.governs:
             if ext in ("max", "min"):
                 per[comp]["env"].add(f"{qty}{'+' if ext == 'max' else '-'}")
             elif ext in ("hull", "hull3d"):
                 per[comp]["hull"].add(qty)
+            elif ext == "propulsion-limit":
+                per[comp]["plim"].add(qty)
         parts = []
         for comp in sorted(per):
             segs = []
@@ -148,6 +166,9 @@ class DesignLoadCase:
                 segs.append("env " + ",".join(sorted(per[comp]["env"])))
             if per[comp]["hull"]:
                 segs.append("potato " + ",".join(sorted(per[comp]["hull"])))
+            if per[comp]["plim"]:
+                segs.append("propulsion-limit "
+                            + ",".join(sorted(per[comp]["plim"])))
             parts.append(f"{comp}: {'; '.join(segs)}")
         return " | ".join(parts)
 
@@ -898,6 +919,8 @@ def design_load_table(design_cases: List["DesignLoadCase"],
             "basis": d.basis,
             "envelope_quantities": sorted({g[2] for g in d.by_envelope}),
             "interaction_planes": sorted({g[2] for g in d.by_interaction}),
+            "rotor_command_feasible": d.rotor_command_feasible,
+            "rotor_thrust_shortfall": d.rotor_thrust_shortfall,
             "why": d.why(),
         })
     return rows
@@ -917,18 +940,101 @@ def write_design_load_summary_csv(design_cases: List["DesignLoadCase"],
         w = _csv.writer(fh)
         w.writerow(["rank", "case_id", "label", "category", "far_section",
                     "nz", "n_govern", "components", "basis",
-                    "envelope_quantities", "interaction_planes", "why"])
+                    "envelope_quantities", "interaction_planes",
+                    "rotor_command_feasible", "rotor_thrust_shortfall",
+                    "why"])
         for r in rows:
             w.writerow([
                 r["rank"], r["case_id"], r["label"], r["category"],
                 r["far_section"], f"{r['nz']:+.2f}", r["n_govern"],
                 "; ".join(r["components"]), r["basis"],
                 ",".join(r["envelope_quantities"]),
-                ",".join(r["interaction_planes"]), r["why"],
+                ",".join(r["interaction_planes"]),
+                "Y" if r["rotor_command_feasible"] else "N",
+                f"{r['rotor_thrust_shortfall']:.3f}",
+                r["why"],
             ])
     logger.info("Design-load summary written: %s (%d conditions)",
                 csv_path, len(rows))
     return csv_path
+
+
+# ---------------------------------------------------------------------------
+# Propulsion-limit (saturated rotor command) screening -- r3 MC2
+# ---------------------------------------------------------------------------
+
+def _screen_infeasible_against_envelope(
+    proc: "EnvelopeProcessor",
+    vmt_data: Dict[int, Dict[str, Any]],
+    infeasible_ids: List[int],
+) -> List[Dict[str, Any]]:
+    """Compare saturated-command cases against the feasible envelope.
+
+    Returns one record per (case, component, station, quantity) where the
+    saturated case falls OUTSIDE the feasible-case envelope band. These
+    are the loads the feasible-only selection would silently miss.
+    """
+    records: List[Dict[str, Any]] = []
+    for cid in infeasible_ids:
+        for comp_name, vmt in vmt_data.get(cid, {}).items():
+            env = proc.get_envelope(comp_name)
+            if env is None:
+                continue
+            stations = vmt["stations"]
+            for qty, arr in (("V", vmt["shear"]), ("M", vmt["bending"]),
+                             ("T", vmt["torsion"])):
+                for i, sta in enumerate(stations):
+                    if i >= len(env.envelopes):
+                        break
+                    se = env.envelopes[i]
+                    lo = getattr(se, f"{qty}_min")
+                    hi = getattr(se, f"{qty}_max")
+                    v = float(arr[i])
+                    if v > hi or v < lo:
+                        bound = hi if v > hi else lo
+                        records.append({
+                            "case_id": cid, "component": comp_name,
+                            "station": float(sta), "quantity": qty,
+                            "value": v, "feasible_bound": float(bound),
+                            "extreme": "max" if v > hi else "min",
+                        })
+    return records
+
+
+def _append_propulsion_limit_cases(
+    batch_result: BatchResult,
+    design_cases: List["DesignLoadCase"],
+    exceedances: List[Dict[str, Any]],
+    shortfall: Dict[int, float],
+) -> int:
+    """Append flagged design cases for envelope-exceeding saturated cases."""
+    by_case: Dict[int, List[Dict[str, Any]]] = {}
+    for e in exceedances:
+        by_case.setdefault(e["case_id"], []).append(e)
+    existing = {dc.case_id for dc in design_cases}
+    appended = 0
+    for cid, recs in sorted(by_case.items()):
+        if cid in existing:
+            continue
+        cr = batch_result.get_result(cid)
+        dc = DesignLoadCase(
+            case_id=cid,
+            category=getattr(cr, "category", "") if cr else "",
+            far_section=getattr(cr, "far_section", "") if cr else "",
+            nz=getattr(cr, "nz", 0.0) if cr else 0.0,
+            label=getattr(cr, "label", "") if cr else "",
+            rotor_command_feasible=False,
+            rotor_thrust_shortfall=shortfall.get(cid, 0.0),
+        )
+        for e in recs:
+            dc.governs.append((e["component"], e["station"], e["quantity"],
+                               "propulsion-limit"))
+            if e["component"] not in dc.components:
+                dc.components.append(e["component"])
+        dc.n_govern = len(dc.governs)
+        design_cases.append(dc)
+        appended += 1
+    return appended
 
 
 # ---------------------------------------------------------------------------
@@ -944,6 +1050,9 @@ def select_critical_design_loads(
     planes: Tuple[Tuple[str, str], ...] = (("V", "M"), ("V", "T"), ("M", "T")),
     include_axis: bool = True,
     include_3d: bool = True,
+    infeasible_policy: str = "separate",
+    components: Any = None,
+    vmt_data: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Run the full critical-design-load selection, the last loads step.
 
@@ -991,6 +1100,17 @@ def select_critical_design_loads(
         default and should only be turned off to reproduce planar-selection
         results. Cost is negligible (hulls over all stations take seconds);
         the price is a slightly larger design set.
+    infeasible_policy : str
+        How cases whose rotor thrust command was NOT achieved (BEMT
+        collective saturation, ``CaseResult.rotor_command_feasible``
+        False) enter the selection (r3 MC2). ``'separate'`` (default):
+        the envelope and design set are built from feasible cases only;
+        saturated cases are then screened against that envelope and any
+        that exceed it anywhere are appended as flagged propulsion-limit
+        design cases, with the full accounting returned under
+        ``result['propulsion_limit']``. ``'include'``: legacy behavior,
+        everything pooled (reproduces archived selections). ``'exclude'``:
+        saturated cases dropped entirely.
 
     Returns
     -------
@@ -1002,12 +1122,35 @@ def select_critical_design_loads(
     """
     from .vmt_bridge import compute_vmt_for_batch
 
-    vmt_data = compute_vmt_for_batch(
-        model, batch_result, n_stations=n_stations,
-        fuselage_cg_x=fuselage_cg_x,
-    )
+    if infeasible_policy not in ("separate", "include", "exclude"):
+        raise ValueError(
+            f"infeasible_policy must be 'separate', 'include' or "
+            f"'exclude', got {infeasible_policy!r}")
 
-    proc = EnvelopeProcessor(batch_result, vmt_data)
+    if vmt_data is None:
+        vmt_data = compute_vmt_for_batch(
+            model, batch_result, components=components,
+            n_stations=n_stations, fuselage_cg_x=fuselage_cg_x,
+        )
+
+    feas_flag = {
+        cr.case_id: bool(getattr(cr, "rotor_command_feasible", True))
+        for cr in batch_result.case_results
+    }
+    shortfall = {
+        cr.case_id: float(getattr(cr, "rotor_thrust_shortfall", 0.0))
+        for cr in batch_result.case_results
+    }
+    infeasible_ids = sorted(
+        cid for cid in vmt_data if not feas_flag.get(cid, True))
+
+    if infeasible_policy == "include":
+        pooled = vmt_data
+    else:
+        pooled = {cid: d for cid, d in vmt_data.items()
+                  if feas_flag.get(cid, True)}
+
+    proc = EnvelopeProcessor(batch_result, pooled)
     proc.compute_envelopes()
     if include_axis:
         proc.identify_critical_cases()
@@ -1016,6 +1159,36 @@ def select_critical_design_loads(
     if include_3d:
         proc.add_interaction_critical_cases_3d()
     design_cases = proc.select_design_cases()
+
+    # Stamp physical realizability on every selected case
+    for dc in design_cases:
+        dc.rotor_command_feasible = feas_flag.get(dc.case_id, True)
+        dc.rotor_thrust_shortfall = shortfall.get(dc.case_id, 0.0)
+
+    propulsion_limit: Dict[str, Any] = {
+        "policy": infeasible_policy,
+        "n_infeasible": len(infeasible_ids),
+        "infeasible_case_ids": infeasible_ids,
+        "exceedances": [],
+        "n_appended_design_cases": 0,
+    }
+    if infeasible_policy == "separate" and infeasible_ids:
+        exceed = _screen_infeasible_against_envelope(
+            proc, vmt_data, infeasible_ids)
+        propulsion_limit["exceedances"] = exceed
+        appended = _append_propulsion_limit_cases(
+            batch_result, design_cases, exceed, shortfall)
+        propulsion_limit["n_appended_design_cases"] = appended
+        if exceed:
+            logger.warning(
+                "Propulsion-limit screening: %d saturated case(s) exceed "
+                "the feasible envelope at %d station extremes; appended "
+                "%d flagged design case(s)",
+                len({e['case_id'] for e in exceed}), len(exceed), appended)
+        else:
+            logger.info(
+                "Propulsion-limit screening: %d saturated case(s), none "
+                "exceed the feasible envelope", len(infeasible_ids))
 
     n_in = sum(1 for cr in batch_result.case_results
                if cr.converged and cr.nodal_forces)
@@ -1030,12 +1203,16 @@ def select_critical_design_loads(
         "design_table": design_load_table(design_cases),
         "components": list(proc._component_envelopes.keys()),
         "processor": proc,
+        "propulsion_limit": propulsion_limit,
     }
 
     if output_dir is not None:
         from .force_export import export_critical_forces
+        plim_ids = sorted({e["case_id"]
+                           for e in propulsion_limit["exceedances"]})
         result["export"] = export_critical_forces(
             batch_result, proc, model, output_dir,
+            extra_case_ids=plim_ids or None,
         )
         import os as _os
         result["design_summary_csv"] = write_design_load_summary_csv(

@@ -101,6 +101,9 @@ class PittPetersInflow:
     rho: float = 1.225
     T_steady: float = 0.0
     V_forward: float = 0.0
+    # 시정수 계수: 비보정 겉보기 질량 4/(3pi)=0.4244 (기본), 보정
+    # L-행렬 관례 64/(75pi)=0.2716 — 모델형식 민감도 스윕용 (r3 MC4)
+    tau_coeff: float = 4.0 / (3.0 * np.pi)
 
     def __post_init__(self):
         self.A = np.pi * self.rotor_radius ** 2
@@ -124,7 +127,7 @@ class PittPetersInflow:
         self.mass_flow = float(np.sqrt(self.V_forward ** 2
                                        + self.nu_steady ** 2))
         if self.mass_flow > 0:
-            self.tau_nu = (4.0 / (3.0 * np.pi)) * self.rotor_radius / self.mass_flow
+            self.tau_nu = self.tau_coeff * self.rotor_radius / self.mass_flow
         else:
             # Fallback for trivial / numerical cases
             self.tau_nu = 0.05  # 50 ms typical
