@@ -9,8 +9,8 @@ PLATE_MODES_BDF = os.path.join(VALIDATION_DIR, "plate_modes", "plate_modes.bdf")
 
 
 def run_sol103(bdf_path):
-    from nastaero.bdf.parser import BDFParser
-    from nastaero.solvers.sol103 import solve_modes
+    from ascent_load.bdf.parser import BDFParser
+    from ascent_load.solvers.sol103 import solve_modes
     parser = BDFParser()
     model = parser.parse(bdf_path)
     return solve_modes(model)

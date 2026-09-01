@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""NastAero Comprehensive Solver Validation.
+"""ASCENT-Load Comprehensive Solver Validation.
 
-Tests ALL NastAero solvers against MSC Nastran manual examples and
+Tests ALL ASCENT-Load solvers against MSC Nastran manual examples and
 analytical solutions:
   SOL 101 - Static Analysis (cantilever beam)
   SOL 103 - Modal Analysis (cantilever beam frequencies)
@@ -11,7 +11,7 @@ analytical solutions:
   SOL 146 - Dynamic Aeroelastic Response (BAH wing, damping sweep)
 
 Usage:
-    cd /Users/yies/git/NastAero/solver && python validate_all_solvers.py
+    cd /Users/yies/git/ASCENT-Load/solver && python validate_all_solvers.py
 """
 from __future__ import annotations
 import os
@@ -22,11 +22,11 @@ import traceback
 import logging
 import numpy as np
 
-# Ensure nastaero is importable
+# Ensure ascent_load is importable
 sys.path.insert(0, os.path.dirname(__file__))
 
 # Suppress verbose solver logging during validation
-logging.getLogger("nastaero").setLevel(logging.WARNING)
+logging.getLogger("ascent_load").setLevel(logging.WARNING)
 
 # ──────────────────────────────────────────────────────────────────────
 # Results accumulator
@@ -52,8 +52,8 @@ def add_result(sol, name, ref_val, comp_val, threshold_pct=5.0, info_only=False)
 # Helper: write a BDF string to a temp file, parse, return BDFModel
 # ──────────────────────────────────────────────────────────────────────
 def parse_bdf_string(bdf_text: str):
-    """Write BDF text to temp file, parse with NastAero, return model."""
-    from nastaero.bdf.parser import BDFParser
+    """Write BDF text to temp file, parse with ASCENT-Load, return model."""
+    from ascent_load.bdf.parser import BDFParser
     with tempfile.NamedTemporaryFile(mode='w', suffix='.bdf', delete=False) as f:
         f.write(bdf_text)
         tmp_path = f.name
@@ -150,7 +150,7 @@ def validate_sol101():
                          J=0.2, rho=0.1, tip_force=P)
     model = parse_bdf_string(bdf)
 
-    from nastaero.solvers.sol101 import solve_static
+    from ascent_load.solvers.sol101 import solve_static
     results = solve_static(model)
 
     sc = results.subcases[0]
@@ -158,7 +158,7 @@ def validate_sol101():
     tip_disp_z = sc.displacements[tip_nid][2]  # DOF 3 = index 2
 
     print(f"  Analytical tip delta:  {delta_analytical:.6f}")
-    print(f"  NastAero tip delta:    {tip_disp_z:.6f}")
+    print(f"  ASCENT-Load tip delta:    {tip_disp_z:.6f}")
 
     add_result(101, "Cantilever tip delta", delta_analytical, tip_disp_z)
 
@@ -199,7 +199,7 @@ def validate_sol103():
                          J=0.2, rho=rho, n_modes=10, include_load=False)
     model = parse_bdf_string(bdf)
 
-    from nastaero.solvers.sol103 import solve_modes
+    from ascent_load.solvers.sol103 import solve_modes
     results = solve_modes(model)
 
     sc = results.subcases[0]
@@ -215,7 +215,7 @@ def validate_sol103():
         if uz > uy:
             z_bending_freqs.append(freqs[i])
 
-    print(f"  {'Mode':>4s}  {'Analytical (Hz)':>15s}  {'NastAero (Hz)':>14s}  {'Error %':>8s}")
+    print(f"  {'Mode':>4s}  {'Analytical (Hz)':>15s}  {'ASCENT-Load (Hz)':>14s}  {'Error %':>8s}")
     print(f"  {'----':>4s}  {'---------------':>15s}  {'--------------':>14s}  {'-------':>8s}")
 
     for i in range(min(3, len(f_analytical))):
@@ -260,8 +260,8 @@ def validate_sol109():
                          J=0.2, rho=rho, tip_force=P, include_load=False)
 
     tip_nid = 21
-    from nastaero.bdf.parser import BDFParser
-    from nastaero.solvers.sol109 import solve_direct_transient
+    from ascent_load.bdf.parser import BDFParser
+    from ascent_load.solvers.sol109 import solve_direct_transient
 
     def run_sol109(zeta_val, dur=duration):
         model = parse_bdf_string(bdf)
@@ -335,7 +335,7 @@ def validate_sol112(delta_static, f1, T1):
                          J=0.2, rho=rho, include_load=False)
 
     tip_nid = 21
-    from nastaero.solvers.sol112 import solve_modal_transient
+    from ascent_load.solvers.sol112 import solve_modal_transient
 
     def run_sol112(zeta_val, dur=duration):
         model = parse_bdf_string(bdf)
@@ -372,7 +372,7 @@ def validate_sol112(delta_static, f1, T1):
     add_result(112, "Step DAF (zeta=2%)", daf_ref, daf_112)
 
     # Cross-compare SOL 112 vs SOL 109 (re-run SOL 109 with same dt)
-    from nastaero.solvers.sol109 import solve_direct_transient
+    from ascent_load.solvers.sol109 import solve_direct_transient
     bdf_109 = cantilever_bdf(sol=101, L=L, n_elem=20, E=E, I1=I1, I2=I1,
                              J=0.2, rho=rho, include_load=False)
     model_109 = parse_bdf_string(bdf_109)
@@ -429,10 +429,10 @@ def validate_sol144():
         add_result(144, "Trim Fz balance (lb)", 8000.0, 0.0)
         return
 
-    from nastaero.bdf.parser import BDFParser
-    from nastaero.solvers.sol144 import solve_trim
-    from nastaero.aero.panel import generate_all_panels, get_box_index_map
-    from nastaero.aero.dlm import build_aic_matrix
+    from ascent_load.bdf.parser import BDFParser
+    from ascent_load.solvers.sol144 import solve_trim
+    from ascent_load.aero.panel import generate_all_panels, get_box_index_map
+    from ascent_load.aero.dlm import build_aic_matrix
 
     parser = BDFParser()
     model = parser.parse(bdf_path)
@@ -534,9 +534,9 @@ def validate_sol146():
         print(f"  WARNING: {bdf_path} not found, skipping SOL 146")
         return
 
-    from nastaero.bdf.parser import BDFParser
-    from nastaero.solvers.sol146 import solve_aeroelastic_transient
-    from nastaero.fem.model import FEModel
+    from ascent_load.bdf.parser import BDFParser
+    from ascent_load.solvers.sol146 import solve_aeroelastic_transient
+    from ascent_load.fem.model import FEModel
     import scipy.sparse.linalg as spla
 
     TIP_NODE = 6
@@ -632,10 +632,10 @@ def print_summary():
     """Print the final summary table."""
     print()
     print("=" * 80)
-    print("  NastAero Solver Validation vs MSC Nastran / Analytical")
+    print("  ASCENT-Load Solver Validation vs MSC Nastran / Analytical")
     print("=" * 80)
     print(f"{'SOL':>3s}  {'Test':<26s}  {'Reference':>10s}  "
-          f"{'NastAero':>10s}  {'Error':>7s}  {'Status':>6s}")
+          f"{'ASCENT-Load':>10s}  {'Error':>7s}  {'Status':>6s}")
     print(f"{'---':>3s}  {'----':<26s}  {'---------':>10s}  "
           f"{'--------':>10s}  {'-----':>7s}  {'------':>6s}")
 
@@ -700,7 +700,7 @@ def print_summary():
 def main():
     t_start = time.time()
     print("=" * 80)
-    print("  NastAero Comprehensive Solver Validation")
+    print("  ASCENT-Load Comprehensive Solver Validation")
     print("  Testing SOL 101, 103, 109, 112, 144, 146")
     print("=" * 80)
 

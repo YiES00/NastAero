@@ -7,10 +7,10 @@ import math
 import pytest
 import numpy as np
 
-from nastaero.loads_analysis.certification.batch_runner import (
+from ascent_load.loads_analysis.certification.batch_runner import (
     BatchResult, CaseResult,
 )
-from nastaero.loads_analysis.certification.envelope import (
+from ascent_load.loads_analysis.certification.envelope import (
     CriticalCase, StationEnvelope, ComponentEnvelope,
     PotatoData, EnvelopeProcessor,
 )
@@ -410,7 +410,7 @@ class TestCriticalCaseDataclass:
 # Interaction-diagram (potato-plot) critical selection + design-load set
 # ---------------------------------------------------------------------------
 
-from nastaero.loads_analysis.certification.envelope import (  # noqa: E402
+from ascent_load.loads_analysis.certification.envelope import (  # noqa: E402
     DesignLoadCase, _hull_vertex_indices,
 )
 
@@ -523,7 +523,7 @@ class TestDesignCaseReduction:
 
 class TestDesignLoadTable:
     def test_why_and_basis(self):
-        from nastaero.loads_analysis.certification.envelope import (
+        from ascent_load.loads_analysis.certification.envelope import (
             DesignLoadCase, design_load_table,
         )
         d = DesignLoadCase(
@@ -539,7 +539,7 @@ class TestDesignLoadTable:
         assert "Right Wing" in row["why"] and "potato" in row["why"]
 
     def test_pure_interaction_basis(self):
-        from nastaero.loads_analysis.certification.envelope import DesignLoadCase
+        from ascent_load.loads_analysis.certification.envelope import DesignLoadCase
         d = DesignLoadCase(case_id=1, governs=[("Wing", 1.0, "V-M", "hull")],
                            components=["Wing"], n_govern=1)
         assert d.basis == "interaction"
@@ -551,7 +551,7 @@ class TestDesignLoadTable:
         proc.compute_envelopes()
         proc.identify_critical_cases()
         proc.add_interaction_critical_cases()
-        from nastaero.loads_analysis.certification.envelope import design_load_table
+        from ascent_load.loads_analysis.certification.envelope import design_load_table
         table = design_load_table(proc.select_design_cases())
         assert table and table[0]["rank"] == 1
         assert all("basis" in r and "why" in r for r in table)
@@ -619,7 +619,7 @@ class TestThreeDHullIsTheDefault:
 
     def test_default_signature_includes_3d(self):
         import inspect
-        from nastaero.loads_analysis.certification.envelope import (
+        from ascent_load.loads_analysis.certification.envelope import (
             select_critical_design_loads,
         )
         sig = inspect.signature(select_critical_design_loads)

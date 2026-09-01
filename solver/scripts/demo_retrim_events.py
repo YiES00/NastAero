@@ -20,18 +20,18 @@ SOLVER = os.path.normpath(os.path.join(HERE, ".."))
 ILC8 = os.path.join(SOLVER, "tests/validation/ILC8")
 sys.path.insert(0, SOLVER)
 
-from nastaero.bdf.parser import parse_bdf                      # noqa: E402
-from nastaero.config import setup_logging                      # noqa: E402
-from nastaero.loads_analysis.certification.aircraft_config import (  # noqa: E402
+from ascent_load.bdf.parser import parse_bdf                      # noqa: E402
+from ascent_load.config import setup_logging                      # noqa: E402
+from ascent_load.loads_analysis.certification.aircraft_config import (  # noqa: E402
     AircraftConfig,
 )
-from nastaero.loads_analysis.certification.retrim_events import (  # noqa: E402
+from ascent_load.loads_analysis.certification.retrim_events import (  # noqa: E402
     RetrimScreen,
 )
-from nastaero.loads_analysis.component_id import (             # noqa: E402
+from ascent_load.loads_analysis.component_id import (             # noqa: E402
     identify_components_manual,
 )
-from nastaero.models.ilc8 import make_ilc8_vtol_config         # noqa: E402
+from ascent_load.models.ilc8 import make_ilc8_vtol_config         # noqa: E402
 
 
 def build_components(model):

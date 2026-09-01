@@ -4,14 +4,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from nastaero.aero.panel_authoring import (
+from ascent_load.aero.panel_authoring import (
     caero1_card_text, mirror_caero1, set1_card_text, spline1_card_text,
     suggest_spline_nodes, w2gj_dmi_text,
 )
 
 
 def _parse_text(tmp_path, bulk: str):
-    from nastaero.bdf.parser import parse_bdf
+    from ascent_load.bdf.parser import parse_bdf
 
     p = tmp_path / "deck.bdf"
     p.write_text("SOL 144\nCEND\nBEGIN BULK\n" + bulk + "ENDDATA\n")
@@ -52,11 +52,11 @@ class TestW2gjWriter:
         return _parse_text(tmp_path, right + "\n" + left + "\n")
 
     def test_round_trip_wash_equals_camber_slope(self, tmp_path):
-        from nastaero.aero.airfoil_camber import (
+        from ascent_load.aero.airfoil_camber import (
             AirfoilCamber, PanelAirfoilConfig,
         )
-        from nastaero.aero.airfoil_camber import compute_camber_normalwash
-        from nastaero.aero.panel import generate_all_panels
+        from ascent_load.aero.airfoil_camber import compute_camber_normalwash
+        from ascent_load.aero.panel import generate_all_panels
 
         model = self._model(tmp_path)
         boxes = generate_all_panels(model, use_nastran_eid=True)
@@ -149,7 +149,7 @@ class TestHardPointPreference:
         return _parse_text(tmp_path, "\n".join(cards) + "\n")
 
     def test_hard_points_detected(self, tmp_path):
-        from nastaero.aero.panel_authoring import hard_point_ids
+        from ascent_load.aero.panel_authoring import hard_point_ids
 
         m = self._model(tmp_path)
         hard = hard_point_ids(m)
@@ -229,7 +229,7 @@ class TestPidFilterAndCurvature:
         return _parse_text(tmp_path, "\n".join(cards) + "\n"), g, w, b
 
     def test_junction_hard_boom_rejected(self, tmp_path):
-        from nastaero.aero.panel_authoring import hard_point_ids
+        from ascent_load.aero.panel_authoring import hard_point_ids
 
         m, g, w, b = self._model(tmp_path)
         hard = hard_point_ids(m)

@@ -30,14 +30,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SOLVER = os.path.normpath(os.path.join(HERE, ".."))
 sys.path.insert(0, SOLVER)
 
-from nastaero.bdf.parser import parse_bdf                      # noqa: E402
-from nastaero.loads_analysis.certification.aircraft_config import (  # noqa: E402
+from ascent_load.bdf.parser import parse_bdf                      # noqa: E402
+from ascent_load.loads_analysis.certification.aircraft_config import (  # noqa: E402
     AircraftConfig,
 )
-from nastaero.loads_analysis.certification.vtol_transient_loads import (  # noqa: E402
+from ascent_load.loads_analysis.certification.vtol_transient_loads import (  # noqa: E402
     VTOLTransientLoadsRunner, _G,
 )
-from nastaero.models.ilc8 import make_ilc8_vtol_config         # noqa: E402
+from ascent_load.models.ilc8 import make_ilc8_vtol_config         # noqa: E402
 
 # ── 논문 3(ch6) 분류 상수 — reproduce_ch6_dep_failure.py와 동일 ──
 PHASES = ["HV", "TO", "TR", "CR", "LD"]

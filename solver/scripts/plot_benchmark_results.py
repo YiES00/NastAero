@@ -46,7 +46,7 @@ plt.rcParams.update({
 })
 
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-fig.suptitle('NastAero Scalability Benchmark\n(CQUAD4 Flat Plate, SOL 101, SciPy spsolve)',
+fig.suptitle('ASCENT-Load Scalability Benchmark\n(CQUAD4 Flat Plate, SOL 101, SciPy spsolve)',
              fontsize=14, fontweight='bold')
 
 # Plot 1: Total time vs DOF

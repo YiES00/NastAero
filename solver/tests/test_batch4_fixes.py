@@ -15,8 +15,8 @@ import os
 import tempfile
 import numpy as np
 import pytest
-from nastaero.bdf.parser import parse_bdf
-from nastaero.solvers.sol101 import solve_static
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.solvers.sol101 import solve_static
 
 MAT = "MAT1    1       70000.          0.33    2.7-9"
 
@@ -114,7 +114,7 @@ class TestBeamPathThetaYSign:
     """
 
     def test_goland_trim_balances_weight(self):
-        from nastaero.solvers.sol144 import solve_trim
+        from ascent_load.solvers.sol144 import solve_trim
         deck = os.path.join(os.path.dirname(__file__), "validation",
                             "goland_wing", "goland_static.bdf")
         model = parse_bdf(deck)
@@ -131,8 +131,8 @@ class TestBeamPathThetaYSign:
 
         보-스플라인 경로의 G_w 열 부호가 이 운동학과 맞는지 본다.
         """
-        from nastaero.solvers.sol144 import _fill_geff
-        from nastaero.fem.dof_manager import DOFManager
+        from ascent_load.solvers.sol144 import _fill_geff
+        from ascent_load.fem.dof_manager import DOFManager
 
         n_box, n_node = 1, 1
         dof_mgr = DOFManager([7])

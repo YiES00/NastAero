@@ -23,8 +23,8 @@ import time
 from datetime import datetime
 import numpy as np
 
-from nastaero.bdf.parser import parse_bdf
-from nastaero.config import setup_logging
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.config import setup_logging
 
 
 def main():
@@ -47,22 +47,22 @@ def main():
 
     # ---- 1. Parse GACOMP VTOL BDF (붐/파일런 + 로터 허브 GRID 포함) ----
     # p400r3-vtol-tr12.bdf = free-trim 기체 + vtol_booms.bdf INCLUDE
-    # (nastaero.rotor.boom_builder로 생성 — 허브 하중이 탄성 붐 경로로
+    # (ascent_load.rotor.boom_builder로 생성 — 허브 하중이 탄성 붐 경로로
     #  기체에 전달되고 로터 질량 CONM2가 관성에 포함된다)
     model = parse_bdf("tests/validation/GACOMP/p400r3-vtol-tr12.bdf")
     print(f"[1] BDF parsed: {len(model.nodes)} nodes, "
           f"{len(model.elements)} elements  ({time.time()-t0:.1f}s)")
 
     # ---- 2. Aircraft Config (conventional) ----
-    from nastaero.loads_analysis.certification.aircraft_config import (
+    from ascent_load.loads_analysis.certification.aircraft_config import (
         AircraftConfig, SpeedSchedule, WeightCGCondition,
         ControlSurfaceLimits, LandingGearConfig,
     )
-    from nastaero.aero.dlm import compute_rigid_clalpha
+    from ascent_load.aero.dlm import compute_rigid_clalpha
 
     # CONM2 + 구조(요소) 질량 전부 럼핑 — model.masses(CONM2)만 합치면
     # 구조 질량 ~76 kg이 빠져 로터 추력 목표가 과소 산정된다
-    from nastaero.loads_analysis.trim_loads import compute_node_masses
+    from ascent_load.loads_analysis.trim_loads import compute_node_masses
 
     total_mass_kg = sum(compute_node_masses(model).values()) * 1000
     weight_N = total_mass_kg * 9.80665
@@ -103,7 +103,7 @@ def main():
     )
 
     # ---- 3. VTOL Configuration ----
-    from nastaero.rotor.rotor_config import VTOLConfig
+    from ascent_load.rotor.rotor_config import VTOLConfig
 
     vtol_config = VTOLConfig.gacomp_tilt_rotor_12()
     config.vtol_config = vtol_config
@@ -120,8 +120,8 @@ def main():
               f"hub=({r.hub_position[0]:.0f},{r.hub_position[1]:.0f},{r.hub_position[2]:.0f})")
 
     # ---- 4. BEMT Rotor Analysis ----
-    from nastaero.rotor.bemt_solver import BEMTSolver
-    from nastaero.loads_analysis.case_generator import isa_atmosphere
+    from ascent_load.rotor.bemt_solver import BEMTSolver
+    from ascent_load.loads_analysis.case_generator import isa_atmosphere
 
     rho_sl, _, _ = isa_atmosphere(0.0)
     print(f"\n[3] BEMT Rotor Analysis (ρ={rho_sl:.3f} kg/m³)")
@@ -147,7 +147,7 @@ def main():
 
     # ---- 5. Model Visualization (FEM + rotor disks) ----
     try:
-        from nastaero.visualization.cert_plot import plot_vtol_model
+        from ascent_load.visualization.cert_plot import plot_vtol_model
 
         vtol_model_path = plot_vtol_model(
             model, vtol_config,
@@ -158,7 +158,7 @@ def main():
         print(f"\n[4] Model visualization failed: {e}")
 
     # ---- 6. Conventional Load Case Matrix ----
-    from nastaero.loads_analysis.certification.load_case_matrix import LoadCaseMatrix
+    from ascent_load.loads_analysis.certification.load_case_matrix import LoadCaseMatrix
 
     conv_matrix = LoadCaseMatrix(config)
     conv_matrix.generate_all()
@@ -168,7 +168,7 @@ def main():
         print(f"      {cat:15s}: {count:3d}")
 
     # ---- 7. VTOL Load Case Matrix ----
-    from nastaero.loads_analysis.certification.vtol_load_case_matrix import (
+    from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (
         VTOLLoadCaseMatrix,
     )
 
@@ -199,7 +199,7 @@ def main():
     print(f"    Case matrix: {csv_path}")
 
     # Save case matrix summary plot
-    from nastaero.visualization.cert_plot import plot_case_matrix_summary
+    from ascent_load.visualization.cert_plot import plot_case_matrix_summary
 
     class _PlotCase:
         """Lightweight wrapper for plot_case_matrix_summary."""
@@ -219,7 +219,7 @@ def main():
     print(f"    →Plot saved: {matrix_path}")
 
     # ---- 8. Batch Solver (고정익 SOL 144 + VTOL 로터 하중 케이스) ----
-    from nastaero.loads_analysis.certification.vtol_batch_runner import (
+    from ascent_load.loads_analysis.certification.vtol_batch_runner import (
         VTOLBatchRunner,
     )
 
@@ -255,7 +255,7 @@ def main():
 
     # ---- 9. Rotor Hub 6-Component Loads Table ----
     print(f"\n[9] Rotor hub 6-component loads table")
-    from nastaero.rotor.rotor_loads_applicator import rotor_loads_to_nodal_forces
+    from ascent_load.rotor.rotor_loads_applicator import rotor_loads_to_nodal_forces
 
     hub_loads_table = []
 
@@ -309,7 +309,7 @@ def main():
 
         # Plot hub loads
         try:
-            from nastaero.visualization.cert_plot import plot_rotor_hub_loads
+            from ascent_load.visualization.cert_plot import plot_rotor_hub_loads
             hub_plot_path = plot_rotor_hub_loads(
                 hub_loads_table,
                 output_path=os.path.join(output_dir, "02_rotor_hub_loads.png"),
@@ -319,7 +319,7 @@ def main():
             print(f"    Hub loads plot failed: {e}")
 
     # ---- 10. VMT Integration ----
-    from nastaero.loads_analysis.certification.vmt_bridge import compute_vmt_for_batch
+    from ascent_load.loads_analysis.certification.vmt_bridge import compute_vmt_for_batch
 
     _wc0 = config.weight_cg_conditions[0] if config.weight_cg_conditions else None
     fuselage_cg_x = _wc0.cg_x if _wc0 else None
@@ -357,7 +357,7 @@ def main():
             print(f"    {comp:20s} {max_s:14,.0f} {max_b:20,.0f} {max_t:20,.0f}")
 
     # ---- 11. Envelope Processing ----
-    from nastaero.loads_analysis.certification.envelope import EnvelopeProcessor
+    from ascent_load.loads_analysis.certification.envelope import EnvelopeProcessor
 
     print(f"\n[11] Envelope processing...")
     proc = EnvelopeProcessor(batch_result, vmt_data)
@@ -376,15 +376,15 @@ def main():
             print(f"      {cat:15s}: {count:3d}")
 
     # ---- 12. VMT Envelope + Potato Plots ----
-    from nastaero.visualization.cert_plot import (
+    from ascent_load.visualization.cert_plot import (
         plot_vmt_envelope as _plot_vmt_env,
         plot_potato as _plot_potato,
         plot_critical_frequency as _plot_crit_freq,
     )
-    from nastaero.loads_analysis.certification.monitoring_stations import (
+    from ascent_load.loads_analysis.certification.monitoring_stations import (
         identify_monitoring_stations,
     )
-    from nastaero.loads_analysis.component_id import identify_components
+    from ascent_load.loads_analysis.component_id import identify_components
 
     _components = identify_components(model)
     monitoring_stations = identify_monitoring_stations(
@@ -464,7 +464,7 @@ def main():
               f"┴──────────────┴────────┴───────────────┘")
 
     # ---- 14. Force Card Export ----
-    from nastaero.loads_analysis.certification.force_export import export_critical_forces
+    from ascent_load.loads_analysis.certification.force_export import export_critical_forces
 
     print(f"\n[14] Exporting critical design load FORCE cards...")
     t_force = time.time()

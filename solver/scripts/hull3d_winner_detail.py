@@ -18,7 +18,7 @@ SOLVER = os.path.normpath(os.path.join(HERE, ".."))
 sys.path.insert(0, SOLVER)
 sys.path.insert(0, HERE)
 
-from nastaero.config import setup_logging                      # noqa: E402
+from ascent_load.config import setup_logging                      # noqa: E402
 
 
 def main() -> None:
@@ -36,15 +36,15 @@ def main() -> None:
         print("no 3D-only winners in results")
         return
 
-    from nastaero.bdf.parser import parse_bdf
-    from nastaero.loads_analysis.certification.batch_runner import (
+    from ascent_load.bdf.parser import parse_bdf
+    from ascent_load.loads_analysis.certification.batch_runner import (
         CaseResult,
     )
-    from nastaero.loads_analysis.certification.vmt_bridge import (
+    from ascent_load.loads_analysis.certification.vmt_bridge import (
         compute_vmt_for_batch,
     )
-    from nastaero.loads_analysis.trim_loads import compute_node_masses
-    from nastaero.models.ilc8 import make_ilc8_vtol_config
+    from ascent_load.loads_analysis.trim_loads import compute_node_masses
+    from ascent_load.models.ilc8 import make_ilc8_vtol_config
     from compare_hull_selection import run_selection
     from hull3d_severity_search import (
         BatchResult, ILC8, adjust_fuselage_masses, build_components,

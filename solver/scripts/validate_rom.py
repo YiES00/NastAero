@@ -21,9 +21,9 @@ import numpy as np
 # Add solver to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from nastaero.bdf.parser import parse_bdf
-from nastaero.solvers.sol144 import solve_trim
-from nastaero.loads_analysis.certification.modal_rom import ModalROM
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.solvers.sol144 import solve_trim
+from ascent_load.loads_analysis.certification.modal_rom import ModalROM
 
 
 def compute_error_metrics(ref: dict, rom_result: dict, node_ids: list,

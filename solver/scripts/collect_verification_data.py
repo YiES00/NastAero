@@ -7,12 +7,12 @@ import numpy as np
 # Add solver to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from nastaero.bdf.parser import BDFParser
-from nastaero.solvers.sol101 import solve_static
-from nastaero.solvers.sol103 import solve_modes
-from nastaero.solvers.sol144 import solve_trim
-from nastaero.aero.panel import generate_panel_mesh, generate_all_panels
-from nastaero.aero.dlm import build_aic_matrix, circulation_to_delta_cp
+from ascent_load.bdf.parser import BDFParser
+from ascent_load.solvers.sol101 import solve_static
+from ascent_load.solvers.sol103 import solve_modes
+from ascent_load.solvers.sol144 import solve_trim
+from ascent_load.aero.panel import generate_panel_mesh, generate_all_panels
+from ascent_load.aero.dlm import build_aic_matrix, circulation_to_delta_cp
 
 VALIDATION_DIR = os.path.join(os.path.dirname(__file__), '..', 'tests', 'validation')
 VM_DIR = os.path.join(VALIDATION_DIR, 'nastran_vm')
@@ -47,12 +47,12 @@ tip_x = sc.displacements[2][0]
 error = abs(tip_x - delta_analytical) / delta_analytical * 100
 rx = sc.spc_forces[1][0]
 print(f"  Analytical:  delta = {delta_analytical:.6e}")
-print(f"  NastAero:    delta = {tip_x:.6e}")
+print(f"  ASCENT-Load:    delta = {tip_x:.6e}")
 print(f"  Error:       {error:.4f}%")
 print(f"  Reaction Fx: {rx:.2f} N (expected -1000)")
 results['VM1'] = {
     'analytical': delta_analytical,
-    'nastaero': tip_x,
+    'ascent_load': tip_x,
     'error_pct': error,
     'reaction': rx,
 }
@@ -72,11 +72,11 @@ err_d = abs(abs(tip_z) - delta_a) / delta_a * 100
 err_t = abs(abs(tip_ry) - theta_a) / theta_a * 100
 print(f"  Tip Deflection:")
 print(f"    Analytical: {delta_a:.6e} m")
-print(f"    NastAero:   {abs(tip_z):.6e} m")
+print(f"    ASCENT-Load:   {abs(tip_z):.6e} m")
 print(f"    Error:      {err_d:.4f}%")
 print(f"  Tip Rotation:")
 print(f"    Analytical: {theta_a:.6e} rad")
-print(f"    NastAero:   {abs(tip_ry):.6e} rad")
+print(f"    ASCENT-Load:   {abs(tip_ry):.6e} rad")
 print(f"    Error:      {err_t:.4f}%")
 
 # Deflection curve
@@ -87,13 +87,13 @@ for nid in range(1, 12):
     w_exact = M * x**2 / (2 * E * I)
     w_comp = abs(sc.displacements[nid][2])
     err = abs(w_comp - w_exact) / max(w_exact, 1e-15) * 100 if w_exact > 1e-12 else 0
-    deflection_data.append({'x': x, 'analytical': w_exact, 'nastaero': w_comp, 'error': err})
+    deflection_data.append({'x': x, 'analytical': w_exact, 'ascent_load': w_comp, 'error': err})
     if nid in [1, 3, 6, 9, 11]:
-        print(f"    x={x:.1f}m: analytical={w_exact:.6e}, NastAero={w_comp:.6e}, err={err:.3f}%")
+        print(f"    x={x:.1f}m: analytical={w_exact:.6e}, ASCENT-Load={w_comp:.6e}, err={err:.3f}%")
 
 results['VM2'] = {
-    'tip_deflection': {'analytical': delta_a, 'nastaero': abs(tip_z), 'error_pct': err_d},
-    'tip_rotation': {'analytical': theta_a, 'nastaero': abs(tip_ry), 'error_pct': err_t},
+    'tip_deflection': {'analytical': delta_a, 'ascent_load': abs(tip_z), 'error_pct': err_d},
+    'tip_rotation': {'analytical': theta_a, 'ascent_load': abs(tip_ry), 'error_pct': err_t},
     'deflection_curve': deflection_data,
 }
 
@@ -112,10 +112,10 @@ err_p = abs(w_center - w_a) / w_a * 100
 print(f"  Timoshenko D = {D:.2f} N-m")
 print(f"  Center Deflection:")
 print(f"    Analytical: {w_a:.6e} m")
-print(f"    NastAero:   {w_center:.6e} m")
+print(f"    ASCENT-Load:   {w_center:.6e} m")
 print(f"    Error:      {err_p:.2f}%")
 results['VM3'] = {
-    'analytical': w_a, 'nastaero': w_center, 'error_pct': err_p,
+    'analytical': w_a, 'ascent_load': w_center, 'error_pct': err_p,
 }
 
 # =========== VM4: Beam Modes ===========
@@ -137,14 +137,14 @@ for f in all_f:
         unique_f.append(f)
 
 mode_data = []
-print(f"  Mode  |  Analytical (Hz)  |  NastAero (Hz)  |  Error (%)")
+print(f"  Mode  |  Analytical (Hz)  |  ASCENT-Load (Hz)  |  Error (%)")
 print(f"  ------+-------------------+-----------------+-----------")
 for i in range(min(3, len(unique_f))):
     err = abs(unique_f[i] - analytical_freqs[i]) / analytical_freqs[i] * 100
     print(f"  {i+1}     |  {analytical_freqs[i]:>15.4f}  |  {unique_f[i]:>13.4f}  |  {err:.2f}")
     mode_data.append({
         'mode': i+1, 'analytical': analytical_freqs[i],
-        'nastaero': unique_f[i], 'error_pct': err
+        'ascent_load': unique_f[i], 'error_pct': err
     })
 results['VM4'] = {'modes': mode_data}
 
@@ -159,11 +159,11 @@ uy = sc.displacements[4][1]
 err_ux = abs(ux - 0.004) / 0.004 * 100
 err_uy = abs(uy - (-0.004)) / 0.004 * 100
 print(f"  Node 4 Displacement:")
-print(f"    ux: analytical=0.004, NastAero={ux:.6e}, error={err_ux:.4f}%")
-print(f"    uy: analytical=-0.004, NastAero={uy:.6e}, error={err_uy:.4f}%")
+print(f"    ux: analytical=0.004, ASCENT-Load={ux:.6e}, error={err_ux:.4f}%")
+print(f"    uy: analytical=-0.004, ASCENT-Load={uy:.6e}, error={err_uy:.4f}%")
 results['VM5'] = {
-    'ux': {'analytical': 0.004, 'nastaero': ux, 'error_pct': err_ux},
-    'uy': {'analytical': -0.004, 'nastaero': uy, 'error_pct': err_uy},
+    'ux': {'analytical': 0.004, 'ascent_load': ux, 'error_pct': err_ux},
+    'uy': {'analytical': -0.004, 'ascent_load': uy, 'error_pct': err_uy},
 }
 
 # =========== VM6: Fixed-Fixed Beam ===========
@@ -182,12 +182,12 @@ mz1 = abs(sc.spc_forces[1][5])
 mz11 = abs(sc.spc_forces[11][5])
 print(f"  Center Deflection:")
 print(f"    Analytical: {delta_a:.6e} m")
-print(f"    NastAero:   {delta_c:.6e} m")
+print(f"    ASCENT-Load:   {delta_c:.6e} m")
 print(f"    Error:      {err:.4f}%")
 print(f"  Reactions: R1={ry1:.2f}N, R11={ry11:.2f}N (expected 5000 each)")
 print(f"  Moments:  M1={mz1:.2f}Nm, M11={mz11:.2f}Nm (expected 12500 each)")
 results['VM6'] = {
-    'deflection': {'analytical': delta_a, 'nastaero': delta_c, 'error_pct': err},
+    'deflection': {'analytical': delta_a, 'ascent_load': delta_c, 'error_pct': err},
     'reactions': {'R1': ry1, 'R11': ry11, 'expected': 5000.0},
     'moments': {'M1': mz1, 'M11': mz11, 'expected': 12500.0},
 }
@@ -206,11 +206,11 @@ ry_fixed = sc.spc_forces[1][1]
 ry_roller = sc.spc_forces[11][1]
 print(f"  Max Deflection:")
 print(f"    Analytical: {delta_a:.6e} m")
-print(f"    NastAero:   {max_defl:.6e} m")
+print(f"    ASCENT-Load:   {max_defl:.6e} m")
 print(f"    Error:      {err:.2f}%")
 print(f"  Reactions: Fixed={ry_fixed:.2f}N(exp 6250), Roller={ry_roller:.2f}N(exp 3750)")
 results['VM9'] = {
-    'deflection': {'analytical': delta_a, 'nastaero': max_defl, 'error_pct': err},
+    'deflection': {'analytical': delta_a, 'ascent_load': max_defl, 'error_pct': err},
     'reactions': {'fixed': ry_fixed, 'roller': ry_roller},
 }
 
@@ -229,7 +229,7 @@ positive_f = [f for f in sc.frequencies if f > 1.0]
 f11_a = plate_freq(1, 1)
 f12_a = plate_freq(1, 2)
 f22_a = plate_freq(2, 2)
-print(f"  Mode |  (m,n) | Analytical (Hz) | NastAero (Hz) | Error (%)")
+print(f"  Mode |  (m,n) | Analytical (Hz) | ASCENT-Load (Hz) | Error (%)")
 print(f"  -----+--------+-----------------+---------------+----------")
 mode_entries = [
     (1, '(1,1)', f11_a, positive_f[0]),
@@ -243,7 +243,7 @@ plate_modes = []
 for idx, label, fa, fc in mode_entries:
     err = abs(fc - fa) / fa * 100
     print(f"  {idx}    | {label}  | {fa:>15.2f} | {fc:>13.2f} | {err:.2f}")
-    plate_modes.append({'mode': idx, 'mn': label, 'analytical': fa, 'nastaero': fc, 'error_pct': err})
+    plate_modes.append({'mode': idx, 'mn': label, 'analytical': fa, 'ascent_load': fc, 'error_pct': err})
 results['VM10'] = {'modes': plate_modes}
 
 # =========== Cantilever Beam (original) ===========
@@ -258,7 +258,7 @@ tip_z = sc.displacements[11][2]
 err = abs(tip_z - delta_a) / delta_a * 100
 print(f"  Tip Deflection:")
 print(f"    Analytical: {delta_a:.6e} m")
-print(f"    NastAero:   {tip_z:.6e} m")
+print(f"    ASCENT-Load:   {tip_z:.6e} m")
 print(f"    Error:      {err:.4f}%")
 
 cant_curve = []
@@ -266,9 +266,9 @@ for nid in range(1, 12):
     x = (nid - 1) * 0.1
     w_exact = P * x**2 * (3*L - x) / (6 * E * I)
     w_comp = sc.displacements[nid][2]
-    cant_curve.append({'x': x, 'analytical': w_exact, 'nastaero': w_comp})
+    cant_curve.append({'x': x, 'analytical': w_exact, 'ascent_load': w_comp})
 results['cantilever'] = {
-    'tip': {'analytical': delta_a, 'nastaero': tip_z, 'error_pct': err},
+    'tip': {'analytical': delta_a, 'ascent_load': tip_z, 'error_pct': err},
     'curve': cant_curve,
 }
 

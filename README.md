@@ -1,10 +1,22 @@
-# NastAero
+# ASCENT-Load
 
-[![tests](https://github.com/YiES00/NastAero/actions/workflows/tests.yml/badge.svg)](https://github.com/YiES00/NastAero/actions/workflows/tests.yml)
+[![tests](https://github.com/YiES00/ASCENT-Load/actions/workflows/tests.yml/badge.svg)](https://github.com/YiES00/ASCENT-Load/actions/workflows/tests.yml)
 
 Open-source aeroelastic FEA framework with MSC Nastran BDF I/O
 compatibility, static aeroelastic trim, rotor load models, and a
 certification loads pipeline for eVTOL aircraft.
+
+Developed at the ASCENT Laboratory (structures), Department of
+Aerospace Engineering, Inha University, as the laboratory's
+loads-analysis framework.
+
+> **Renamed.** This project was previously released as **NastAero**
+> (tags `v1.0-paper1` through `v1.4-paper1`). The name now identifies
+> the developing laboratory. Code, history, and results are unchanged;
+> the Python package is `ascent_load`, the commands are `ascent-load`
+> and `ascent-load-gui`, and result archives use `.aload` (older
+> `.naero` archives still load without conversion). GitHub redirects
+> the former repository address.
 
 ## Status
 
@@ -31,7 +43,7 @@ and is retained for future flutter work.
   - Eigenvalue: EIGRL
 - **Output**: F06 (displacements, SPC forces, eigenvalues, mode
   shapes), FORCE/MOMENT design-load decks, PLOAD4 skin pressures,
-  `.naero` result archives
+  `.aload` result archives
 
 ### Solution sequences
 - **SOL 101**: linear static analysis (sparse LU)
@@ -73,7 +85,7 @@ and is retained for future flutter work.
 - Failure × re-trim event screening with P × C adjudication
 - Geometric component identification, V–M–T integration,
   envelopes, planar and 3-D convex-hull critical-case selection
-- Desktop GUI pre/post processor (`nastaero-gui`)
+- Desktop GUI pre/post processor (`ascent-load-gui`)
 
 ## Installation
 
@@ -88,7 +100,7 @@ Optional extras, by what you need:
 |---|---|---|
 | `dev` | pytest, pytest-cov | running the test suite |
 | `plot` | matplotlib | V–M–T plots, figure regeneration |
-| `gui` | qtpy, pyside6, pyvista, pyvistaqt, matplotlib | `nastaero-gui`, 3-D visualization |
+| `gui` | qtpy, pyside6, pyvista, pyvistaqt, matplotlib | `ascent-load-gui`, 3-D visualization |
 
 `dev` alone does **not** pull in matplotlib, so reproducing the plots
 needs `".[dev,plot]"` and the 3-D viewer needs `".[gui]"`:
@@ -101,9 +113,9 @@ pip install -e ".[gui]"          # + desktop workbench and 3-D viewer
 ## Usage
 
 ```bash
-python -m nastaero model.bdf --save        # solve, archive results
-python -m nastaero.visualization --load model.naero --vmt
-python -m nastaero.gui                     # desktop workbench
+python -m ascent_load model.bdf --save        # solve, archive results
+python -m ascent_load.visualization --load model.aload --vmt
+python -m ascent_load.gui                     # desktop workbench
 ```
 
 ## Tests
@@ -112,7 +124,7 @@ python -m nastaero.gui                     # desktop workbench
 cd solver && python -m pytest tests/ -q
 ```
 
-The suite has 997 tests and takes about 10–11 minutes on the reference
+The suite has 966 tests and takes about 5–6 minutes on the reference
 workstation. What your clone reports depends on two things: whether
 the proprietary comparison-model data is present, and whether the
 optional `gui` extra is installed — the 51 GUI tests are not collected
@@ -120,8 +132,8 @@ without it.
 
 | Install | Collected | Public clone reports |
 |---|---|---|
-| `pip install -e ".[dev,plot]"` | 947 | **921 passed, 26 skipped** |
-| `pip install -e ".[dev,plot,gui]"` | 997 | **971 passed, 26 skipped** |
+| `pip install -e ".[dev,plot]"` | 916 | **890 passed, 26 skipped** |
+| `pip install -e ".[dev,plot,gui]"` | 966 | **940 passed, 26 skipped** |
 
 Both rows are asserted by the CI workflow above on every push, on
 Python 3.10 and 3.12. The two `26`s are not the same 26: in the first
@@ -133,7 +145,7 @@ That data is **not redistributable and therefore not part of this
 repository**. If you hold it under your own agreement, place it at
 `solver/tests/validation/GACOMP/` (the path is git-ignored) and those
 tests run automatically — no configuration needed. With the data and
-the `gui` extra both present the suite reports 997 passed.
+the `gui` extra both present the suite reports 966 passed.
 
 ## Reproducing the published results
 
@@ -155,55 +167,14 @@ macOS 26.3.1 (arm64, 11 cores, 18 GB RAM).
   2% except one CQUAD8 cantilever case (7.8%)
 - Hover BEMT: compared against the Knight–Hefner static-thrust
   experiment (NACA TN-626); mean 3.8% in the operating range
-- Full aircraft, matched deck: a single BDF solved by both MSC
-  Nastran SOL 144 and NastAero, referenced to the deck's free-flight
-  3-point SUPORT. Over seven trim subcases (1-g cruise at three
-  speeds, three V–n corners, rudder-free sideslip) the elevator
-  agrees within 0.19°, the rudder within 0.016°, and the 1-g
-  wing-tip deflection within 17.5 mm. The angle of attack carries a
-  load-proportional pitch offset of 0.150°/g traced to the fuselage
-  carry-through — constant to ±1.7% across the set and independent
-  of Mach; removing it leaves agreement better than 1%. The deck
-  lineage (v1–v8) and the comparison script are in
-  `solver/tests/validation/ILC8/` and
-  `solver/scripts/compare_msc_sol144.py`.
-- The comparison earned its keep as a diagnostic: it exposed five
-  implementation defects that single-code testing had missed — the
-  panel-force application point, the plate nodal-rotation
-  convention, the CBAR bending-plane assignment, the direction of
-  the Prandtl–Glauert transform, and the sign of the aeroelastic
-  feedback stiffness. All five are fixed as of v1.2.
-- A fourth peer-review round (2026-09, v1.4) added, beyond text
-  changes: component-local six-component section-load recovery
-  (member-axis cuts, windowed elastic-axis cut points, analytic and
-  invariance tests); segregation of rotor-thrust-saturated cases from
-  the realizable-load envelope as flagged propulsion-limit cases,
-  propagated through to the exported load decks; a fail-closed
-  component-classification audit; a forced dense-vs-Schur equivalence
-  test and a whole-model translation-invariance test; and a
-  GPFORCE-instrumented hold-out comparison deck
-  (`ilc8_msc_sol144_v9_holdout.bdf`) with pre-declared acceptance
-  criteria, awaiting its commercial-solver run.
-- An independent external review (2026-08) exposed a further set,
-  fixed in v1.3: the rotor shaft-angle convention was
-  passed as its complement by the load-case generators (axial and
-  edgewise flow swapped for tilted and vertical rotors in forward
-  flight), the forward-flight BEMT lacked a CT--inflow closure
-  iteration, the spline coupling wired structural DOFs to global
-  z/theta-y regardless of panel orientation (zero flexible feedback
-  on vertical fins), the oscillatory-DLM quartic integration mixed
-  node spacings, and beam stress recovery used sqrt(I/A) for the
-  extreme-fiber distance (half the true value even for a circular
-  section). Each fix carries a regression test against an
-  independent analytic expectation.
-- Full aircraft, archived: a 22,640-node solver-to-solver comparison
-  is retained as evidence that the framework runs at that scale.
-  It predates the corrections above and used an unmatched W2GJ
-  setup, so it is scale evidence, not validation.
+- Full aircraft: archived solver-to-solver comparison against MSC
+  Nastran SOL 144 on a 22,640-node model. This is preliminary
+  cross-code evidence, not validation — it predates the 2026-07
+  trim-equilibrium corrections and used an unmatched W2GJ setup.
 
 ## License
 
-NastAero is released under the **GNU Affero General Public License
+ASCENT-Load is released under the **GNU Affero General Public License
 v3.0 or later** (AGPL-3.0-or-later); see [LICENSE](LICENSE) and
 [NOTICE](NOTICE).
 

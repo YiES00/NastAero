@@ -146,10 +146,10 @@ def far23_wing_root(nz, V_eas):
 
 
 def run():
-    from nastaero.bdf.parser import BDFParser
-    from nastaero.solvers.sol144 import solve_trim
-    from nastaero.loads_analysis.vmt import compute_vmt
-    from nastaero.loads_analysis.component_id import identify_components
+    from ascent_load.bdf.parser import BDFParser
+    from ascent_load.solvers.sol144 import solve_trim
+    from ascent_load.loads_analysis.vmt import compute_vmt
+    from ascent_load.loads_analysis.component_id import identify_components
 
     orig_bdf = os.path.join(os.path.dirname(__file__),
         "validation", "GACOMP", "p400r3-free-trim.bdf")
@@ -159,7 +159,7 @@ def run():
         "validation", "GACOMP", "p400r3-multi-nz.bdf")
 
     print("=" * 95)
-    print("  GACOMP Multi-nz Trim: FAR 23 LOADS vs NastAero SOL 144")
+    print("  GACOMP Multi-nz Trim: FAR 23 LOADS vs ASCENT-Load SOL 144")
     print("=" * 95)
 
     print("\n  Creating multi-nz BDF...")
@@ -198,7 +198,7 @@ def run():
     ]
 
     print(f"\n{'═'*95}")
-    print(f"  RIGHT WING ROOT LOADS — NastAero SOL 144 vs FAR 23 LOADS")
+    print(f"  RIGHT WING ROOT LOADS — ASCENT-Load SOL 144 vs FAR 23 LOADS")
     print(f"{'═'*95}")
     print(f"  {'Case':<22} {'nz':>5} │ {'NA Shear':>10} {'F23 Shear':>10} {'Ratio':>7}"
           f" │ {'NA Bend':>12} {'F23 Bend':>12} {'Ratio':>7}")
@@ -295,7 +295,7 @@ def run():
     max_V_f = max(na_results, key=lambda r: abs(r["V_f23"]))
     max_M_f = max(na_results, key=lambda r: abs(r["M_f23"]))
 
-    print(f"\n  {'Quantity':<25} {'NastAero':>14} {'Case':>22} │ {'FAR 23':>14} {'Case':>22}")
+    print(f"\n  {'Quantity':<25} {'ASCENT-Load':>14} {'Case':>22} │ {'FAR 23':>14} {'Case':>22}")
     print(f"  {'─'*100}")
     print(f"  {'Wing Root Shear (N)':<25} {max_V_na['V_na']:>14.0f} {max_V_na['label']:>22}"
           f" │ {max_V_f['V_f23']:>14.0f} {max_V_f['label']:>22}")
@@ -307,7 +307,7 @@ def run():
 
     ratio_V = max_V_na["V_na"] / max_V_f["V_f23"] if abs(max_V_f["V_f23"]) > 1 else 0
     ratio_M = max_M_na["M_na"] / max_M_f["M_f23"] if abs(max_M_f["M_f23"]) > 1 else 0
-    print(f"\n  Critical load ratio (NastAero / FAR 23):")
+    print(f"\n  Critical load ratio (ASCENT-Load / FAR 23):")
     print(f"    Shear:   {ratio_V:.3f}")
     print(f"    Bending: {ratio_M:.3f}")
 

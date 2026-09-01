@@ -1,4 +1,4 @@
-$ NastAero AVM3: Rigid Wing Trim Verification
+$ ASCENT-Load AVM3: Rigid Wing Trim Verification
 $ Very stiff wing to verify trim angle matches CL requirement
 $ AR=4, c=2.0m, b=8.0m, at M=0.0 (incompressible)
 $

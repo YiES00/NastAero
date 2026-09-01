@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from nastaero.loads_analysis.transition_loads import LiftSharingModel
+from ascent_load.loads_analysis.transition_loads import LiftSharingModel
 
 
 class TestFitResiduals:

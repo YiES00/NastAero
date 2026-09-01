@@ -6,9 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from nastaero.bdf.cards.constraints import SUPORT
-from nastaero.bdf.parser import parse_bdf
-from nastaero.solvers.sol144 import _suport_mount_idx
+from ascent_load.bdf.cards.constraints import SUPORT
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.solvers.sol144 import _suport_mount_idx
 
 DECK = (Path(__file__).parent / "validation" / "ILC8"
         / "ilc8_msc_sol144_v8_shellbend.bdf")
@@ -113,7 +113,7 @@ class TestSuportChangesTheReferenceFrame:
     @pytest.mark.slow
     def test_deck_suport_is_used_for_the_trim_mount(self, caplog):
         pytest.importorskip("scipy")
-        from nastaero.solvers.sol144 import solve_trim
+        from ascent_load.solvers.sol144 import solve_trim
         model = parse_bdf(str(DECK))
         with caplog.at_level("INFO"):
             solve_trim(model)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""FAR 23 LOADS vs NastAero: Actual Structural Loads Comparison for GACOMP.
+"""FAR 23 LOADS vs ASCENT-Load: Actual Structural Loads Comparison for GACOMP.
 
-Runs NastAero SOL 144 trim on the GACOMP BDF for representative V-n
+Runs ASCENT-Load SOL 144 trim on the GACOMP BDF for representative V-n
 conditions, extracts VMT (shear, bending, torsion) at component roots,
 and compares against FAR 23 LOADS analytical estimates.
 """
@@ -244,11 +244,11 @@ def far23_landing_loads():
 
 
 # ═══════════════════════════════════════════
-# NastAero SOL 144 Analysis
+# ASCENT-Load SOL 144 Analysis
 # ═══════════════════════════════════════════
 
-def run_nastaero_trim(cases):
-    """Run NastAero SOL 144 for multiple trim cases on GACOMP.
+def run_ascent_load_trim(cases):
+    """Run ASCENT-Load SOL 144 for multiple trim cases on GACOMP.
 
     Args:
         cases: list of (label, nz, V_eas_ms) tuples
@@ -256,15 +256,15 @@ def run_nastaero_trim(cases):
     Returns:
         dict of case_label -> {trim_vars, aero_forces, inertia_forces, vmt}
     """
-    from nastaero.bdf.parser import BDFParser
-    from nastaero.solvers.sol144 import solve_trim
-    from nastaero.loads_analysis.trim_loads import (
+    from ascent_load.bdf.parser import BDFParser
+    from ascent_load.solvers.sol144 import solve_trim
+    from ascent_load.loads_analysis.trim_loads import (
         compute_nodal_aero_forces_fast,
         compute_nodal_inertial_forces,
         compute_nodal_combined_forces,
     )
-    from nastaero.loads_analysis.vmt import compute_vmt_all
-    from nastaero.loads_analysis.component_id import identify_components
+    from ascent_load.loads_analysis.vmt import compute_vmt_all
+    from ascent_load.loads_analysis.component_id import identify_components
 
     bdf_path = os.path.join(
         os.path.dirname(__file__),
@@ -383,9 +383,9 @@ def run_nastaero_trim(cases):
 
 
 def print_comparison(na_results, components):
-    """Print formatted comparison of FAR 23 vs NastAero loads."""
+    """Print formatted comparison of FAR 23 vs ASCENT-Load loads."""
     print("\n" + "=" * 90)
-    print("FAR 23 LOADS (DARCorp) vs NastAero — Structural Loads Comparison — GACOMP")
+    print("FAR 23 LOADS (DARCorp) vs ASCENT-Load — Structural Loads Comparison — GACOMP")
     print("=" * 90)
 
     print(f"\n■ Aircraft: 제작사 GACOMP | W={W_KG:.1f}kg={W_N:.0f}N | "
@@ -404,7 +404,7 @@ def print_comparison(na_results, components):
     print(f"\n{'─'*90}")
     print(f"■ Wing Root Loads (Right Wing Semi-span)")
     print(f"{'─'*90}")
-    print(f"  {'Case':<22} │ {'FAR23':^32} │ {'NastAero':^32}")
+    print(f"  {'Case':<22} │ {'FAR23':^32} │ {'ASCENT-Load':^32}")
     print(f"  {'':22} │ {'V(N)':>10} {'M(N-mm)':>12} {'T(N-mm)':>10}"
           f" │ {'V(N)':>10} {'M(N-mm)':>12} {'T(N-mm)':>10}")
     print(f"  {'─'*87}")
@@ -414,7 +414,7 @@ def print_comparison(na_results, components):
         LT = far23_balanced_tail_load(nz, V_eas)
         V_f, M_f, T_f = far23_wing_loads(nz, V_eas, LT)
 
-        # NastAero
+        # ASCENT-Load
         na_key = label
         V_n = M_n = T_n = 0
         if na_key in na_results:
@@ -434,7 +434,7 @@ def print_comparison(na_results, components):
     print(f"■ Horizontal Tail Loads (Balanced)")
     print(f"{'─'*90}")
     print(f"  {'Case':<22} │ {'FAR23 LT(N)':>12} {'LT(kgf)':>10}"
-          f" │ {'NastAero':>12} {'Ratio':>8}")
+          f" │ {'ASCENT-Load':>12} {'Ratio':>8}")
     print(f"  {'─'*65}")
 
     for label, nz, V_eas in cases_def:
@@ -524,10 +524,10 @@ def print_comparison(na_results, components):
     print(f"    Max Brake:     {ldg['brake_D_N']:>10.0f} N "
           f"({ldg['brake_D_N']/G:>8.0f} kgf) ← Braked roll")
 
-    # ── NastAero Critical ──
+    # ── ASCENT-Load Critical ──
     if na_results:
         print(f"\n{'─'*90}")
-        print(f"■ Critical Design Loads Summary (NastAero SOL 144)")
+        print(f"■ Critical Design Loads Summary (ASCENT-Load SOL 144)")
         print(f"{'─'*90}")
         for comp_name_key in ["Right Wing", "Right HTP", "VTP"]:
             max_V_na = max_M_na = max_T_na = 0
@@ -563,13 +563,13 @@ if __name__ == "__main__":
     ]
 
     print("=" * 90)
-    print("Running NastAero SOL 144 trim on GACOMP for representative V-n cases...")
+    print("Running ASCENT-Load SOL 144 trim on GACOMP for representative V-n cases...")
     print("=" * 90)
 
     try:
-        na_results, components = run_nastaero_trim(cases)
+        na_results, components = run_ascent_load_trim(cases)
     except Exception as e:
-        print(f"\nNastAero solve failed: {e}")
+        print(f"\nASCENT-Load solve failed: {e}")
         import traceback; traceback.print_exc()
         na_results = {}
         components = []

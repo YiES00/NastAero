@@ -1,4 +1,4 @@
-$ NastAero VM1: Axial Rod Under Tension
+$ ASCENT-Load VM1: Axial Rod Under Tension
 $ Reference: Nastran Verification Manual Problem 1
 $ A single rod (CBAR used as rod) under axial tension
 $ L=10 in, A=1 in^2, E=30e6 psi, F=1000 lb

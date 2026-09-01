@@ -26,25 +26,25 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from nastaero.bdf.parser import parse_bdf
-from nastaero.config import setup_logging
-from nastaero.rotor.rotor_config import VTOLConfig, RotorType
-from nastaero.rotor.bemt_solver import BEMTSolver
-from nastaero.rotor.rotor_dynamics import make_oei_force_func, make_rotor_jam_force_func
-from nastaero.loads_analysis.case_generator import isa_atmosphere
-from nastaero.loads_analysis.certification.aero_derivatives import (
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.config import setup_logging
+from ascent_load.rotor.rotor_config import VTOLConfig, RotorType
+from ascent_load.rotor.bemt_solver import BEMTSolver
+from ascent_load.rotor.rotor_dynamics import make_oei_force_func, make_rotor_jam_force_func
+from ascent_load.loads_analysis.case_generator import isa_atmosphere
+from ascent_load.loads_analysis.certification.aero_derivatives import (
     build_derivative_set, compute_inertia_from_conm2,
 )
-from nastaero.loads_analysis.certification.aircraft_config import (
+from ascent_load.loads_analysis.certification.aircraft_config import (
     AircraftConfig, SpeedSchedule, WeightCGCondition,
     ControlSurfaceLimits, LandingGearConfig,
 )
-from nastaero.loads_analysis.certification.flight_sim import (
+from ascent_load.loads_analysis.certification.flight_sim import (
     AircraftParams, AircraftState, ControlInput,
     SimTimeHistory, integrate_6dof, trim_initial_state,
     compute_nz_from_history, six_dof_derivatives,
 )
-from nastaero.aero.dlm import compute_rigid_clalpha
+from ascent_load.aero.dlm import compute_rigid_clalpha
 
 
 def compute_body_accels(params, history, ext_force_func):
@@ -521,7 +521,7 @@ def main():
 
     # ---- Also regenerate fixed VTOL model plot ----
     print(f"\n[5] Regenerating VTOL model plot...")
-    from nastaero.visualization.cert_plot import plot_vtol_model
+    from ascent_load.visualization.cert_plot import plot_vtol_model
     model_path = plot_vtol_model(
         model, vtol_config,
         output_path=os.path.join(output_dir, "00_vtol_model.png"))

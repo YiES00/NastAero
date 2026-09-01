@@ -31,26 +31,26 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
-# ── NastAero imports ──────────────────────────────────────────────────────
-from nastaero.bdf.parser import parse_bdf
-from nastaero.config import setup_logging
-from nastaero.loads_analysis.certification.aircraft_config import (
+# ── ASCENT-Load imports ──────────────────────────────────────────────────────
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.config import setup_logging
+from ascent_load.loads_analysis.certification.aircraft_config import (
     AircraftConfig, SpeedSchedule, WeightCGCondition,
     ControlSurfaceLimits, LandingGearConfig, eas_to_tas, eas_to_mach,
     gust_Ude_at_altitude,
 )
-from nastaero.loads_analysis.certification.aero_derivatives import (
+from ascent_load.loads_analysis.certification.aero_derivatives import (
     build_derivative_set, compute_inertia_from_conm2,
 )
-from nastaero.loads_analysis.certification.flight_sim import (
+from ascent_load.loads_analysis.certification.flight_sim import (
     AircraftParams, integrate_6dof, trim_initial_state,
     compute_nz_from_history,
 )
-from nastaero.loads_analysis.certification.maneuver_profiles import (
+from ascent_load.loads_analysis.certification.maneuver_profiles import (
     generate_all_maneuver_profiles,
 )
-from nastaero.loads_analysis.case_generator import isa_atmosphere
-from nastaero.aero.dlm import compute_rigid_clalpha
+from ascent_load.loads_analysis.case_generator import isa_atmosphere
+from ascent_load.aero.dlm import compute_rigid_clalpha
 
 # ── Altitude analysis grid ───────────────────────────────────────────────
 # 6 altitudes from SL to 25,000 ft service ceiling

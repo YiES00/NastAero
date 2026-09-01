@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark: Can NastAero's 6-DOF dynamics run in real-time?
+"""Benchmark: Can ASCENT-Load's 6-DOF dynamics run in real-time?
 
 Measures per-timestep cost of:
   1. six_dof_derivatives()  — single EOM evaluation
@@ -17,16 +17,16 @@ import os
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from nastaero.loads_analysis.certification.flight_sim import (
+from ascent_load.loads_analysis.certification.flight_sim import (
     AircraftParams, AircraftState, ControlInput, SimTimeHistory,
     six_dof_derivatives, integrate_6dof, trim_initial_state,
     compute_nz_from_history,
 )
-from nastaero.loads_analysis.certification.aero_derivatives import AeroDerivativeSet
-from nastaero.loads_analysis.certification.aircraft_config import (
+from ascent_load.loads_analysis.certification.aero_derivatives import AeroDerivativeSet
+from ascent_load.loads_analysis.certification.aircraft_config import (
     eas_to_tas, RHO_0, G_MPS2,
 )
-from nastaero.loads_analysis.case_generator import isa_atmosphere
+from ascent_load.loads_analysis.case_generator import isa_atmosphere
 
 
 def build_gacomp_params_manual():
@@ -89,7 +89,7 @@ def build_gacomp_params_manual():
 
 def benchmark():
     print("=" * 70)
-    print("NastAero Real-Time Performance Benchmark")
+    print("ASCENT-Load Real-Time Performance Benchmark")
     print("=" * 70)
 
     # ------------------------------------------------------------------
@@ -269,7 +269,7 @@ def benchmark():
     print("=" * 70)
 
     try:
-        from nastaero.bdf.parser import parse_bdf
+        from ascent_load.bdf.parser import parse_bdf
         bdf_path = os.path.join(os.path.dirname(__file__),
                                 "tests", "validation", "GACOMP",
                                 "p400r3-free-trim.bdf")
@@ -280,8 +280,8 @@ def benchmark():
             print(f"  BDF parse ({len(model.nodes)} nodes): {t_parse*1000:.0f} ms")
 
             # Assembly
-            from nastaero.fem.assembly import assemble_global_matrices
-            from nastaero.fem.dof_manager import DOFManager
+            from ascent_load.fem.assembly import assemble_global_matrices
+            from ascent_load.fem.dof_manager import DOFManager
 
             t0 = time.perf_counter()
             node_ids = list(model.nodes.keys())

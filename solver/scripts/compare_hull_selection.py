@@ -28,23 +28,23 @@ SOLVER = os.path.normpath(os.path.join(HERE, ".."))
 ILC8 = os.path.join(SOLVER, "tests/validation/ILC8")
 sys.path.insert(0, SOLVER)
 
-from nastaero.bdf.parser import parse_bdf                      # noqa: E402
-from nastaero.loads_analysis.certification.aircraft_config import (  # noqa: E402
+from ascent_load.bdf.parser import parse_bdf                      # noqa: E402
+from ascent_load.loads_analysis.certification.aircraft_config import (  # noqa: E402
     AircraftConfig,
 )
-from nastaero.loads_analysis.certification.batch_runner import (  # noqa: E402
+from ascent_load.loads_analysis.certification.batch_runner import (  # noqa: E402
     BatchResult, BatchRunner, CaseResult,
 )
-from nastaero.loads_analysis.certification.envelope import (   # noqa: E402
+from ascent_load.loads_analysis.certification.envelope import (   # noqa: E402
     EnvelopeProcessor,
 )
-from nastaero.loads_analysis.certification.load_case_matrix import (  # noqa: E402
+from ascent_load.loads_analysis.certification.load_case_matrix import (  # noqa: E402
     LoadCaseMatrix,
 )
-from nastaero.loads_analysis.certification.vmt_bridge import (  # noqa: E402
+from ascent_load.loads_analysis.certification.vmt_bridge import (  # noqa: E402
     compute_vmt_for_batch,
 )
-from nastaero.output.result_io import load_results             # noqa: E402
+from ascent_load.output.result_io import load_results             # noqa: E402
 
 
 def build_batch():
@@ -55,7 +55,7 @@ def build_batch():
     matrix.generate_all(bdf_model=model, include_dynamic=False)
     meta = {c.case_id: c for c in matrix.flight_cases}
 
-    results, _ = load_results(os.path.join(ILC8, "ilc8_cert_trim.naero"))
+    results, _ = load_results(os.path.join(ILC8, "ilc8_cert_trim.aload"))
     batch = BatchResult()
     for sc in results.subcases:
         if not sc.nodal_combined_forces:

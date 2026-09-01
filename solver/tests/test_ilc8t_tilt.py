@@ -20,7 +20,7 @@ class TestTiltAllocation:
     """제어법칙 없는 결정적 배분 — Fx/Fz 2식 평형."""
 
     def test_force_balance(self):
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             tilt_allocation, tilt_drag_estimate,
         )
         for V, sg, nz in ((15.0, 30.0, 1.0), (25.0, 60.0, 1.5),
@@ -35,7 +35,7 @@ class TestTiltAllocation:
                         == pytest.approx(nz * W, rel=1e-9))
 
     def test_wing_capability_cap(self):
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             tilt_allocation,
         )
         _F, _A, L, _ok = tilt_allocation(35.0, 80.0, 1.0, W, S, CL, RHO)
@@ -44,7 +44,7 @@ class TestTiltAllocation:
 
     def test_front_thrust_cap_sets_lower_sigma_bound(self):
         """과소 틸트에서 F = D/sin(σ)가 전열 한계를 넘어 비가용."""
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             tilt_allocation,
         )
         _F, _A, _L, ok = tilt_allocation(35.0, 2.0, 1.0, W, S, CL, RHO)
@@ -53,7 +53,7 @@ class TestTiltAllocation:
 
 class TestTiltCorridor:
     def _conds(self):
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             generate_tilt_transition_conditions,
         )
         return generate_tilt_transition_conditions(
@@ -86,8 +86,8 @@ class TestTiltCorridor:
 
 @pytest.fixture(scope="module")
 def ilc8t_model(tmp_path_factory):
-    from nastaero.bdf.parser import parse_bdf
-    from nastaero.models.ilc8t import build_ilc8t
+    from ascent_load.bdf.parser import parse_bdf
+    from ascent_load.models.ilc8t import build_ilc8t
 
     out = tmp_path_factory.mktemp("ilc8t")
     return parse_bdf(build_ilc8t(str(out)))
@@ -96,7 +96,7 @@ def ilc8t_model(tmp_path_factory):
 class TestIlc8tDeck:
     def test_mass_cg_matches_lc(self, ilc8t_model):
         """동일 MTOW, CG 오차 < 10 mm — 등중량 비교 성립."""
-        from nastaero.loads_analysis.trim_loads import compute_node_masses
+        from ascent_load.loads_analysis.trim_loads import compute_node_masses
 
         nm = compute_node_masses(ilc8t_model)
         mt = sum(nm.values()) * 1000
@@ -114,13 +114,13 @@ class TestIlc8tDeck:
 class TestTiltMatrix:
     @pytest.fixture(scope="class")
     def matrix_cases(self):
-        from nastaero.loads_analysis.certification.aircraft_config import (
+        from ascent_load.loads_analysis.certification.aircraft_config import (
             AircraftConfig,
         )
-        from nastaero.loads_analysis.certification.vtol_load_case_matrix import (
+        from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (
             VTOLLoadCaseMatrix,
         )
-        from nastaero.models.ilc8t import make_ilc8t_vtol_config
+        from ascent_load.models.ilc8t import make_ilc8t_vtol_config
 
         cfg_path = os.path.join(os.path.dirname(__file__),
                                 "validation/ILC8/ilc8_cert_config.yaml")
@@ -140,10 +140,10 @@ class TestTiltMatrix:
     def test_tilt_force_direction_and_fx(self, matrix_cases):
         """전열 허브력이 축 [sinσ,0,cosσ] 방향이고 ΣFx ≈ D
         (BEMT 포화 없는 케이스 기준)."""
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             tilt_drag_estimate,
         )
-        from nastaero.models.ilc8t import make_ilc8t_vtol_config
+        from ascent_load.models.ilc8t import make_ilc8t_vtol_config
 
         _mx, cases = matrix_cases
         vc = make_ilc8t_vtol_config()
@@ -180,7 +180,7 @@ class TestTiltMatrix:
 
     def test_sigma90_no_aft_lift_when_wing_sufficient(self, matrix_cases):
         """σ=90° 케이스: 전열 힘은 순수 +x (수직 성분 ≈ 0)."""
-        from nastaero.models.ilc8t import make_ilc8t_vtol_config
+        from ascent_load.models.ilc8t import make_ilc8t_vtol_config
 
         _mx, cases = matrix_cases
         vc = make_ilc8t_vtol_config()
@@ -205,7 +205,7 @@ class TestTiltStuck:
     """틸트 액추에이터 고착(M6) — 틸트로터 고유 고장 모드."""
 
     def _conds(self):
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             generate_tilt_stuck_conditions,
         )
         return generate_tilt_stuck_conditions(
@@ -223,13 +223,13 @@ class TestTiltStuck:
 
     def test_matrix_stuck_cases_and_asymmetry(self):
         """매트릭스 통합 + 고착 비대칭이 롤 모멘트를 만드는지."""
-        from nastaero.loads_analysis.certification.aircraft_config import (
+        from ascent_load.loads_analysis.certification.aircraft_config import (
             AircraftConfig,
         )
-        from nastaero.loads_analysis.certification.vtol_load_case_matrix import (
+        from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (
             VTOLLoadCaseMatrix,
         )
-        from nastaero.models.ilc8t import make_ilc8t_vtol_config
+        from ascent_load.models.ilc8t import make_ilc8t_vtol_config
 
         cfg_path = os.path.join(os.path.dirname(__file__),
                                 "validation/ILC8/ilc8_cert_config.yaml")
@@ -254,16 +254,16 @@ class TestTiltStuck:
         assert found_asym
 
     def test_stuck_rotor_force_along_stuck_axis(self):
-        from nastaero.loads_analysis.certification.aircraft_config import (
+        from ascent_load.loads_analysis.certification.aircraft_config import (
             AircraftConfig,
         )
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             VTOLCondition, VTOLFlightPhase,
         )
-        from nastaero.loads_analysis.certification.vtol_load_case_matrix import (
+        from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (
             VTOLLoadCaseMatrix,
         )
-        from nastaero.models.ilc8t import make_ilc8t_vtol_config
+        from ascent_load.models.ilc8t import make_ilc8t_vtol_config
 
         cfg_path = os.path.join(os.path.dirname(__file__),
                                 "validation/ILC8/ilc8_cert_config.yaml")
@@ -294,14 +294,14 @@ class TestConversionSweep:
 
         import yaml as _yaml
 
-        from nastaero.bdf.parser import parse_bdf
-        from nastaero.loads_analysis.certification.aircraft_config import (
+        from ascent_load.bdf.parser import parse_bdf
+        from ascent_load.loads_analysis.certification.aircraft_config import (
             AircraftConfig,
         )
-        from nastaero.loads_analysis.certification.vtol_transient_loads import (
+        from ascent_load.loads_analysis.certification.vtol_transient_loads import (
             VTOLTransientLoadsRunner,
         )
-        from nastaero.models.ilc8t import build_ilc8t, make_ilc8t_vtol_config
+        from ascent_load.models.ilc8t import build_ilc8t, make_ilc8t_vtol_config
 
         out = tmp_path_factory.mktemp("ilc8t_sweep")
         model = parse_bdf(build_ilc8t(str(out)))

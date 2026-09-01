@@ -3,7 +3,7 @@
 
 Runs the free-trim deck twice — with the W2GJ camber/incidence downwash
 applied (as MSC Nastran does) and with it stripped (flat-plate panels,
-the pre-fix NastAero behavior) — and tabulates per-subcase trim
+the pre-fix ASCENT-Load behavior) — and tabulates per-subcase trim
 variables (alpha, elevator), the 1-g invariant alpha*M^2, and the
 right-wing root V/M/T from the combined nodal loads.
 
@@ -22,10 +22,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SOLVER = os.path.normpath(os.path.join(HERE, ".."))
 sys.path.insert(0, SOLVER)
 
-from nastaero.bdf.parser import parse_bdf                      # noqa: E402
-from nastaero.loads_analysis.component_id import identify_components  # noqa: E402
-from nastaero.loads_analysis.vmt import compute_vmt            # noqa: E402
-from nastaero.solvers.sol144 import solve_trim                 # noqa: E402
+from ascent_load.bdf.parser import parse_bdf                      # noqa: E402
+from ascent_load.loads_analysis.component_id import identify_components  # noqa: E402
+from ascent_load.loads_analysis.vmt import compute_vmt            # noqa: E402
+from ascent_load.solvers.sol144 import solve_trim                 # noqa: E402
 
 BDF = os.path.join(SOLVER, "tests/validation/GACOMP/p400r3-free-trim.bdf")
 

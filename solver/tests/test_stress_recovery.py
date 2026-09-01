@@ -4,9 +4,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from nastaero.elements.quad4 import CQuad4Element
-from nastaero.elements.tria3 import CTria3Element
-from nastaero.fem.stress_recovery import (
+from ascent_load.elements.quad4 import CQuad4Element
+from ascent_load.elements.tria3 import CTria3Element
+from ascent_load.fem.stress_recovery import (
     _recover_cquad4,
     _recover_ctria3,
     _recover_cbar,

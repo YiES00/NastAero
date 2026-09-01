@@ -6,8 +6,8 @@ import time
 from datetime import datetime
 import numpy as np
 
-from nastaero.bdf.parser import parse_bdf
-from nastaero.config import setup_logging
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.config import setup_logging
 
 
 def main():
@@ -37,8 +37,8 @@ def main():
     # ---- 1b. Generate Model Screenshots ----
     try:
         import pyvista as pv
-        from nastaero.visualization.viewer import NastAeroViewer
-        from nastaero.visualization.mesh_builder import (
+        from ascent_load.visualization.viewer import AscentLoadViewer
+        from ascent_load.visualization.mesh_builder import (
             build_structural_mesh, build_beam_tubes, build_rbe_lines,
         )
 
@@ -46,7 +46,7 @@ def main():
 
         print(f"\n[1b] Generating model screenshots...")
 
-        viewer = NastAeroViewer(model, off_screen=True)
+        viewer = AscentLoadViewer(model, off_screen=True)
 
         # ① Combined FE + aero (aircraft overview)
         viewer.plot_model(
@@ -93,11 +93,11 @@ def main():
         print(f"\n[1b] Screenshot generation failed: {e}")
 
     # ---- 2. Aircraft Config ----
-    from nastaero.loads_analysis.certification.aircraft_config import (
+    from ascent_load.loads_analysis.certification.aircraft_config import (
         AircraftConfig, SpeedSchedule, WeightCGCondition,
         ControlSurfaceLimits, LandingGearConfig,
     )
-    from nastaero.aero.dlm import compute_rigid_clalpha
+    from ascent_load.aero.dlm import compute_rigid_clalpha
 
     total_mass_kg = sum(m.mass for m in model.masses.values()) * 1000  # Mg->kg
     weight_N = total_mass_kg * 9.80665
@@ -139,7 +139,7 @@ def main():
     )
 
     # ---- 3. V-n Diagram ----
-    from nastaero.loads_analysis.certification.vn_diagram import compute_vn_diagram
+    from ascent_load.loads_analysis.certification.vn_diagram import compute_vn_diagram
 
     wc = config.weight_cg_conditions[0]
     vn = compute_vn_diagram(config, wc, altitude_m=0.0)
@@ -151,14 +151,14 @@ def main():
         print(f"      {cp.label:12s}  V={cp.V_eas:6.1f} m/s  nz={cp.nz:+6.2f}")
 
     # Save V-n diagram plot
-    from nastaero.visualization.cert_plot import plot_vn_diagram as _plot_vn
+    from ascent_load.visualization.cert_plot import plot_vn_diagram as _plot_vn
     vn_path = _plot_vn(vn,
         output_path=os.path.join(output_dir, "01_vn_diagram.png"),
         timestamp=timestamp_label)
     print(f"    →Plot saved: {vn_path}")
 
     # ---- 4. Load Case Matrix ----
-    from nastaero.loads_analysis.certification.load_case_matrix import LoadCaseMatrix
+    from ascent_load.loads_analysis.certification.load_case_matrix import LoadCaseMatrix
 
     matrix = LoadCaseMatrix(config)
     matrix.generate_all()
@@ -177,7 +177,7 @@ def main():
         print(f"      {cat:15s}: {count:3d} cases")
 
     # Save case matrix summary plot
-    from nastaero.visualization.cert_plot import plot_case_matrix_summary
+    from ascent_load.visualization.cert_plot import plot_case_matrix_summary
 
     class _PlotCase:
         """Lightweight wrapper to expose nz/mach for plot_case_matrix_summary."""
@@ -196,8 +196,8 @@ def main():
     print(f"    →Plot saved: {matrix_path}")
 
     # ---- 4b. 6-DOF Dynamic Simulations ----
-    from nastaero.loads_analysis.certification.sim_runner import SimRunner
-    from nastaero.loads_analysis.certification.sim_to_loads import (
+    from ascent_load.loads_analysis.certification.sim_runner import SimRunner
+    from ascent_load.loads_analysis.certification.sim_to_loads import (
         critical_points_to_load_cases, summarize_critical_points,
         deduplicate_critical_points,
     )
@@ -273,7 +273,7 @@ def main():
     print(f"    Simulation phase: {sim_time:.2f}s")
 
     # ---- 5. Batch Solver Execution ----
-    from nastaero.loads_analysis.certification.batch_runner import BatchRunner
+    from ascent_load.loads_analysis.certification.batch_runner import BatchRunner
 
     print(f"\n[4] Running SOL 144 trim solver for {len(matrix.flight_cases)} "
           f"flight cases (static + dynamic)...")
@@ -313,7 +313,7 @@ def main():
         print(f"      {cat:15s}: {mf:12,.0f} N  {status}")
 
     # ---- 6. VMT Integration ----
-    from nastaero.loads_analysis.certification.vmt_bridge import compute_vmt_for_batch
+    from ascent_load.loads_analysis.certification.vmt_bridge import compute_vmt_for_batch
 
     # Get CG position for fuselage VMT integration
     _wc0 = config.weight_cg_conditions[0] if config.weight_cg_conditions else None
@@ -350,7 +350,7 @@ def main():
             print(f"    {comp:20s} {max_s:14,.0f} {max_b:20,.0f} {max_t:20,.0f}")
 
     # ---- 7. Envelope Processing ----
-    from nastaero.loads_analysis.certification.envelope import EnvelopeProcessor
+    from ascent_load.loads_analysis.certification.envelope import EnvelopeProcessor
 
     print(f"\n[6] Envelope processing...")
     proc = EnvelopeProcessor(batch_result, vmt_data)
@@ -362,17 +362,17 @@ def main():
     print(f"    Critical cases identified: {env_summary['n_critical']}")
 
     # Save VMT envelope + potato + critical frequency plots
-    from nastaero.visualization.cert_plot import (
+    from ascent_load.visualization.cert_plot import (
         plot_vmt_envelope as _plot_vmt_env,
         plot_potato as _plot_potato,
         plot_critical_frequency as _plot_crit_freq,
     )
 
     # Identify critical monitoring stations for multi-station potato plots
-    from nastaero.loads_analysis.certification.monitoring_stations import (
+    from ascent_load.loads_analysis.certification.monitoring_stations import (
         identify_monitoring_stations,
     )
-    from nastaero.loads_analysis.component_id import identify_components
+    from ascent_load.loads_analysis.component_id import identify_components
 
     _components = identify_components(model)
     monitoring_stations = identify_monitoring_stations(
@@ -441,7 +441,7 @@ def main():
         print(f"    └──────────────┴──────────┴────────┴──────────────┴──────────────┴────────┴───────────────┘")
 
     # ---- 8. Force Card Export ----
-    from nastaero.loads_analysis.certification.force_export import export_critical_forces
+    from ascent_load.loads_analysis.certification.force_export import export_critical_forces
 
     print(f"\n[7] Exporting critical design load FORCE cards...")
     t_force = time.time()
@@ -465,7 +465,7 @@ def main():
               f"  (critical for {reasons} quantities)")
 
     # ---- 9. Report ----
-    from nastaero.loads_analysis.certification.report import CertificationReport
+    from ascent_load.loads_analysis.certification.report import CertificationReport
 
     report = CertificationReport(matrix, batch_result, proc)
     rep_summary = report.summary()
@@ -500,7 +500,7 @@ def main():
                       f"  ←{label} ({cat_str}, {nz_str})")
 
     # ---- 10. Word Report ----
-    from nastaero.loads_analysis.certification.report_docx import generate_cert_report
+    from ascent_load.loads_analysis.certification.report_docx import generate_cert_report
 
     print(f"\n[9] Generating Word report...")
     t_report = time.time()

@@ -10,14 +10,14 @@ def gust_results(tmp_path_factory):
     """ILC-8 생성 모델로 축약 파라미터 돌풍 과도 2건(상/하) 실행."""
     import yaml
 
-    from nastaero.bdf.parser import parse_bdf
-    from nastaero.loads_analysis.certification.aircraft_config import (
+    from ascent_load.bdf.parser import parse_bdf
+    from ascent_load.loads_analysis.certification.aircraft_config import (
         AircraftConfig,
     )
-    from nastaero.loads_analysis.certification.vtol_transient_loads import (
+    from ascent_load.loads_analysis.certification.vtol_transient_loads import (
         VTOLTransientLoadsRunner,
     )
-    from nastaero.models.ilc8 import build_ilc8, make_ilc8_vtol_config
+    from ascent_load.models.ilc8 import build_ilc8, make_ilc8_vtol_config
     import os
 
     out = tmp_path_factory.mktemp("ilc8_gust")
@@ -65,7 +65,7 @@ class TestHoverGustTransient:
 
     def test_batch_case_conversion_contract(self, gust_results):
         # 배치 러너 합류 규약: category/far/nodal_forces 형식 재현
-        from nastaero.loads_analysis.certification.batch_runner import (
+        from ascent_load.loads_analysis.certification.batch_runner import (
             CaseResult,
         )
 
@@ -92,14 +92,14 @@ def tr_gust_results(tmp_path_factory):
 
     import yaml
 
-    from nastaero.bdf.parser import parse_bdf
-    from nastaero.loads_analysis.certification.aircraft_config import (
+    from ascent_load.bdf.parser import parse_bdf
+    from ascent_load.loads_analysis.certification.aircraft_config import (
         AircraftConfig,
     )
-    from nastaero.loads_analysis.certification.vtol_transient_loads import (
+    from ascent_load.loads_analysis.certification.vtol_transient_loads import (
         VTOLTransientLoadsRunner,
     )
-    from nastaero.models.ilc8 import build_ilc8, make_ilc8_vtol_config
+    from ascent_load.models.ilc8 import build_ilc8, make_ilc8_vtol_config
 
     out = tmp_path_factory.mktemp("ilc8_trgust")
     build_ilc8(str(out))
@@ -118,7 +118,7 @@ class TestForwardFlightInflow:
     """Pitt-Peters 전진비 일반화 — 호버 중첩과 질량유량 스케일."""
 
     def test_hover_nesting_exact(self):
-        from nastaero.rotor.dynamic_inflow import PittPetersInflow
+        from ascent_load.rotor.dynamic_inflow import PittPetersInflow
 
         p0 = PittPetersInflow(rotor_radius=1.2, T_steady=2300.0)
         pf = PittPetersInflow(rotor_radius=1.2, T_steady=2300.0,
@@ -132,7 +132,7 @@ class TestForwardFlightInflow:
         """T = 2 rho A U nu_s가 수치적으로 만족되는지."""
         import math
 
-        from nastaero.rotor.dynamic_inflow import PittPetersInflow
+        from ascent_load.rotor.dynamic_inflow import PittPetersInflow
 
         p = PittPetersInflow(rotor_radius=1.2, T_steady=2300.0,
                              V_forward=20.0)

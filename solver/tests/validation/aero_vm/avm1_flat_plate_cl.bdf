@@ -1,4 +1,4 @@
-$ NastAero AVM1: Flat Plate Wing CL_alpha Validation
+$ ASCENT-Load AVM1: Flat Plate Wing CL_alpha Validation
 $ Rectangular wing, AR=6, c=1.0m, b=6.0m (half-span 3.0m each side)
 $ VLM should give CL_alpha close to lifting-line theory:
 $   CL_alpha = 2*pi*AR/(AR+2) = 2*pi*6/8 = 4.712 (per rad)

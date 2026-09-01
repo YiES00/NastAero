@@ -4,9 +4,9 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 
 import numpy as np
-from nastaero.bdf.parser import parse_bdf
-from nastaero.solvers.sol144 import _build_shared_data, _solve_trim_subcase_from_shared
-from nastaero.loads_analysis.case_generator import TrimCondition, trim_condition_to_trim_card
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.solvers.sol144 import _build_shared_data, _solve_trim_subcase_from_shared
+from ascent_load.loads_analysis.case_generator import TrimCondition, trim_condition_to_trim_card
 
 BDF_PATH = "tests/validation/GACOMP/p400r3-free-trim.bdf"
 print("Parsing BDF...")

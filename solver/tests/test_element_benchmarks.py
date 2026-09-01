@@ -1,6 +1,6 @@
 """Comprehensive element benchmark tests against analytical solutions.
 
-Validates every element type in NastAero against published reference
+Validates every element type in ASCENT-Load against published reference
 values from:
   - MacNeal & Harder (1985) "A Proposed Standard Set of Problems to
     Test Finite Element Accuracy", FE Anal. Design 1, 3-20.
@@ -25,9 +25,9 @@ import tempfile
 import numpy as np
 import pytest
 
-from nastaero.bdf.parser import BDFParser
-from nastaero.solvers.sol101 import solve_static
-from nastaero.solvers.sol103 import solve_modes
+from ascent_load.bdf.parser import BDFParser
+from ascent_load.solvers.sol101 import solve_static
+from ascent_load.solvers.sol103 import solve_modes
 
 
 # ───────────────────────────────────────────────────────
@@ -651,7 +651,7 @@ class TestCQUAD8_Benchmark:
 
     def test_stiffness_matrix_properties(self):
         """CQUAD8 stiffness: symmetric, positive semi-definite."""
-        from nastaero.elements.quad8 import CQuad8Element
+        from ascent_load.elements.quad8 import CQuad8Element
         nodes = np.array([
             [0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0],
             [5, 0, 0], [10, 5, 0], [5, 10, 0], [0, 5, 0]], dtype=float)
@@ -719,7 +719,7 @@ class TestCTRIA6_Benchmark:
 
     def test_stiffness_matrix_properties(self):
         """CTRIA6 stiffness: symmetric, positive semi-definite."""
-        from nastaero.elements.tria6 import CTria6Element
+        from ascent_load.elements.tria6 import CTria6Element
         nodes = np.array([
             [0, 0, 0], [10, 0, 0], [0, 10, 0],
             [5, 0, 0], [5, 5, 0], [0, 5, 0]], dtype=float)
@@ -749,10 +749,10 @@ class TestElementComparison:
         We verify: at least 6 zero eigenvalues, no large negative eigenvalues,
         and the first positive eigenvalue is well-separated from zero.
         """
-        from nastaero.elements.quad4 import CQuad4Element
-        from nastaero.elements.tria3 import CTria3Element
-        from nastaero.elements.quad8 import CQuad8Element
-        from nastaero.elements.tria6 import CTria6Element
+        from ascent_load.elements.quad4 import CQuad4Element
+        from ascent_load.elements.tria3 import CTria3Element
+        from ascent_load.elements.quad8 import CQuad8Element
+        from ascent_load.elements.tria6 import CTria6Element
 
         E, nu, t = 1e7, 0.3, 0.1
         tol = 1e-6
@@ -789,10 +789,10 @@ class TestElementComparison:
 
     def test_element_mass_conservation(self):
         """All element types should conserve total translational mass."""
-        from nastaero.elements.quad4 import CQuad4Element
-        from nastaero.elements.tria3 import CTria3Element
-        from nastaero.elements.quad8 import CQuad8Element
-        from nastaero.elements.tria6 import CTria6Element
+        from ascent_load.elements.quad4 import CQuad4Element
+        from ascent_load.elements.tria3 import CTria3Element
+        from ascent_load.elements.quad8 import CQuad8Element
+        from ascent_load.elements.tria6 import CTria6Element
 
         E, nu, t, rho = 1e7, 0.3, 0.1, 7850.0
 

@@ -14,10 +14,10 @@ import os
 import tempfile
 import numpy as np
 import pytest
-from nastaero.bdf.parser import parse_bdf
-from nastaero.elements.quad4 import CQuad4Element
-from nastaero.elements.tria6 import CTria6Element
-from nastaero.solvers.sol101 import solve_static
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.elements.quad4 import CQuad4Element
+from ascent_load.elements.tria6 import CTria6Element
+from ascent_load.solvers.sol101 import solve_static
 
 _QUAD = np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0],
                   [10.0, 10.0, 0.0], [0.0, 10.0, 0.0]])
@@ -84,7 +84,7 @@ class TestPSHELLNSM:
         assert np.trace(heavy.mass_matrix()) > np.trace(plain.mass_matrix())
 
     def test_nsm_reaches_trim_node_masses(self):
-        from nastaero.loads_analysis.trim_loads import compute_node_masses
+        from ascent_load.loads_analysis.trim_loads import compute_node_masses
         deck = """SOL 101
 CEND
 BEGIN BULK

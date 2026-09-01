@@ -2,13 +2,13 @@
 from __future__ import annotations
 import numpy as np
 import pytest
-from nastaero.bdf.cards.properties import PCOMP, _rotate_Q
-from nastaero.bdf.cards.materials import MAT1, MAT8
-from nastaero.bdf.cards.elements import CQUAD4
-from nastaero.bdf.cards.grid import GRID
-from nastaero.bdf.model import BDFModel
-from nastaero.fem.dof_manager import DOFManager
-from nastaero.fem.assembly import assemble_global_matrices
+from ascent_load.bdf.cards.properties import PCOMP, _rotate_Q
+from ascent_load.bdf.cards.materials import MAT1, MAT8
+from ascent_load.bdf.cards.elements import CQUAD4
+from ascent_load.bdf.cards.grid import GRID
+from ascent_load.bdf.model import BDFModel
+from ascent_load.fem.dof_manager import DOFManager
+from ascent_load.fem.assembly import assemble_global_matrices
 
 
 class TestPCOMPParsing:

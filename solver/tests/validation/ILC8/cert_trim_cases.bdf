@@ -7308,78 +7308,78 @@ $ case 39: Flap VF nz=0.0 MTOW
 TRIM    39      0.14693 0.001531ROLL    0       YAW     0       URDD2
 +       0       URDD4   0       URDD6   0       URDD3   0
 $ case 10000: Dyn_abrupt_roll_minnz_V71_MTOW
-TRIM    10000   0.20864 0.003088ANGLEA  0.051546SIDES   -0.01642ROLL
-+       0       YAW     0       ELEV    -0.02044ARON    -0.06954RUD
-+       0       URDD3   0.876366URDD2   0       URDD4   0       URDD6
+TRIM    10000   0.20864 0.003088ANGLEA  0.051004SIDES   -0.01711ROLL
++       0       YAW     0       ELEV    -0.01937ARON    -0.06954RUD
++       0       URDD3   0.880138URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10001: Dyn_abrupt_roll_max|β|_V100_MTOW
-TRIM    10001   0.29386 0.006125ANGLEA  0.044116SIDES   0.163975ROLL
-+       0       YAW     0       ELEV    -0.02044ARON    0.035053RUD
-+       0       URDD3   1.47646 URDD2   0       URDD4   0       URDD6
+TRIM    10001   0.29386 0.006125ANGLEA  0.043378SIDES   0.165003ROLL
++       0       YAW     0       ELEV    -0.01937ARON    0.035053RUD
++       0       URDD3   1.47382 URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10002: Dyn_abrupt_roll_max|β|_V100_MTOW
-TRIM    10002   0.29386 0.006125ANGLEA  0.044116SIDES   -0.16398ROLL
-+       0       YAW     0       ELEV    -0.02044ARON    -0.03505RUD
-+       0       URDD3   1.47646 URDD2   0       URDD4   0       URDD6
+TRIM    10002   0.29386 0.006125ANGLEA  0.043378SIDES   -0.165  ROLL
++       0       YAW     0       ELEV    -0.01937ARON    -0.03505RUD
++       0       URDD3   1.47382 URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10003: Dyn_checked_max|q|_V71_MTOW
-TRIM    10003   0.20864 0.003088ANGLEA  0.152702SIDES   0       ROLL
-+       0       YAW     0       ELEV    -0.1207 ARON    0       RUD
-+       0       URDD3   2.54897 URDD2   0       URDD4   0       URDD6
+TRIM    10003   0.20864 0.003088ANGLEA  0.147006SIDES   0       ROLL
++       0       YAW     0       ELEV    -0.11436ARON    0       RUD
++       0       URDD3   2.49063 URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10004: Dyn_checked_minα_V80_MTOW
-TRIM    10004   0.23509 0.00392 ANGLEA  -0.02103SIDES   0       ROLL
-+       0       YAW     0       ELEV    -0.02187ARON    0       RUD
-+       0       URDD3   -0.53113URDD2   0       URDD4   0       URDD6
+TRIM    10004   0.23509 0.00392 ANGLEA  -0.01842SIDES   0       ROLL
++       0       YAW     0       ELEV    -0.02072ARON    0       RUD
++       0       URDD3   -0.47573URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10005: Dyn_elevator_pullup_maxnz_V71_MTOW
-TRIM    10005   0.20864 0.003088ANGLEA  0.184655SIDES   0       ROLL
-+       0       YAW     0       ELEV    -0.1207 ARON    0       RUD
-+       0       URDD3   3.04317 URDD2   0       URDD4   0       URDD6
+TRIM    10005   0.20864 0.003088ANGLEA  0.178489SIDES   0       ROLL
++       0       YAW     0       ELEV    -0.11436ARON    0       RUD
++       0       URDD3   2.98468 URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10006: Dyn_elevator_pullup_minα_V71_MTOW
-TRIM    10006   0.20864 0.003088ANGLEA  -0.04018SIDES   0       ROLL
-+       0       YAW     0       ELEV    0.048281ARON    0       RUD
-+       0       URDD3   -0.68168URDD2   0       URDD4   0       URDD6
+TRIM    10006   0.20864 0.003088ANGLEA  -0.03692SIDES   0       ROLL
++       0       YAW     0       ELEV    0.045744ARON    0       RUD
++       0       URDD3   -0.63514URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10007: Dyn_elevator_pullup_maxnz_V80_MTOW
-TRIM    10007   0.23509 0.00392 ANGLEA  0.145517SIDES   0       ROLL
-+       0       YAW     0       ELEV    -0.09507ARON    0       RUD
-+       0       URDD3   3.06616 URDD2   0       URDD4   0       URDD6
+TRIM    10007   0.23509 0.00392 ANGLEA  0.140633SIDES   0       ROLL
++       0       YAW     0       ELEV    -0.09008ARON    0       RUD
++       0       URDD3   3.00734 URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10008: Dyn_gust_lat_max|β|_V80_MTOW
-TRIM    10008   0.23509 0.00392 ANGLEA  0.047401SIDES   0.284717ROLL
-+       0       YAW     0       ELEV    -0.02044ARON    0       RUD
-+       0       URDD3   1.01867 URDD2   0       URDD4   0       URDD6
+TRIM    10008   0.23509 0.00392 ANGLEA  0.046693SIDES   0.283373ROLL
++       0       YAW     0       ELEV    -0.01937ARON    0       RUD
++       0       URDD3   1.01852 URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10009: Dyn_gust_lat_minα_V80_MTOW
-TRIM    10009   0.23509 0.00392 ANGLEA  0.045691SIDES   -0.04409ROLL
-+       0       YAW     0       ELEV    -0.02044ARON    0       RUD
-+       0       URDD3   0.981183URDD2   0       URDD4   0       URDD6
+TRIM    10009   0.23509 0.00392 ANGLEA  0.045006SIDES   -0.04394ROLL
++       0       YAW     0       ELEV    -0.01937ARON    0       RUD
++       0       URDD3   0.98103 URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10010: Dyn_gust_vert_maxα_V80_MTOW
-TRIM    10010   0.23509 0.00392 ANGLEA  0.141035SIDES   0       ROLL
-+       0       YAW     0       ELEV    -0.02044ARON    0       RUD
-+       0       URDD3   3.1606  URDD2   0       URDD4   0       URDD6
+TRIM    10010   0.23509 0.00392 ANGLEA  0.140026SIDES   0       ROLL
++       0       YAW     0       ELEV    -0.01937ARON    0       RUD
++       0       URDD3   3.18174 URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10011: Dyn_gust_vert_minα_V100_MTOW
-TRIM    10011   0.29386 0.006125ANGLEA  -0.00846SIDES   0       ROLL
-+       0       YAW     0       ELEV    -0.01308ARON    0       RUD
-+       0       URDD3   -0.34091URDD2   0       URDD4   0       URDD6
+TRIM    10011   0.29386 0.006125ANGLEA  -0.00877SIDES   0       ROLL
++       0       YAW     0       ELEV    -0.01239ARON    0       RUD
++       0       URDD3   -0.35372URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10012: Dyn_yaw_max|p|_V71_MTOW
-TRIM    10012   0.20864 0.003088ANGLEA  0.058871SIDES   0.045832ROLL
-+       0       YAW     0       ELEV    -0.02595ARON    0       RUD
-+       0.421788URDD3   0.996711URDD2   0       URDD4   0       URDD6
+TRIM    10012   0.20864 0.003088ANGLEA  0.057997SIDES   0.045827ROLL
++       0       YAW     0       ELEV    -0.02459ARON    0       RUD
++       0.421788URDD3   0.996698URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10013: Dyn_yaw_max|β|_V100_MTOW
-TRIM    10013   0.29386 0.006125ANGLEA  0.034656SIDES   0.534953ROLL
-+       0       YAW     0       ELEV    -0.01308ARON    0       RUD
-+       0       URDD3   1.16912 URDD2   0       URDD4   0       URDD6
+TRIM    10013   0.29386 0.006125ANGLEA  0.034199SIDES   0.534271ROLL
++       0       YAW     0       ELEV    -0.01239ARON    0       RUD
++       0       URDD3   1.17089 URDD2   0       URDD4   0       URDD6
 +       0
 $ case 10014: Dyn_yaw_max|p|_V100_MTOW
-TRIM    10014   0.29386 0.006125ANGLEA  0.029649SIDES   -0.03971ROLL
-+       0       YAW     0       ELEV    -0.01308ARON    0       RUD
-+       -0.3098 URDD3   0.995714URDD2   0       URDD4   0       URDD6
+TRIM    10014   0.29386 0.006125ANGLEA  0.029209SIDES   -0.03971ROLL
++       0       YAW     0       ELEV    -0.01239ARON    0       RUD
++       -0.3098 URDD3   0.995695URDD2   0       URDD4   0       URDD6
 +       0
 ENDDATA

@@ -7,20 +7,20 @@ import os
 import pytest
 import numpy as np
 
-from nastaero.loads_analysis.certification.aircraft_config import (
+from ascent_load.loads_analysis.certification.aircraft_config import (
     AircraftConfig, SpeedSchedule, WeightCGCondition,
     ControlSurfaceLimits, LandingGearConfig,
 )
-from nastaero.loads_analysis.certification.load_case_matrix import (
+from ascent_load.loads_analysis.certification.load_case_matrix import (
     LoadCaseMatrix,
 )
-from nastaero.loads_analysis.certification.batch_runner import (
+from ascent_load.loads_analysis.certification.batch_runner import (
     BatchRunner, BatchResult, CaseResult,
 )
-from nastaero.loads_analysis.certification.envelope import (
+from ascent_load.loads_analysis.certification.envelope import (
     EnvelopeProcessor, ComponentEnvelope, StationEnvelope,
 )
-from nastaero.loads_analysis.certification.report import (
+from ascent_load.loads_analysis.certification.report import (
     CertificationReport, CriticalLoadsRow, ComplianceEntry,
     FAR_SECTIONS,
 )
@@ -297,8 +297,8 @@ class TestCertVisualization:
 
     def test_plot_potato(self, tmp_path):
         """Potato plot generates without error."""
-        from nastaero.visualization.cert_plot import plot_potato
-        from nastaero.loads_analysis.certification.envelope import PotatoData
+        from ascent_load.visualization.cert_plot import plot_potato
+        from ascent_load.loads_analysis.certification.envelope import PotatoData
 
         potato = PotatoData(
             station=5000.0,
@@ -315,7 +315,7 @@ class TestCertVisualization:
 
     def test_plot_vmt_envelope(self, tmp_path):
         """VMT envelope plot generates without error."""
-        from nastaero.visualization.cert_plot import plot_vmt_envelope
+        from ascent_load.visualization.cert_plot import plot_vmt_envelope
 
         env = ComponentEnvelope(
             component="Wing",
@@ -338,7 +338,7 @@ class TestCertVisualization:
 
     def test_plot_critical_frequency(self, tmp_path):
         """Critical frequency plot generates without error."""
-        from nastaero.visualization.cert_plot import plot_critical_frequency
+        from ascent_load.visualization.cert_plot import plot_critical_frequency
 
         freq = {1: 12, 2: 8, 3: 15, 4: 5, 5: 3}
         path = plot_critical_frequency(

@@ -1,6 +1,6 @@
 """Tests for BDF field parsing."""
 import pytest
-from nastaero.bdf.field_parser import (
+from ascent_load.bdf.field_parser import (
     nastran_float, nastran_int, nastran_string,
     parse_fixed8, parse_free, detect_format, parse_card_fields,
 )

@@ -1,6 +1,6 @@
 """HA144A Forward Swept Wing - Stability Derivative Validation.
 
-Runs NastAero SOL 144 on the FSW model and computes rigid stability
+Runs ASCENT-Load SOL 144 on the FSW model and computes rigid stability
 derivatives for comparison against MSC Nastran Aeroelastic Manual Table 7-1.
 
 Reference: MSC Nastran Aeroelastic Analysis User's Guide, Example HA144A
@@ -15,14 +15,14 @@ import numpy as np
 
 sys.path.insert(0, '.')
 
-from nastaero.bdf.parser import BDFParser
-from nastaero.solvers.sol144 import (
+from ascent_load.bdf.parser import BDFParser
+from ascent_load.solvers.sol144 import (
     _build_shared_data, _trim_variable_normalwash, solve_trim,
     _compute_cg_x
 )
-from nastaero.aero.panel import generate_all_panels, get_box_index_map
-from nastaero.aero.dlm import build_aic_matrix
-from nastaero.config import logger
+from ascent_load.aero.panel import generate_all_panels, get_box_index_map
+from ascent_load.aero.dlm import build_aic_matrix
+from ascent_load.config import logger
 import logging
 
 logger.setLevel(logging.WARNING)
@@ -166,14 +166,14 @@ nastran_trim = {
     "ELEV":   0.492457,
 }
 
-print(f"{'Variable':<12s} {'Nastran':>12s} {'NastAero':>12s} {'Error %':>10s} {'Units':>8s}")
+print(f"{'Variable':<12s} {'Nastran':>12s} {'ASCENT-Load':>12s} {'Error %':>10s} {'Units':>8s}")
 print("-" * 56)
 for key in ["ANGLEA", "ELEV"]:
     nast_val = nastran_trim[key]
-    nastaero_val = sc.trim_variables.get(key, 0.0)
-    err_pct = 100*(nastaero_val - nast_val)/abs(nast_val) if abs(nast_val) > 1e-10 else 0.0
-    print(f"  {key:<12s} {nast_val:12.6f} {nastaero_val:12.6f} {err_pct:10.2f}% {'rad':>8s}")
-    print(f"  {'':12s} {np.degrees(nast_val):12.4f} {np.degrees(nastaero_val):12.4f} {'':>10s} {'deg':>8s}")
+    ascent_load_val = sc.trim_variables.get(key, 0.0)
+    err_pct = 100*(ascent_load_val - nast_val)/abs(nast_val) if abs(nast_val) > 1e-10 else 0.0
+    print(f"  {key:<12s} {nast_val:12.6f} {ascent_load_val:12.6f} {err_pct:10.2f}% {'rad':>8s}")
+    print(f"  {'':12s} {np.degrees(nast_val):12.4f} {np.degrees(ascent_load_val):12.4f} {'':>10s} {'deg':>8s}")
 print()
 
 # ============================================================
@@ -184,17 +184,17 @@ print("SUMMARY")
 print("=" * 72)
 print()
 print("Rigid stability derivatives (no image, best accuracy):")
-print(f"  Cz_alpha: NastAero={derivs_nosym['Cz_alpha']:.4f}, Nastran={nastran_rigid['Cz_alpha']:.4f}, "
+print(f"  Cz_alpha: ASCENT-Load={derivs_nosym['Cz_alpha']:.4f}, Nastran={nastran_rigid['Cz_alpha']:.4f}, "
       f"err={100*(derivs_nosym['Cz_alpha']-nastran_rigid['Cz_alpha'])/abs(nastran_rigid['Cz_alpha']):.1f}%")
-print(f"  Cm_alpha: NastAero={derivs_nosym['Cm_alpha']:.4f}, Nastran={nastran_rigid['Cm_alpha']:.4f}, "
+print(f"  Cm_alpha: ASCENT-Load={derivs_nosym['Cm_alpha']:.4f}, Nastran={nastran_rigid['Cm_alpha']:.4f}, "
       f"err={100*(derivs_nosym['Cm_alpha']-nastran_rigid['Cm_alpha'])/abs(nastran_rigid['Cm_alpha']):.1f}%")
-print(f"  Cz_de:    NastAero={derivs_nosym['Cz_de']:.4f}, Nastran={nastran_rigid['Cz_de']:.4f}, "
+print(f"  Cz_de:    ASCENT-Load={derivs_nosym['Cz_de']:.4f}, Nastran={nastran_rigid['Cz_de']:.4f}, "
       f"err={100*(derivs_nosym['Cz_de']-nastran_rigid['Cz_de'])/abs(nastran_rigid['Cz_de']):.1f}%")
-print(f"  Cm_de:    NastAero={derivs_nosym['Cm_de']:.4f}, Nastran={nastran_rigid['Cm_de']:.4f}, "
+print(f"  Cm_de:    ASCENT-Load={derivs_nosym['Cm_de']:.4f}, Nastran={nastran_rigid['Cm_de']:.4f}, "
       f"err={100*(derivs_nosym['Cm_de']-nastran_rigid['Cm_de'])/abs(nastran_rigid['Cm_de']):.1f}%")
-print(f"  Cz_q:     NastAero={derivs_nosym['Cz_q']:.4f}, Nastran={nastran_rigid['Cz_q']:.4f}, "
+print(f"  Cz_q:     ASCENT-Load={derivs_nosym['Cz_q']:.4f}, Nastran={nastran_rigid['Cz_q']:.4f}, "
       f"err={100*(derivs_nosym['Cz_q']-nastran_rigid['Cz_q'])/abs(nastran_rigid['Cz_q']):.1f}%")
-print(f"  Cm_q:     NastAero={derivs_nosym['Cm_q']:.4f}, Nastran={nastran_rigid['Cm_q']:.4f}, "
+print(f"  Cm_q:     ASCENT-Load={derivs_nosym['Cm_q']:.4f}, Nastran={nastran_rigid['Cm_q']:.4f}, "
       f"err={100*(derivs_nosym['Cm_q']-nastran_rigid['Cm_q'])/abs(nastran_rigid['Cm_q']):.1f}%")
 print()
 print("Notes:")

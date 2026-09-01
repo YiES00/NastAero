@@ -7,7 +7,7 @@ import math
 import numpy as np
 import pytest
 
-from nastaero.loads_analysis.certification.aircraft_config import (
+from ascent_load.loads_analysis.certification.aircraft_config import (
     AircraftConfig, WeightCGCondition, SpeedSchedule,
     ControlSurfaceLimits, LandingGearConfig,
     part23_nz_max, part23_nz_min,
@@ -16,11 +16,11 @@ from nastaero.loads_analysis.certification.aircraft_config import (
     CONM2Adjuster,
     RHO_0, G_MPS2, KG_PER_LB,
 )
-from nastaero.loads_analysis.certification.vn_diagram import (
+from ascent_load.loads_analysis.certification.vn_diagram import (
     VnPoint, VnDiagram, pratt_gust_delta_nz,
     compute_vn_diagram, compute_all_vn_diagrams,
 )
-from nastaero.loads_analysis.case_generator import isa_atmosphere
+from ascent_load.loads_analysis.case_generator import isa_atmosphere
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +421,7 @@ class TestVnPlot:
 
     def test_plot_vn_diagram(self, tmp_path):
         """Plot generates PNG without error."""
-        from nastaero.visualization.cert_plot import plot_vn_diagram
+        from ascent_load.visualization.cert_plot import plot_vn_diagram
 
         config = AircraftConfig(
             speeds=SpeedSchedule(VS1=28.0, VC=65.0, VD=85.0, VF=35.0),

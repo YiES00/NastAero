@@ -5,8 +5,8 @@ import sys, os
 import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 
-from nastaero.bdf.parser import parse_bdf
-from nastaero.loads_analysis.certification.modal_rom import ModalROM
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.loads_analysis.certification.modal_rom import ModalROM
 
 bdf_path = "tests/validation/GACOMP/p400r3-free-trim.bdf"
 print("Parsing BDF...")

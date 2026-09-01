@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from types import SimpleNamespace
 
-from nastaero.loads_analysis.component_id import (
+from ascent_load.loads_analysis.component_id import (
     ComponentDef, ComponentSet, ClassificationAudit,
     ComponentClassificationError, audit_classification,
     assert_classification_complete,
@@ -98,9 +98,9 @@ class TestFailClosed:
 
 class TestBridgeStrictMode:
     def test_bridge_gate(self, setup):
-        from nastaero.loads_analysis.certification.batch_runner import (
+        from ascent_load.loads_analysis.certification.batch_runner import (
             BatchResult, CaseResult)
-        from nastaero.loads_analysis.certification.vmt_bridge import (
+        from ascent_load.loads_analysis.certification.vmt_bridge import (
             compute_vmt_for_batch)
         m, comps = setup
         forces = {nid: np.array([0, 0, 100.0, 0, 0, 0]) for nid in m.nodes}

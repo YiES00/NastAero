@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FAR 23 LOADS vs NastAero: Structural Loads Comparison for GACOMP.
+"""FAR 23 LOADS vs ASCENT-Load: Structural Loads Comparison for GACOMP.
 
 Runs the GACOMP BDF through SOL 144 (existing subcases), extracts VMT,
 and compares with FAR 23 LOADS analytical method.
@@ -75,15 +75,15 @@ def far23_landing():
 
 
 # ═══════════════════════════════════════
-# NastAero Solver
+# ASCENT-Load Solver
 # ═══════════════════════════════════════
 
-def run_nastaero():
+def run_ascent_load():
     """Run GACOMP through SOL 144 and extract VMT."""
-    from nastaero.bdf.parser import BDFParser
-    from nastaero.solvers.sol144 import solve_trim
-    from nastaero.loads_analysis.vmt import compute_vmt_all
-    from nastaero.loads_analysis.component_id import identify_components
+    from ascent_load.bdf.parser import BDFParser
+    from ascent_load.solvers.sol144 import solve_trim
+    from ascent_load.loads_analysis.vmt import compute_vmt_all
+    from ascent_load.loads_analysis.component_id import identify_components
 
     bdf_path = os.path.join(os.path.dirname(__file__),
         "validation", "GACOMP", "p400r3-free-trim.bdf")
@@ -176,7 +176,7 @@ def run_nastaero():
 
 def print_all(na_data, comp_names):
     print("\n" + "=" * 95)
-    print("  FAR 23 LOADS (DARCorp) vs NastAero SOL 144 — GACOMP Structural Loads")
+    print("  FAR 23 LOADS (DARCorp) vs ASCENT-Load SOL 144 — GACOMP Structural Loads")
     print("=" * 95)
 
     # Representative cases for FAR 23
@@ -202,10 +202,10 @@ def print_all(na_data, comp_names):
         print(f"  {label:<25} {nz:>5.2f} {V:>7.0f} │ {Vr:>10.0f} "
               f"{Mr/1000:>12.0f} {Tr/1000:>12.0f} │ {LT:>10.0f}")
 
-    # ── NastAero Results ──
+    # ── ASCENT-Load Results ──
     if na_data:
         print(f"\n{'─'*95}")
-        print(f"  ■ WING ROOT LOADS — NastAero SOL 144 (from BDF subcases)")
+        print(f"  ■ WING ROOT LOADS — ASCENT-Load SOL 144 (from BDF subcases)")
         print(f"{'─'*95}")
         rw_key = None
         for cn in comp_names:
@@ -235,7 +235,7 @@ def print_all(na_data, comp_names):
 
         if ht_key:
             print(f"\n{'─'*95}")
-            print(f"  ■ HORIZONTAL TAIL LOADS — NastAero")
+            print(f"  ■ HORIZONTAL TAIL LOADS — ASCENT-Load")
             print(f"{'─'*95}")
             print(f"  {'Subcase':<30} {'nz':>5} │ {'Shear(N)':>10} "
                   f"{'Bend(N-m)':>12} {'Tors(N-m)':>12}")
@@ -255,7 +255,7 @@ def print_all(na_data, comp_names):
             if "VTP" in cn or "Vertical" in cn: vt_key = cn; break
         if vt_key:
             print(f"\n{'─'*95}")
-            print(f"  ■ VERTICAL TAIL LOADS — NastAero")
+            print(f"  ■ VERTICAL TAIL LOADS — ASCENT-Load")
             print(f"{'─'*95}")
             for d in na_data:
                 vmt = d["vmt"].get(vt_key, {})
@@ -265,19 +265,19 @@ def print_all(na_data, comp_names):
 
     # ── Scaling comparison ──
     if na_data:
-        # Find 1g case in NastAero
+        # Find 1g case in ASCENT-Load
         base = None
         for d in na_data:
             if abs(d["nz"] - 1.0) < 0.1: base = d; break
 
         if base and rw_key and rw_key in base["vmt"]:
             print(f"\n{'─'*95}")
-            print(f"  ■ SCALED COMPARISON: NastAero 1g → nz×scaling vs FAR 23")
+            print(f"  ■ SCALED COMPARISON: ASCENT-Load 1g → nz×scaling vs FAR 23")
             print(f"{'─'*95}")
             V_1g = base["vmt"][rw_key]["shear"][0]
             M_1g = base["vmt"][rw_key]["bending"][0]
 
-            print(f"  NastAero 1g wing root: V={V_1g:.0f} N, M={M_1g/1000:.0f} N-m")
+            print(f"  ASCENT-Load 1g wing root: V={V_1g:.0f} N, M={M_1g/1000:.0f} N-m")
             print(f"\n  {'Condition':<20} {'nz':>5} │ {'FAR23 V(N)':>12} {'NA×nz V(N)':>12} "
                   f"{'Ratio':>7} │ {'FAR23 M(N-m)':>14} {'NA×nz M(N-m)':>14} {'Ratio':>7}")
             print(f"  {'─'*95}")
@@ -341,7 +341,7 @@ def print_all(na_data, comp_names):
     print(f"    Landing main gear: {ldg['main_V']:>10.0f} N  = {ldg['main_V']/G:>8.0f} kgf")
     print(f"    Landing brake:     {ldg['brake_D']:>10.0f} N  = {ldg['brake_D']/G:>8.0f} kgf")
 
-    # NastAero critical
+    # ASCENT-Load critical
     if na_data and rw_key:
         max_V_n = max_M_n = max_T_n = 0
         cv_n = cm_n = ct_n = ""
@@ -355,14 +355,14 @@ def print_all(na_data, comp_names):
                 if abs(vmt["torsion"][0]) > abs(max_T_n):
                     max_T_n = vmt["torsion"][0]; ct_n = d["label"]
 
-        print(f"\n  NastAero SOL 144:")
+        print(f"\n  ASCENT-Load SOL 144:")
         print(f"    Wing max shear:    {max_V_n:>10.0f} N  = {max_V_n/G:>8.0f} kgf  ← {cv_n}")
         print(f"    Wing max bending:  {max_M_n/1000:>10.0f} N-m = {max_M_n/G/1000:>8.1f} kgf-m ← {cm_n}")
         print(f"    Wing max torsion:  {max_T_n/1000:>10.0f} N-m = {max_T_n/G/1000:>8.1f} kgf-m ← {ct_n}")
 
         # Ratio
         if abs(max_V) > 1:
-            print(f"\n  Ratio (NastAero / FAR 23):")
+            print(f"\n  Ratio (ASCENT-Load / FAR 23):")
             print(f"    Wing shear:  {max_V_n/max_V:.3f}")
             print(f"    Wing bending: {max_M_n/max_M:.3f}")
 
@@ -371,14 +371,14 @@ def print_all(na_data, comp_names):
 
 if __name__ == "__main__":
     print("=" * 95)
-    print("  GACOMP Structural Loads Analysis: FAR 23 LOADS vs NastAero SOL 144")
+    print("  GACOMP Structural Loads Analysis: FAR 23 LOADS vs ASCENT-Load SOL 144")
     print("=" * 95)
 
     na_data = []; comp_names = []
     try:
-        na_data, comp_names = run_nastaero()
+        na_data, comp_names = run_ascent_load()
     except Exception as e:
-        print(f"\n  NastAero failed: {e}")
+        print(f"\n  ASCENT-Load failed: {e}")
         import traceback; traceback.print_exc()
 
     print_all(na_data, comp_names)

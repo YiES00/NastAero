@@ -2,14 +2,14 @@
 from __future__ import annotations
 import numpy as np
 import pytest
-from nastaero.bdf.cards.mass import CONM2
-from nastaero.bdf.cards.elements import CQUAD4
-from nastaero.bdf.cards.properties import PSHELL
-from nastaero.bdf.cards.materials import MAT1
-from nastaero.bdf.cards.grid import GRID
-from nastaero.bdf.model import BDFModel
-from nastaero.fem.dof_manager import DOFManager
-from nastaero.fem.assembly import assemble_global_matrices
+from ascent_load.bdf.cards.mass import CONM2
+from ascent_load.bdf.cards.elements import CQUAD4
+from ascent_load.bdf.cards.properties import PSHELL
+from ascent_load.bdf.cards.materials import MAT1
+from ascent_load.bdf.cards.grid import GRID
+from ascent_load.bdf.model import BDFModel
+from ascent_load.fem.dof_manager import DOFManager
+from ascent_load.fem.assembly import assemble_global_matrices
 
 
 class TestCONM2Parsing:
@@ -86,7 +86,7 @@ class TestCONM2Assembly:
 
         # Need a dummy element so assembly doesn't produce empty K
         # Add a grounded spring to avoid singular K
-        from nastaero.bdf.cards.elements import CELAS2
+        from ascent_load.bdf.cards.elements import CELAS2
         sp = CELAS2()
         sp.eid = 100; sp.k = 1.0; sp.g1 = 1; sp.c1 = 1; sp.g2 = 0; sp.c2 = 0
         model.springs[100] = sp
@@ -224,7 +224,7 @@ class TestCONM2Semantics2026Audit:
     """
 
     def _mass_matrix(self, cid, xyz_node, x123, mass=3.0):
-        from nastaero.bdf.cards.elements import CELAS2
+        from ascent_load.bdf.cards.elements import CELAS2
         model = BDFModel()
         g = GRID()
         g.nid = 1

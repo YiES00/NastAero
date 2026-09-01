@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NastAero Scalability Benchmark.
+"""ASCENT-Load Scalability Benchmark.
 
 Runs SOL 101 on progressively larger plate models and measures:
 - BDF parse time
@@ -93,7 +93,7 @@ def run_benchmark(nx, ny, temp_dir):
         print(f"  [1/4] BDF generated: {t_gen:.2f} s")
 
         # Step 2: Parse BDF (includes cross-reference)
-        from nastaero.bdf.parser import BDFParser
+        from ascent_load.bdf.parser import BDFParser
         parser = BDFParser()
         t0 = time.perf_counter()
         bdf_model = parser.parse(bdf_path)
@@ -103,8 +103,8 @@ def run_benchmark(nx, ny, temp_dir):
         print(f"  [2/4] BDF parsed: {t_parse:.2f} s ({n_nodes:,} nodes, {n_elems:,} elements)")
 
         # Step 3: Assemble
-        from nastaero.fem.dof_manager import DOFManager
-        from nastaero.fem.assembly import assemble_global_matrices
+        from ascent_load.fem.dof_manager import DOFManager
+        from ascent_load.fem.assembly import assemble_global_matrices
         dof_mgr = DOFManager(list(bdf_model.nodes.keys()))
 
         t0 = time.perf_counter()
@@ -119,8 +119,8 @@ def run_benchmark(nx, ny, temp_dir):
         result['mem_assembly_mb'] = mem_after_assembly
 
         # Step 4: Solve directly (partition + spsolve) - avoids re-assembly
-        from nastaero.fem.load_vector import assemble_load_vector
-        from nastaero.fem.boundary import apply_spcs
+        from ascent_load.fem.load_vector import assemble_load_vector
+        from ascent_load.fem.boundary import apply_spcs
         import scipy.sparse.linalg as spla
 
         subcases = bdf_model.subcases if bdf_model.subcases else [bdf_model.global_case]
@@ -191,7 +191,7 @@ def run_benchmark(nx, ny, temp_dir):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="NastAero Scalability Benchmark")
+    parser = argparse.ArgumentParser(description="ASCENT-Load Scalability Benchmark")
     parser.add_argument("--max-dof", type=int, default=1000000,
                         help="Maximum DOF count to test (default: 1,000,000)")
     parser.add_argument("--output", type=str, default=None,
@@ -223,11 +223,11 @@ def main():
     os.makedirs(temp_dir, exist_ok=True)
 
     # Setup logging
-    from nastaero.config import setup_logging
+    from ascent_load.config import setup_logging
     setup_logging("WARNING")  # Suppress most output during benchmarks
 
     print("=" * 70)
-    print("NastAero Scalability Benchmark")
+    print("ASCENT-Load Scalability Benchmark")
     print("=" * 70)
     print(f"Max DOF target: {args.max_dof:,}")
     print(f"Test cases: {len(test_sizes)}")

@@ -16,8 +16,8 @@ import os
 import tempfile
 import numpy as np
 import pytest
-from nastaero.bdf.parser import parse_bdf
-from nastaero.solvers.sol101 import solve_static
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.solvers.sol101 import solve_static
 
 # CORD2R 7: ez = 기본 y, ex = 기본 x  =>  CD 성분 (0,0,1) = 기본 (0,1,0)
 _CORD = """CORD2R  7               0.      0.      0.      0.      1.      0.      +

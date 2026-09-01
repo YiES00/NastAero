@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from nastaero.solvers.sol144 import (
+from ascent_load.solvers.sol144 import (
     _compute_cg_x, _compute_total_weight, _detect_gravity,
     _trim_variable_normalwash,
 )
@@ -90,14 +90,14 @@ class TestControlSurfaceHingeSigns:
                                coords=coords, aelinks=[])
 
     def test_aileron_differential(self):
-        from nastaero.solvers.sol144 import _get_control_surface_boxes
+        from ascent_load.solvers.sol144 import _get_control_surface_boxes
 
         idx = {101: 0, 102: 1, 103: 2, 104: 3}
         signs, eff = _get_control_surface_boxes("ARON", self._model(), idx)
         assert signs[0] == 1.0 and signs[1] == -1.0
 
     def test_elevator_symmetric(self):
-        from nastaero.solvers.sol144 import _get_control_surface_boxes
+        from ascent_load.solvers.sol144 import _get_control_surface_boxes
 
         idx = {101: 0, 102: 1, 103: 2, 104: 3}
         signs, eff = _get_control_surface_boxes("ELEV", self._model(), idx)
@@ -127,7 +127,7 @@ class TestInertiaReliefClosure:
         return SimpleNamespace(nodes=nodes, elements={}, masses=masses)
 
     def test_residual_closes_exactly(self):
-        from nastaero.loads_analysis.trim_loads import (
+        from ascent_load.loads_analysis.trim_loads import (
             apply_inertia_relief, verify_trim_balance,
         )
 
@@ -148,7 +148,7 @@ class TestInertiaReliefClosure:
             assert abs(val) < 1e-6, f"{k}={val}"
 
     def test_zero_residual_noop(self):
-        from nastaero.loads_analysis.trim_loads import apply_inertia_relief
+        from ascent_load.loads_analysis.trim_loads import apply_inertia_relief
 
         model = self._model()
         combined = {i: np.zeros(6) for i in model.nodes}
@@ -167,14 +167,14 @@ class TestTrimMassConsistency:
     """
 
     def _model(self):
-        from nastaero.bdf.parser import parse_bdf
+        from ascent_load.bdf.parser import parse_bdf
 
         model = parse_bdf(str(VM_DIR / "vm6_fixed_fixed_beam.bdf"))
         model.cross_reference()
         return model
 
     def test_weight_matches_inertial_sum(self):
-        from nastaero.loads_analysis.trim_loads import (
+        from ascent_load.loads_analysis.trim_loads import (
             compute_nodal_inertial_forces,
         )
 
@@ -185,7 +185,7 @@ class TestTrimMassConsistency:
         assert abs(_compute_total_weight(model) + total_fz) < 1e-9 * abs(total_fz)
 
     def test_cg_matches_inertial_centroid(self):
-        from nastaero.loads_analysis.trim_loads import (
+        from ascent_load.loads_analysis.trim_loads import (
             compute_nodal_inertial_forces,
         )
 

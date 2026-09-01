@@ -1,4 +1,4 @@
-# MSC 대 NastAero SOL 144 변위장의 사전 기준 정량 비교 (r3 MC3)
+# MSC 대 ASCENT-Load SOL 144 변위장의 사전 기준 정량 비교 (r3 MC3)
 """Formal displacement-field comparison metrics, ILC-8 v8 deck.
 
 Acceptance criteria — DECLARED BEFORE COMPUTATION (r3 MC3 요구):
@@ -82,13 +82,13 @@ def remove_rigid(xyz, u):
 
 
 def main():
-    from nastaero.bdf.parser import parse_bdf
+    from ascent_load.bdf.parser import parse_bdf
     model = parse_bdf(DECK)
     print(f"덱 절점 {len(model.nodes)}")
 
     d_msc = parse_displacements(F_MSC)
     d_na = parse_displacements(F_NA)
-    print(f"MSC 서브케이스 {sorted(d_msc)}, NastAero {sorted(d_na)}")
+    print(f"MSC 서브케이스 {sorted(d_msc)}, ASCENT-Load {sorted(d_na)}")
 
     wing_nids = [n for n in model.nodes if 300000 <= n <= 499999]
     results = {}

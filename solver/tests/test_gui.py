@@ -15,15 +15,15 @@ VM_DIR = Path(__file__).parent / "validation" / "nastran_vm"
 # ---------------------------------------------------------------------------
 qtpy = pytest.importorskip("qtpy", reason="GUI deps not installed")
 
-from nastaero.gui.run_panel import build_solver_command, naero_path_for  # noqa: E402
-from nastaero.gui.model_tree import summarize_model  # noqa: E402
-from nastaero.gui.editor import HIGHLIGHT_RULES  # noqa: E402
+from ascent_load.gui.run_panel import build_solver_command, naero_path_for  # noqa: E402
+from ascent_load.gui.model_tree import summarize_model  # noqa: E402
+from ascent_load.gui.editor import HIGHLIGHT_RULES  # noqa: E402
 
 
 class TestBuildSolverCommand:
     def test_defaults(self):
         cmd = build_solver_command("model.bdf")
-        assert cmd[:3] == [sys.executable, "-m", "nastaero"]
+        assert cmd[:3] == [sys.executable, "-m", "ascent_load"]
         assert "model.bdf" in cmd
         assert "--save" in cmd
         # 기본값은 CLI 기본과 같으므로 생략
@@ -39,7 +39,7 @@ class TestBuildSolverCommand:
         assert cmd[cmd.index("--log-level") + 1] == "DEBUG"
 
     def test_naero_path(self):
-        assert naero_path_for("/a/b/model.bdf") == "/a/b/model.naero"
+        assert naero_path_for("/a/b/model.bdf") == "/a/b/model.aload"
 
 
 class TestKillProcessTree:
@@ -48,7 +48,7 @@ class TestKillProcessTree:
         import sys
         import time
 
-        from nastaero.gui.run_panel import kill_process_tree, list_child_pids
+        from ascent_load.gui.run_panel import kill_process_tree, list_child_pids
 
         # 부모가 자식(워커 역할)을 하나 띄우고 대기하는 미니 트리
         parent = subprocess.Popen([
@@ -82,7 +82,7 @@ class TestKillProcessTree:
 
 class TestSummarizeModel:
     def test_vm1_counts(self):
-        from nastaero.bdf.parser import parse_bdf
+        from ascent_load.bdf.parser import parse_bdf
 
         model = parse_bdf(str(VM_DIR / "vm1_rod_axial.bdf"))
         groups = dict(summarize_model(model))
@@ -92,7 +92,7 @@ class TestSummarizeModel:
         assert f"({len(model.elements)})" in elem_key
 
     def test_item_cap(self):
-        from nastaero.bdf.parser import parse_bdf
+        from ascent_load.bdf.parser import parse_bdf
 
         model = parse_bdf(str(VM_DIR / "vm1_rod_axial.bdf"))
         groups = dict(summarize_model(model, max_items=2))
@@ -107,7 +107,7 @@ class TestIncludeListing:
         not (Path(__file__).parent / "validation" / "GACOMP").is_dir(),
         reason="comparison-model data not present in this archive")
     def test_gacomp_includes(self):
-        from nastaero.gui.editor import list_bdf_files
+        from ascent_load.gui.editor import list_bdf_files
 
         master = (Path(__file__).parent / "validation" / "GACOMP"
                   / "p400r3-free-trim.bdf")
@@ -117,7 +117,7 @@ class TestIncludeListing:
         assert all(Path(f).exists() for f in files)
 
     def test_no_includes(self):
-        from nastaero.gui.editor import list_bdf_files
+        from ascent_load.gui.editor import list_bdf_files
 
         master = VM_DIR / "vm1_rod_axial.bdf"
         files = list_bdf_files(str(master))
@@ -126,7 +126,7 @@ class TestIncludeListing:
 
 class TestCardForm:
     def test_extent_single_line(self):
-        from nastaero.gui.card_form import card_extent
+        from ascent_load.gui.card_form import card_extent
 
         lines = ["$ comment", "GRID    1               0.      0.      0.",
                  "GRID    2               1.      0.      0."]
@@ -134,7 +134,7 @@ class TestCardForm:
         assert card_extent(lines, 0) is None  # 주석
 
     def test_extent_continuation(self):
-        from nastaero.gui.card_form import card_extent
+        from ascent_load.gui.card_form import card_extent
 
         lines = [
             "CONM2   1       10              5.0",
@@ -147,13 +147,13 @@ class TestCardForm:
         assert card_extent(lines, 2) == (2, 3)
 
     def test_extent_skips_structural_lines(self):
-        from nastaero.gui.card_form import card_extent
+        from ascent_load.gui.card_form import card_extent
 
         assert card_extent(["ENDDATA"], 0) is None
         assert card_extent(["INCLUDE 'BULK/x.bdf'"], 0) is None
 
     def test_fit8(self):
-        from nastaero.gui.card_form import fit8
+        from ascent_load.gui.card_form import fit8
 
         assert fit8("1.5") == "1.5"
         assert fit8("ABCDEFGHIJ") == "ABCDEFGH"
@@ -162,7 +162,7 @@ class TestCardForm:
         assert abs(float(long_float) - 0.2298472344348814) < 1e-5
 
     def test_format_parse_roundtrip(self):
-        from nastaero.gui.card_form import format_card, parse_card
+        from ascent_load.gui.card_form import format_card, parse_card
 
         fields = ["GRID", "999", "", "500.", "0.", "99."]
         lines = format_card(fields)
@@ -171,7 +171,7 @@ class TestCardForm:
         assert parse_card(lines) == fields
 
     def test_format_continuation(self):
-        from nastaero.gui.card_form import format_card, parse_card
+        from ascent_load.gui.card_form import format_card, parse_card
 
         # 데이터 8개 초과 → '+' 연속행 생성
         fields = ["CONM2", "1", "10", "0", "5.0", "0.", "0.", "0.", "",
@@ -182,7 +182,7 @@ class TestCardForm:
         assert parse_card(lines) == fields
 
     def test_format_trims_trailing_blanks(self):
-        from nastaero.gui.card_form import format_card
+        from ascent_load.gui.card_form import format_card
 
         lines = format_card(["GRID", "1", "", "0.", "0.", "0.", "", "", ""])
         assert lines == ["GRID    1               0.      0.      0."]
@@ -191,7 +191,7 @@ class TestCardForm:
 class TestDesignLoads:
     def _mini_results(self):
         import numpy as np
-        from nastaero.output.result_data import ResultData, SubcaseResult
+        from ascent_load.output.result_data import ResultData, SubcaseResult
 
         results = ResultData(title="t", subcases=[])
         for sid in (1, 2):
@@ -202,7 +202,7 @@ class TestDesignLoads:
         return results
 
     def test_batch_from_results(self):
-        from nastaero.gui.design_loads import batch_from_results
+        from ascent_load.gui.design_loads import batch_from_results
 
         batch = batch_from_results(self._mini_results())
         assert batch.n_converged == 2
@@ -214,8 +214,8 @@ class TestDesignLoads:
     def test_batch_carries_landing_metadata(self):
         # 착륙 SubcaseResult에 실린 라벨/분류/FAR/nz가 CaseResult로 승계
         import numpy as np
-        from nastaero.output.result_data import SubcaseResult
-        from nastaero.gui.design_loads import batch_from_results
+        from ascent_load.output.result_data import SubcaseResult
+        from ascent_load.gui.design_loads import batch_from_results
 
         results = self._mini_results()
         sc = SubcaseResult(subcase_id=40)
@@ -236,8 +236,8 @@ class TestDesignLoads:
         assert {c.case_id: c for c in batch.case_results}[1].category == "trim"
 
     def test_batch_skips_missing_forces(self):
-        from nastaero.output.result_data import SubcaseResult
-        from nastaero.gui.design_loads import batch_from_results
+        from ascent_load.output.result_data import SubcaseResult
+        from ascent_load.gui.design_loads import batch_from_results
 
         results = self._mini_results()
         results.subcases.append(SubcaseResult(subcase_id=3))  # 하중 없음
@@ -263,7 +263,7 @@ class TestLoadCases:
 
     def _fake_results(self, with_balance: bool):
         import numpy as np
-        from nastaero.output.result_data import ResultData, SubcaseResult
+        from ascent_load.output.result_data import ResultData, SubcaseResult
 
         sc = SubcaseResult(subcase_id=1)
         sc.trim_variables = {"ANGLEA": 0.1}
@@ -279,7 +279,7 @@ class TestLoadCases:
         return ResultData(title="t", subcases=[sc])
 
     def test_input_conditions(self):
-        from nastaero.gui.load_cases import summarize_cases
+        from ascent_load.gui.load_cases import summarize_cases
 
         rows = summarize_cases(self._fake_model(), None)
         assert len(rows) == 1
@@ -290,7 +290,7 @@ class TestLoadCases:
         assert row["sums"] is None
 
     def test_case_description_from_subtitle(self):
-        from nastaero.gui.load_cases import summarize_cases
+        from ascent_load.gui.load_cases import summarize_cases
 
         model = self._fake_model()
         model.subcases[0].label = "MACH 0.3 - 1G LEVEL FLIGHT"
@@ -301,7 +301,7 @@ class TestLoadCases:
         assert summarize_cases(model, None)[0]["desc"] == ""
 
     def test_trim_balance_preferred_for_combined(self):
-        from nastaero.gui.load_cases import summarize_cases
+        from ascent_load.gui.load_cases import summarize_cases
 
         rows = summarize_cases(self._fake_model(),
                                self._fake_results(with_balance=True),
@@ -311,7 +311,7 @@ class TestLoadCases:
         assert "ANGLEA=5.73°" in rows[0]["trim_result"]
 
     def test_computed_sums_fallback(self):
-        from nastaero.gui.load_cases import summarize_cases
+        from ascent_load.gui.load_cases import summarize_cases
 
         rows = summarize_cases(self._fake_model(),
                                self._fake_results(with_balance=False),
@@ -322,7 +322,7 @@ class TestLoadCases:
         assert "원점" in rows[0]["sums_note"]
 
     def test_aero_sum(self):
-        from nastaero.gui.load_cases import summarize_cases
+        from ascent_load.gui.load_cases import summarize_cases
 
         rows = summarize_cases(self._fake_model(),
                                self._fake_results(with_balance=True),
@@ -330,7 +330,7 @@ class TestLoadCases:
         assert rows[0]["sums"][2] == 100.0  # aero 총 양력
 
     def test_tolerance_from_aero_sums(self):
-        from nastaero.gui.load_cases import summarize_cases, TOLERANCE_FRACTION
+        from ascent_load.gui.load_cases import summarize_cases, TOLERANCE_FRACTION
 
         rows = summarize_cases(self._fake_model(),
                                self._fake_results(with_balance=True),
@@ -341,7 +341,7 @@ class TestLoadCases:
         assert tol_m is None
 
     def test_tolerance_absent_for_aero_view(self):
-        from nastaero.gui.load_cases import summarize_cases
+        from ascent_load.gui.load_cases import summarize_cases
 
         rows = summarize_cases(self._fake_model(),
                                self._fake_results(with_balance=True),
@@ -349,7 +349,7 @@ class TestLoadCases:
         assert rows[0]["tol"] is None
 
     def test_acceleration_columns(self):
-        from nastaero.gui.load_cases import summarize_cases
+        from ascent_load.gui.load_cases import summarize_cases
 
         model = self._fake_model()
         # URDD3=9810이 nz로 그대로 (0이 아니므로), relief 가속도 합산
@@ -363,7 +363,7 @@ class TestLoadCases:
         assert row["ang_accel"] == "8.68, 0, 0.44"
 
     def test_acceleration_default_1g(self):
-        from nastaero.gui.load_cases import summarize_cases
+        from ascent_load.gui.load_cases import summarize_cases
         from types import SimpleNamespace
 
         # URDD3 부재 → 솔버 규약상 1g
@@ -374,7 +374,7 @@ class TestLoadCases:
         assert row["ang_accel"] == "0, 0, 0"
 
     def test_vizmodel_without_subcases(self):
-        from nastaero.gui.load_cases import summarize_cases
+        from ascent_load.gui.load_cases import summarize_cases
         from types import SimpleNamespace
         import numpy as np
 
@@ -387,7 +387,7 @@ class TestLoadCases:
 
 class TestResolveBdfRef:
     def test_relative_to_yaml(self, tmp_path):
-        from nastaero.gui.cert_setup import resolve_bdf_ref
+        from ascent_load.gui.cert_setup import resolve_bdf_ref
 
         (tmp_path / "model.bdf").write_text("CEND\n")
         yaml_path = str(tmp_path / "cfg.yaml")
@@ -397,7 +397,7 @@ class TestResolveBdfRef:
         assert resolve_bdf_ref(yaml_path, "") is None
 
     def test_absolute(self, tmp_path):
-        from nastaero.gui.cert_setup import resolve_bdf_ref
+        from ascent_load.gui.cert_setup import resolve_bdf_ref
 
         p = tmp_path / "abs.bdf"
         p.write_text("CEND\n")
@@ -428,7 +428,7 @@ class TestCertBdfRender:
                                 solve_type="trim")]
 
     def test_detect_q_scale_mm(self):
-        from nastaero.gui.cert_cases import detect_q_scale
+        from ascent_load.gui.cert_cases import detect_q_scale
         from types import SimpleNamespace
 
         mm = SimpleNamespace(aeros=SimpleNamespace(refc=1500.0), aero=None)
@@ -437,7 +437,7 @@ class TestCertBdfRender:
         assert detect_q_scale(m) == 1.0
 
     def test_render_roundtrip(self):
-        from nastaero.gui.cert_cases import render_trim_bdf
+        from ascent_load.gui.cert_cases import render_trim_bdf
 
         text, removed = render_trim_bdf(self.MASTER, self._cases(),
                                         q_scale=1e-6)
@@ -458,8 +458,8 @@ class TestCertBdfRender:
         assert lines[-1].strip().upper().startswith("ENDDATA")
 
     def test_rendered_bdf_parses(self, tmp_path):
-        from nastaero.gui.cert_cases import render_trim_bdf
-        from nastaero.bdf.parser import parse_bdf
+        from ascent_load.gui.cert_cases import render_trim_bdf
+        from ascent_load.bdf.parser import parse_bdf
 
         text, _removed = render_trim_bdf(self.MASTER, self._cases(),
                                          q_scale=1e-6)
@@ -500,11 +500,11 @@ class TestHighlightRules:
 
 
 class TestDescribeItem:
-    """트리 항목 상세 정보 — BDFModel과 VizModel(.naero) 양쪽에서 예외 없이 동작."""
+    """트리 항목 상세 정보 — BDFModel과 VizModel(.aload) 양쪽에서 예외 없이 동작."""
 
     @staticmethod
     def _exercise(model, results=None):
-        from nastaero.gui.model_tree import describe_item
+        from ascent_load.gui.model_tree import describe_item
 
         for group, labels in summarize_model(model, results):
             flat = []
@@ -520,8 +520,8 @@ class TestDescribeItem:
 
     def test_single_element_describe_and_eids(self):
         ilc8 = (Path(__file__).parent / "validation" / "ILC8" / "ilc8.bdf")
-        from nastaero.bdf.parser import parse_bdf
-        from nastaero.gui.model_tree import ModelTreeWidget, describe_item
+        from ascent_load.bdf.parser import parse_bdf
+        from ascent_load.gui.model_tree import ModelTreeWidget, describe_item
 
         m = parse_bdf(str(ilc8))
         eid = next(e for e, o in m.elements.items() if o.type == "CQUAD4")
@@ -532,25 +532,25 @@ class TestDescribeItem:
         assert t._eids_for("Elements (3872)", f"CQUAD4 {eid}") == [eid]
 
     def test_bdf_model_all_items(self):
-        from nastaero.bdf.parser import parse_bdf
+        from ascent_load.bdf.parser import parse_bdf
 
         model = parse_bdf(str(VM_DIR / "vm1_rod_axial.bdf"))
         self._exercise(model)
 
     def test_viz_model_all_items(self):
         naero = (Path(__file__).parent / "validation" / "ILC8"
-                 / "ilc8.naero")
+                 / "ilc8.aload")
         if not naero.exists():
-            pytest.skip("ilc8.naero not generated")
-        from nastaero.output.result_io import load_results
+            pytest.skip("ilc8.aload not generated")
+        from ascent_load.output.result_io import load_results
 
         results, viz = load_results(str(naero))
         self._exercise(viz, results)
 
     def test_elem_type_uses_dict_keys(self):
         """VizElement에는 eid 속성이 없다 — dict 키로 EID 범위를 뽑아야 함."""
-        from nastaero.gui.model_tree import _describe_elem_type
-        from nastaero.output.result_io import VizElement
+        from ascent_load.gui.model_tree import _describe_elem_type
+        from ascent_load.output.result_io import VizElement
 
         class M:
             elements = {7: VizElement(type="CQUAD4", pid=1,
@@ -568,8 +568,8 @@ class TestElementOverlay:
 
     def test_ilc8_mixed_types(self):
         ilc8 = (Path(__file__).parent / "validation" / "ILC8" / "ilc8.bdf")
-        from nastaero.bdf.parser import parse_bdf
-        from nastaero.gui.scene import build_element_overlay
+        from ascent_load.bdf.parser import parse_bdf
+        from ascent_load.gui.scene import build_element_overlay
 
         m = parse_bdf(str(ilc8))
         quads = [eid for eid, e in m.elements.items()
@@ -582,14 +582,14 @@ class TestElementOverlay:
         assert poly.n_lines == 10
 
     def test_empty(self):
-        from nastaero.gui.scene import build_element_overlay
+        from ascent_load.gui.scene import build_element_overlay
 
         assert build_element_overlay(None, [1]) is None
 
     def test_eids_for_property(self):
         ilc8 = (Path(__file__).parent / "validation" / "ILC8" / "ilc8.bdf")
-        from nastaero.bdf.parser import parse_bdf
-        from nastaero.gui.model_tree import ModelTreeWidget
+        from ascent_load.bdf.parser import parse_bdf
+        from ascent_load.gui.model_tree import ModelTreeWidget
 
         m = parse_bdf(str(ilc8))
         t = ModelTreeWidget.__new__(ModelTreeWidget)  # Qt 초기화 없이
@@ -606,7 +606,7 @@ class TestLandingGearForm:
     """Aircraft 탭 착륙장치 폼 — ID 파싱 (Qt 초기화 없이)."""
 
     def test_parse_ids(self):
-        from nastaero.gui.cert_setup import AircraftInfoPanel
+        from ascent_load.gui.cert_setup import AircraftInfoPanel
 
         parse = AircraftInfoPanel._parse_ids
         assert parse("101720, 101718") == [101720, 101718]
@@ -619,9 +619,9 @@ class TestLandingRowsInLoadCases:
 
     def test_summarize_uses_result_meta(self):
         import numpy as np
-        from nastaero.bdf.parser import parse_bdf
-        from nastaero.gui.load_cases import summarize_cases
-        from nastaero.output.result_data import ResultData, SubcaseResult
+        from ascent_load.bdf.parser import parse_bdf
+        from ascent_load.gui.load_cases import summarize_cases
+        from ascent_load.output.result_data import ResultData, SubcaseResult
 
         model = parse_bdf(str(VM_DIR / "vm1_rod_axial.bdf"))
         sc = SubcaseResult(subcase_id=9001)
@@ -647,7 +647,7 @@ class TestElementTypeFilter:
     """3D 뷰 종류별 표시 — mesh_builder element_types 필터 검증."""
 
     def _model(self, tmp_path):
-        from nastaero.bdf.parser import parse_bdf
+        from ascent_load.bdf.parser import parse_bdf
 
         deck = (
             "SOL 101\nCEND\nBEGIN BULK\n"
@@ -666,7 +666,7 @@ class TestElementTypeFilter:
 
     def test_type_filter(self, tmp_path):
         pv = pytest.importorskip("pyvista")  # noqa: F841
-        from nastaero.visualization.mesh_builder import build_structural_mesh
+        from ascent_load.visualization.mesh_builder import build_structural_mesh
 
         m = self._model(tmp_path)
         assert build_structural_mesh(m).n_cells == 3
@@ -681,7 +681,7 @@ class TestElementTypeFilter:
 
     def test_beam_tube_type_filter(self, tmp_path):
         pv = pytest.importorskip("pyvista")  # noqa: F841
-        from nastaero.visualization.mesh_builder import build_beam_tubes
+        from ascent_load.visualization.mesh_builder import build_beam_tubes
 
         m = self._model(tmp_path)
         assert build_beam_tubes(m) is not None
@@ -693,7 +693,7 @@ class TestPload4Available:
 
     def _results(self, with_aero=True):
         import numpy as np
-        from nastaero.output.result_data import ResultData, SubcaseResult
+        from ascent_load.output.result_data import ResultData, SubcaseResult
 
         sc = SubcaseResult(subcase_id=1)
         if with_aero:
@@ -702,7 +702,7 @@ class TestPload4Available:
 
     def test_requires_caero_and_aero_forces(self):
         from types import SimpleNamespace
-        from nastaero.gui.design_loads import pload4_available
+        from ascent_load.gui.design_loads import pload4_available
 
         model = SimpleNamespace(caero_panels={1001: object()})
         assert pload4_available(model, self._results(True))
@@ -717,23 +717,23 @@ class TestResolveVtolFactory:
     """재트림 버튼의 vtol_factory 훅 — 점 표기 임포트 경로 해석."""
 
     def test_valid_path_resolves_to_callable(self):
-        from nastaero.gui.cert_cases import resolve_vtol_factory
+        from ascent_load.gui.cert_cases import resolve_vtol_factory
 
         fn = resolve_vtol_factory(
-            {"vtol_factory": "nastaero.models.ilc8.make_ilc8_vtol_config"})
+            {"vtol_factory": "ascent_load.models.ilc8.make_ilc8_vtol_config"})
         assert callable(fn)
         vc = fn()
         assert len(vc.hover_rotors) == 8
 
     def test_missing_or_bad_key_returns_none(self):
-        from nastaero.gui.cert_cases import resolve_vtol_factory
+        from ascent_load.gui.cert_cases import resolve_vtol_factory
 
         assert resolve_vtol_factory({}) is None
         assert resolve_vtol_factory(None) is None
         assert resolve_vtol_factory({"vtol_factory": ""}) is None
         assert resolve_vtol_factory({"vtol_factory": "no_dot"}) is None
         assert resolve_vtol_factory(
-            {"vtol_factory": "nastaero.models.ilc8.nope"}) is None
+            {"vtol_factory": "ascent_load.models.ilc8.nope"}) is None
         assert resolve_vtol_factory(
             {"vtol_factory": "not.a.module.fn"}) is None
 
@@ -746,6 +746,6 @@ class TestResolveVtolFactory:
                             "ILC8", "ilc8_cert_config.yaml")
         with open(path) as f:
             d = yaml.safe_load(f)
-        from nastaero.gui.cert_cases import resolve_vtol_factory
+        from ascent_load.gui.cert_cases import resolve_vtol_factory
 
         assert callable(resolve_vtol_factory(d))

@@ -8,8 +8,8 @@ CANTILEVER_BDF = os.path.join(VALIDATION_DIR, "cantilever_beam", "cantilever.bdf
 
 
 def run_sol101(bdf_path):
-    from nastaero.bdf.parser import BDFParser
-    from nastaero.solvers.sol101 import solve_static
+    from ascent_load.bdf.parser import BDFParser
+    from ascent_load.solvers.sol101 import solve_static
     parser = BDFParser()
     model = parser.parse(bdf_path)
     return solve_static(model)

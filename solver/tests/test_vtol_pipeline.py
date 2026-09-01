@@ -11,14 +11,14 @@ import math
 import pytest
 import numpy as np
 
-from nastaero.rotor.airfoil import RotorAirfoil
-from nastaero.rotor.blade import BladeDef
-from nastaero.rotor.bemt_solver import BEMTSolver, RotorLoads
-from nastaero.rotor.forward_flight import ForwardFlightBEMT
-from nastaero.rotor.rotor_config import (
+from ascent_load.rotor.airfoil import RotorAirfoil
+from ascent_load.rotor.blade import BladeDef
+from ascent_load.rotor.bemt_solver import BEMTSolver, RotorLoads
+from ascent_load.rotor.forward_flight import ForwardFlightBEMT
+from ascent_load.rotor.rotor_config import (
     RotorType, RotationDir, RotorDef, VTOLConfig,
 )
-from nastaero.rotor.rotor_loads_applicator import (
+from ascent_load.rotor.rotor_loads_applicator import (
     rotor_loads_to_nodal_forces, all_rotor_forces,
     generate_force_moment_cards,
 )
@@ -475,7 +475,7 @@ class TestVTOLConditions:
     """Tests for VTOL flight condition generation."""
 
     def test_hover_conditions(self):
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             generate_hover_conditions,
         )
         conditions = generate_hover_conditions(altitudes_m=[0.0])
@@ -484,7 +484,7 @@ class TestVTOLConditions:
             assert c.V_eas == pytest.approx(0.0, abs=0.1)
 
     def test_oei_conditions(self):
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             generate_oei_conditions,
         )
         config = VTOLConfig.uam_lift_cruise()
@@ -498,7 +498,7 @@ class TestVTOLConditions:
         assert len(conditions) >= len(failable)
 
     def test_transition_conditions(self):
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             generate_transition_conditions,
         )
         config = VTOLConfig.uam_lift_cruise()
@@ -513,7 +513,7 @@ class TestVTOLConditions:
             assert c.V_eas <= config.v_transition_end + 1.0
 
     def test_landing_conditions(self):
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             generate_vtol_landing_conditions,
         )
         conditions = generate_vtol_landing_conditions(altitudes_m=[0.0])
@@ -522,7 +522,7 @@ class TestVTOLConditions:
             assert c.nz >= 1.0  # Landing loads should be >= 1g
 
     def test_rotor_jam_conditions(self):
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             generate_rotor_jam_conditions,
         )
         config = VTOLConfig.uam_lift_cruise()
@@ -539,10 +539,10 @@ class TestVTOLLoadCaseMatrix:
     """Tests for VTOL load case matrix generation."""
 
     def test_matrix_generates_cases(self):
-        from nastaero.loads_analysis.certification.vtol_load_case_matrix import (
+        from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (
             VTOLLoadCaseMatrix,
         )
-        from nastaero.loads_analysis.certification.aircraft_config import (
+        from ascent_load.loads_analysis.certification.aircraft_config import (
             AircraftConfig, SpeedSchedule, WeightCGCondition,
             ControlSurfaceLimits, LandingGearConfig,
         )
@@ -565,10 +565,10 @@ class TestVTOLLoadCaseMatrix:
         assert len(cases) > 0
 
     def test_case_ids_in_vtol_range(self):
-        from nastaero.loads_analysis.certification.vtol_load_case_matrix import (
+        from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (
             VTOLLoadCaseMatrix,
         )
-        from nastaero.loads_analysis.certification.aircraft_config import (
+        from ascent_load.loads_analysis.certification.aircraft_config import (
             AircraftConfig, SpeedSchedule, WeightCGCondition,
             ControlSurfaceLimits, LandingGearConfig,
         )
@@ -593,10 +593,10 @@ class TestVTOLLoadCaseMatrix:
                 f"VTOL case ID {case.case_id} below 20000")
 
     def test_summary_has_expected_categories(self):
-        from nastaero.loads_analysis.certification.vtol_load_case_matrix import (
+        from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (
             VTOLLoadCaseMatrix,
         )
-        from nastaero.loads_analysis.certification.aircraft_config import (
+        from ascent_load.loads_analysis.certification.aircraft_config import (
             AircraftConfig, SpeedSchedule, WeightCGCondition,
             ControlSurfaceLimits, LandingGearConfig,
         )
@@ -629,14 +629,14 @@ class TestVTOLMerge:
     """Tests for merging VTOL cases into conventional matrix."""
 
     def test_merge_vtol_cases(self):
-        from nastaero.loads_analysis.certification.load_case_matrix import (
+        from ascent_load.loads_analysis.certification.load_case_matrix import (
             CertLoadCase, LoadCaseMatrix,
         )
-        from nastaero.loads_analysis.certification.aircraft_config import (
+        from ascent_load.loads_analysis.certification.aircraft_config import (
             AircraftConfig, SpeedSchedule, WeightCGCondition,
             ControlSurfaceLimits, LandingGearConfig,
         )
-        from nastaero.loads_analysis.case_generator import TrimCondition
+        from ascent_load.loads_analysis.case_generator import TrimCondition
 
         config = AircraftConfig(
             speeds=SpeedSchedule(VS1=33, VA=62, VB=0, VC=80, VD=100, VF=40),
@@ -683,7 +683,7 @@ class TestRotorDynamics:
     """Tests for OEI and rotor jam force callbacks."""
 
     def test_oei_force_func_before_failure(self, gacomp_vtol_config):
-        from nastaero.rotor.rotor_dynamics import make_oei_force_func
+        from ascent_load.rotor.rotor_dynamics import make_oei_force_func
 
         func = make_oei_force_func(
             vtol_config=gacomp_vtol_config,
@@ -702,7 +702,7 @@ class TestRotorDynamics:
         assert M.shape == (3,)
 
     def test_oei_force_func_after_failure(self, gacomp_vtol_config):
-        from nastaero.rotor.rotor_dynamics import make_oei_force_func
+        from ascent_load.rotor.rotor_dynamics import make_oei_force_func
 
         func = make_oei_force_func(
             vtol_config=gacomp_vtol_config,
@@ -721,7 +721,7 @@ class TestRotorDynamics:
         assert abs(F_after[2]) < abs(F_before[2])
 
     def test_rotor_jam_force_func(self, gacomp_vtol_config):
-        from nastaero.rotor.rotor_dynamics import make_rotor_jam_force_func
+        from ascent_load.rotor.rotor_dynamics import make_rotor_jam_force_func
 
         func = make_rotor_jam_force_func(
             vtol_config=gacomp_vtol_config,
@@ -747,16 +747,16 @@ class TestVTOLBatchRunner:
     """Tests for VTOLBatchRunner integration."""
 
     def test_batch_runner_instantiation(self):
-        from nastaero.loads_analysis.certification.vtol_batch_runner import (
+        from ascent_load.loads_analysis.certification.vtol_batch_runner import (
             VTOLBatchRunner,
         )
-        from nastaero.loads_analysis.certification.vtol_load_case_matrix import (
+        from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (
             VTOLLoadCaseMatrix,
         )
-        from nastaero.loads_analysis.certification.load_case_matrix import (
+        from ascent_load.loads_analysis.certification.load_case_matrix import (
             LoadCaseMatrix,
         )
-        from nastaero.loads_analysis.certification.aircraft_config import (
+        from ascent_load.loads_analysis.certification.aircraft_config import (
             AircraftConfig, SpeedSchedule, WeightCGCondition,
             ControlSurfaceLimits, LandingGearConfig,
         )
@@ -822,7 +822,7 @@ class TestTransitionGustConditions:
                 CLalpha=5.348, mean_chord_m=1.35)
 
     def _conds(self):
-        from nastaero.loads_analysis.certification.vtol_conditions import (
+        from ascent_load.loads_analysis.certification.vtol_conditions import (
             generate_transition_gust_conditions,
         )
         return generate_transition_gust_conditions(**self.ARGS)
@@ -853,13 +853,13 @@ class TestTransitionGustConditions:
 
     def test_matrix_includes_gust_cases(self):
         """VTOL 매트릭스에 천이 돌풍 케이스가 합류 (39 -> 55)."""
-        from nastaero.loads_analysis.certification.aircraft_config import (
+        from ascent_load.loads_analysis.certification.aircraft_config import (
             AircraftConfig, SpeedSchedule, WeightCGCondition,
         )
-        from nastaero.loads_analysis.certification.vtol_load_case_matrix import (
+        from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (
             VTOLLoadCaseMatrix,
         )
-        from nastaero.models.ilc8 import make_ilc8_vtol_config
+        from ascent_load.models.ilc8 import make_ilc8_vtol_config
 
         cfg = AircraftConfig(
             speeds=SpeedSchedule(VS1=36.0, VA=71.0, VB=0.0, VC=80.0,

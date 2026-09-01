@@ -11,9 +11,9 @@ import os
 import tempfile
 import numpy as np
 import pytest
-from nastaero.bdf.parser import parse_bdf
-from nastaero.elements.bar import CBarElement
-from nastaero.solvers.sol101 import solve_static
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.elements.bar import CBarElement
+from ascent_load.solvers.sol101 import solve_static
 
 E, I1, L = 70000.0, 1000.0, 100.0
 NU = 0.33

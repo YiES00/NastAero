@@ -6,9 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from nastaero.bdf.parser import parse_bdf
-from nastaero.rotor.boom_builder import _f, _tube_section, build_vtol_boom_bulk
-from nastaero.rotor.rotor_config import VTOLConfig
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.rotor.boom_builder import _f, _tube_section, build_vtol_boom_bulk
+from ascent_load.rotor.rotor_config import VTOLConfig
 
 KC = Path(__file__).parent / "validation" / "GACOMP"
 

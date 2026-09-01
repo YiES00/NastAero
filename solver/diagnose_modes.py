@@ -19,9 +19,9 @@ import numpy as np
 # Setup path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from nastaero.bdf.parser import parse_bdf
-from nastaero.loads_analysis.certification.modal_rom import ModalROM
-from nastaero.visualization.mesh_builder import build_structural_mesh
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.loads_analysis.certification.modal_rom import ModalROM
+from ascent_load.visualization.mesh_builder import build_structural_mesh
 
 
 def classify_node(nid: int) -> str:
@@ -46,7 +46,7 @@ def main():
     bdf_path = "tests/validation/GACOMP/p400r3-free-trim.bdf"
 
     print("=" * 70)
-    print("  Mode Shape Diagnostic — NastAero LDRV Modes")
+    print("  Mode Shape Diagnostic — ASCENT-Load LDRV Modes")
     print("=" * 70)
 
     # Parse model

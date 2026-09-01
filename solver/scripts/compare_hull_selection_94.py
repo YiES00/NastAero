@@ -22,7 +22,7 @@ SOLVER = os.path.normpath(os.path.join(HERE, ".."))
 sys.path.insert(0, SOLVER)
 sys.path.insert(0, HERE)
 
-from nastaero.loads_analysis.certification import envelope as env_mod  # noqa: E402
+from ascent_load.loads_analysis.certification import envelope as env_mod  # noqa: E402
 
 captured = {}
 _RealProc = env_mod.EnvelopeProcessor

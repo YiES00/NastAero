@@ -4,9 +4,9 @@ import os
 import numpy as np
 import pytest
 
-from nastaero.bdf.parser import BDFParser
-from nastaero.solvers import sol144
-from nastaero.solvers.sol144 import solve_trim
+from ascent_load.bdf.parser import BDFParser
+from ascent_load.solvers import sol144
+from ascent_load.solvers.sol144 import solve_trim
 
 VALIDATION_DIR = os.path.join(os.path.dirname(__file__), "validation")
 GOLAND_BDF = os.path.join(VALIDATION_DIR, "goland_wing", "goland_static.bdf")

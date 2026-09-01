@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from types import SimpleNamespace
 
-from nastaero.loads_analysis.component_id import ComponentDef
-from nastaero.loads_analysis.vmt import (
+from ascent_load.loads_analysis.component_id import ComponentDef
+from ascent_load.loads_analysis.vmt import (
     compute_vmt, component_local_frame,
 )
 

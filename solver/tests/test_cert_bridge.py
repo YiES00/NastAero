@@ -6,8 +6,8 @@ TrimCondition to TRIM card conversion bridge for certification loads.
 import os
 import numpy as np
 import pytest
-from nastaero.bdf.parser import BDFParser
-from nastaero.loads_analysis.case_generator import (
+from ascent_load.bdf.parser import BDFParser
+from ascent_load.loads_analysis.case_generator import (
     TrimCondition, CaseGenerator, isa_atmosphere,
     trim_condition_to_trim_card, trim_conditions_to_model,
 )
@@ -177,7 +177,7 @@ class TestNzPropagation:
 
     def test_nz_from_urdd3_in_trim_vars(self):
         """Verify nz extraction from URDD3 in trim variables."""
-        from nastaero.bdf.cards.aero import TRIM
+        from ascent_load.bdf.cards.aero import TRIM
 
         # Create TRIM card with URDD3 = 2.5
         trim = TRIM(tid=1, mach=0.3, q=5000.0)
@@ -193,7 +193,7 @@ class TestNzPropagation:
 
     def test_nz_default_when_no_urdd3(self):
         """Without URDD3, nz defaults to 1.0."""
-        from nastaero.bdf.cards.aero import TRIM
+        from ascent_load.bdf.cards.aero import TRIM
 
         trim = TRIM(tid=1, mach=0.3, q=5000.0)
         trim.variables = [("ROLL", 0.0), ("YAW", 0.0)]

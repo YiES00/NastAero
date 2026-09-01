@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Detailed 1g wing root load decomposition: FAR 23 vs NastAero.
+"""Detailed 1g wing root load decomposition: FAR 23 vs ASCENT-Load.
 
 Investigates the 0.59 ratio discrepancy by decomposing loads into
 aerodynamic and inertial contributions, comparing elastic axis positions,
@@ -15,10 +15,10 @@ XCG = 3882.0; XW = 3500.0; XT = 8500.0; CMAC_WF = -0.05
 
 
 def run():
-    from nastaero.bdf.parser import BDFParser
-    from nastaero.solvers.sol144 import solve_trim
-    from nastaero.loads_analysis.vmt import compute_vmt, _compute_elastic_axis
-    from nastaero.loads_analysis.component_id import identify_components
+    from ascent_load.bdf.parser import BDFParser
+    from ascent_load.solvers.sol144 import solve_trim
+    from ascent_load.loads_analysis.vmt import compute_vmt, _compute_elastic_axis
+    from ascent_load.loads_analysis.component_id import identify_components
 
     bdf_path = os.path.join(os.path.dirname(__file__),
         "validation", "GACOMP", "p400r3-free-trim.bdf")
@@ -163,7 +163,7 @@ def run():
     print(f"  4. ELASTIC AXIS (EA) POSITION COMPARISON")
     print(f"{'─'*80}")
 
-    # NastAero EA: compute from component node chord extent
+    # ASCENT-Load EA: compute from component node chord extent
     all_xyz_rw = np.array([model.nodes[nid].xyz_global for nid in rw_comp.node_ids
                            if nid in model.nodes], dtype=np.float64)
     all_y_rw = all_xyz_rw[:, 1]  # span axis = Y
@@ -173,7 +173,7 @@ def run():
     stations_check = np.linspace(all_y_rw.min(), all_y_rw.max(), 8)
     half_bin = (all_y_rw.max() - all_y_rw.min()) / 20
 
-    print(f"\n  NastAero elastic axis (40% chord from LE):")
+    print(f"\n  ASCENT-Load elastic axis (40% chord from LE):")
     print(f"  {'Y_span(mm)':>12} {'X_LE(mm)':>10} {'X_TE(mm)':>10} {'Chord(mm)':>10}"
           f" {'EA_40%(mm)':>12} {'EA_25%(mm)':>12}")
     print(f"  {'─'*68}")
@@ -224,14 +224,14 @@ def run():
     print(f"\n  Step 4: Inertia relief (FAR 23 assumption)")
     print(f"    Wing+fuel weight = {W_wing_assumed/W_N*100:.0f}% of W = {W_wing_assumed:.0f} N")
     print(f"    Per semi-span = {W_wing_semi_assumed:.0f} N")
-    print(f"    NastAero actual R.Wing inertia Fz = {abs(F_inertia_rw[2]):.0f} N"
+    print(f"    ASCENT-Load actual R.Wing inertia Fz = {abs(F_inertia_rw[2]):.0f} N"
           f" = {abs(F_inertia_rw[2])/W_N*100:.1f}% of W")
 
     # Step 5: Net root shear
     V_root_f23 = L_semi - inertia_relief
     print(f"\n  Step 5: Root shear = Aero - Inertia = {L_semi:.0f} - {inertia_relief:.0f}"
           f" = {V_root_f23:.0f} N")
-    print(f"    NastAero combined = {curve_combined.shear[0]:.0f} N")
+    print(f"    ASCENT-Load combined = {curve_combined.shear[0]:.0f} N")
     print(f"    Ratio = {curve_combined.shear[0] / V_root_f23:.3f}")
 
     # Step 6: Root bending
@@ -245,7 +245,7 @@ def run():
     print(f"    M = L×y_aero - I×y_mass = {L_semi:.0f}×{y_aero:.0f}"
           f" - {inertia_relief:.0f}×{y_mass:.0f}")
     print(f"      = {M_root_f23:.0f} N-mm = {M_root_f23/1000:.0f} N-m")
-    print(f"    NastAero combined = {curve_combined.bending_moment[0]:.0f} N-mm"
+    print(f"    ASCENT-Load combined = {curve_combined.bending_moment[0]:.0f} N-mm"
           f" = {curve_combined.bending_moment[0]/1000:.0f} N-m")
     print(f"    Ratio = {curve_combined.bending_moment[0] / M_root_f23:.3f}")
 
@@ -257,13 +257,13 @@ def run():
     # The key difference: actual wing aero lift vs assumed
     print(f"\n  [A] Wing Aerodynamic Lift:")
     print(f"    FAR 23 assumed wing aero (semi-span): {L_semi:.0f} N")
-    print(f"    NastAero actual wing aero Fz (R.Wing): {F_aero_rw[2]:.0f} N")
+    print(f"    ASCENT-Load actual wing aero Fz (R.Wing): {F_aero_rw[2]:.0f} N")
     print(f"    → FAR 23 overestimates wing lift by "
           f"{L_semi/F_aero_rw[2]:.2f}x" if F_aero_rw[2] > 0 else "")
 
     print(f"\n  [B] Wing Inertia Relief:")
     print(f"    FAR 23 assumed (20% of W): {W_wing_semi_assumed:.0f} N per semi-span")
-    print(f"    NastAero actual R.Wing inertia |Fz|: {abs(F_inertia_rw[2]):.0f} N")
+    print(f"    ASCENT-Load actual R.Wing inertia |Fz|: {abs(F_inertia_rw[2]):.0f} N")
     print(f"    → FAR 23 {'under' if W_wing_semi_assumed < abs(F_inertia_rw[2]) else 'over'}estimates"
           f" inertia by {abs(F_inertia_rw[2])/W_wing_semi_assumed:.2f}x")
 
@@ -272,23 +272,23 @@ def run():
     print(f"    Weight = {W_N:.0f} N")
     print(f"    Ratio = {F_aero_total[2]/W_N:.4f}")
 
-    # ── 7. Corrected FAR 23 with NastAero parameters ──
+    # ── 7. Corrected FAR 23 with ASCENT-Load parameters ──
     print(f"\n{'─'*80}")
-    print(f"  7. CORRECTED FAR 23 (using NastAero actual parameters)")
+    print(f"  7. CORRECTED FAR 23 (using ASCENT-Load actual parameters)")
     print(f"{'─'*80}")
 
-    # Use actual wing aero and inertia from NastAero
+    # Use actual wing aero and inertia from ASCENT-Load
     V_corrected = F_aero_rw[2] + F_inertia_rw[2]  # Net Fz on wing
-    print(f"    Using NastAero wing aero Fz = {F_aero_rw[2]:.0f} N")
-    print(f"    Using NastAero wing inertia Fz = {F_inertia_rw[2]:.0f} N")
+    print(f"    Using ASCENT-Load wing aero Fz = {F_aero_rw[2]:.0f} N")
+    print(f"    Using ASCENT-Load wing inertia Fz = {F_inertia_rw[2]:.0f} N")
     print(f"    Net Fz = {V_corrected:.0f} N (this ≈ VMT root shear)")
-    print(f"    NastAero VMT root shear = {curve_combined.shear[0]:.0f} N")
+    print(f"    ASCENT-Load VMT root shear = {curve_combined.shear[0]:.0f} N")
     print(f"    Agreement: {V_corrected/curve_combined.shear[0]:.3f}"
           if abs(curve_combined.shear[0]) > 1 else "")
 
     # ── 8. Spanwise distribution comparison ──
     print(f"\n{'─'*80}")
-    print(f"  8. SPANWISE SHEAR DISTRIBUTION (NastAero)")
+    print(f"  8. SPANWISE SHEAR DISTRIBUTION (ASCENT-Load)")
     print(f"{'─'*80}")
     print(f"  {'Y(mm)':>8} │ {'V_comb(N)':>10} {'V_aero(N)':>10} {'V_iner(N)':>10}"
           f" │ {'M_comb(N-m)':>12}")

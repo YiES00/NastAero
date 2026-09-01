@@ -14,12 +14,12 @@ import os
 import tempfile
 import numpy as np
 import pytest
-from nastaero.bdf.parser import parse_bdf
-from nastaero.bdf.cards.constraints import SPC1
-from nastaero.bdf.cards.sets import SET1
-from nastaero.bdf.cards.rbe import RBE2
-from nastaero.bdf.cards.eigrl import EIGRL
-from nastaero.bdf.field_parser import expand_thru
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.bdf.cards.constraints import SPC1
+from ascent_load.bdf.cards.sets import SET1
+from ascent_load.bdf.cards.rbe import RBE2
+from ascent_load.bdf.cards.eigrl import EIGRL
+from ascent_load.bdf.field_parser import expand_thru
 
 
 def _parse(text):

@@ -11,7 +11,7 @@ control surface. Verifies:
 import os
 import numpy as np
 import pytest
-from nastaero.bdf.parser import BDFParser
+from ascent_load.bdf.parser import BDFParser
 
 VALIDATION_DIR = os.path.join(os.path.dirname(__file__), "validation")
 AIRCRAFT_BDF = os.path.join(VALIDATION_DIR, "full_aircraft", "full_aircraft_trim.bdf")
@@ -116,7 +116,7 @@ class TestFullAircraftTrim:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        from nastaero.solvers.sol144 import solve_trim
+        from ascent_load.solvers.sol144 import solve_trim
         self.model = parse_bdf(AIRCRAFT_BDF)
         self.results = solve_trim(self.model)
         self.sc = self.results.subcases[0]
@@ -174,7 +174,7 @@ class TestFullAircraftTrim:
     def test_pitch_moment_balanced(self):
         """Pitch moment about CG should be approximately zero."""
         # Compute CG
-        from nastaero.solvers.sol144 import _compute_cg_x
+        from ascent_load.solvers.sol144 import _compute_cg_x
         cg_x = _compute_cg_x(self.model)
 
         # Compute pitch moment

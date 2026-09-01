@@ -1,6 +1,6 @@
 """Aeroelastic Verification Manual Tests (AVM series).
 
-Validates NastAero SOL 144 (static aeroelastic trim) against
+Validates ASCENT-Load SOL 144 (static aeroelastic trim) against
 analytical aerodynamic solutions and known Nastran benchmark results.
 
 Test cases:
@@ -12,9 +12,9 @@ Test cases:
 import os
 import numpy as np
 import pytest
-from nastaero.bdf.parser import BDFParser
-from nastaero.aero.panel import generate_panel_mesh, generate_all_panels, AeroBox
-from nastaero.aero.dlm import build_aic_matrix, circulation_to_delta_cp
+from ascent_load.bdf.parser import BDFParser
+from ascent_load.aero.panel import generate_panel_mesh, generate_all_panels, AeroBox
+from ascent_load.aero.dlm import build_aic_matrix, circulation_to_delta_cp
 
 VALIDATION_DIR = os.path.join(os.path.dirname(__file__), "validation")
 AERO_VM_DIR = os.path.join(VALIDATION_DIR, "aero_vm")
@@ -28,7 +28,7 @@ def parse_bdf(filepath):
 
 def solve_trim(filepath):
     """Parse a BDF and run SOL 144 trim."""
-    from nastaero.solvers.sol144 import solve_trim as _solve_trim
+    from ascent_load.solvers.sol144 import solve_trim as _solve_trim
     model = parse_bdf(filepath)
     results = _solve_trim(model)
     return results, model
@@ -608,7 +608,7 @@ class TestSplineInterpolation:
 
     def test_beam_spline_exact_at_nodes(self):
         """Beam spline should give exact values at structural nodes."""
-        from nastaero.aero.spline import build_beam_spline
+        from ascent_load.aero.spline import build_beam_spline
 
         struct = np.array([
             [0.5, 0.0, 0.0],
@@ -636,7 +636,7 @@ class TestSplineInterpolation:
 
     def test_beam_spline_linear_interpolation(self):
         """Beam spline should correctly interpolate between nodes."""
-        from nastaero.aero.spline import build_beam_spline
+        from ascent_load.aero.spline import build_beam_spline
 
         struct = np.array([
             [0.5, 0.0, 0.0],
@@ -658,7 +658,7 @@ class TestSplineInterpolation:
 
     def test_ips_spline_rigid_body(self):
         """IPS spline should exactly reproduce rigid body translation."""
-        from nastaero.aero.spline import build_ips_spline
+        from ascent_load.aero.spline import build_ips_spline
 
         struct = np.array([
             [0.0, 0.0, 0.0],
@@ -682,7 +682,7 @@ class TestSplineInterpolation:
 
     def test_spline_partition_of_unity(self):
         """Beam spline rows should sum to 1 (partition of unity)."""
-        from nastaero.aero.spline import build_beam_spline
+        from ascent_load.aero.spline import build_beam_spline
 
         struct = np.array([
             [0.5, 0.0, 0.0],

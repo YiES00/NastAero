@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NastAero Solver Verification Report - Validation Plots
+ASCENT-Load Solver Verification Report - Validation Plots
 Generates 6 publication-quality plots for the certification report.
 """
 
@@ -24,8 +24,8 @@ except OSError:
 
 # Consistent color palette
 C_ANALYTICAL = "#2c3e50"   # dark blue-grey
-C_NASTAERO   = "#e74c3c"   # red
-C_NASTAERO2  = "#3498db"   # blue
+C_ASCENT_LOAD   = "#e74c3c"   # red
+C_ASCENT_LOAD2  = "#3498db"   # blue
 C_DAMPED     = "#27ae60"   # green
 C_UNDAMPED   = "#e67e22"   # orange
 C_STATIC     = "#7f8c8d"   # grey
@@ -39,17 +39,17 @@ DPI = 300
 
 
 def add_logo(ax, loc="lower right"):
-    """Add NastAero text branding in corner."""
+    """Add ASCENT-Load text branding in corner."""
     props = dict(fontsize=8, color="#999999", fontstyle="italic",
                  fontweight="bold", alpha=0.7)
     if loc == "lower right":
-        ax.text(0.98, 0.02, "NastAero", transform=ax.transAxes,
+        ax.text(0.98, 0.02, "ASCENT-Load", transform=ax.transAxes,
                 ha="right", va="bottom", **props)
     elif loc == "upper right":
-        ax.text(0.98, 0.98, "NastAero", transform=ax.transAxes,
+        ax.text(0.98, 0.98, "ASCENT-Load", transform=ax.transAxes,
                 ha="right", va="top", **props)
     elif loc == "lower left":
-        ax.text(0.02, 0.02, "NastAero", transform=ax.transAxes,
+        ax.text(0.02, 0.02, "ASCENT-Load", transform=ax.transAxes,
                 ha="left", va="bottom", **props)
 
 
@@ -64,7 +64,7 @@ def plot_sol101():
     x_anal = np.linspace(0, L, 200)
     delta_anal = P / (6.0 * EI) * (3.0 * L * x_anal**2 - x_anal**3)
 
-    # NastAero 10-element FEM results (exact for cubic, matches analytical)
+    # ASCENT-Load 10-element FEM results (exact for cubic, matches analytical)
     n_elem = 10
     x_fem = np.linspace(0, L, n_elem + 1)
     delta_fem = P / (6.0 * EI) * (3.0 * L * x_fem**2 - x_fem**3)
@@ -76,8 +76,8 @@ def plot_sol101():
     fig, ax = plt.subplots(figsize=(9, 5.5))
     ax.plot(x_anal, delta_anal, color=C_ANALYTICAL, linewidth=2.0,
             label="Analytical: $\\delta = \\frac{P}{6EI}(3Lx^2 - x^3)$")
-    ax.plot(x_fem, delta_fem, "o--", color=C_NASTAERO, markersize=6,
-            linewidth=1.5, label="NastAero SOL 101 (10 elem)")
+    ax.plot(x_fem, delta_fem, "o--", color=C_ASCENT_LOAD, markersize=6,
+            linewidth=1.5, label="ASCENT-Load SOL 101 (10 elem)")
 
     ax.set_xlabel("Position along beam, $x$", fontsize=LABEL_SIZE)
     ax.set_ylabel("Deflection, $\\delta(x)$", fontsize=LABEL_SIZE)
@@ -116,7 +116,7 @@ def plot_sol103():
 
     x = np.linspace(0, L, 300)
 
-    mode_colors = [C_NASTAERO, C_NASTAERO2, C_DAMPED]
+    mode_colors = [C_ASCENT_LOAD, C_ASCENT_LOAD2, C_DAMPED]
     mode_labels = [
         f"Mode 1: $f_1$ = {freqs_hz[0]:.2f} Hz",
         f"Mode 2: $f_2$ = {freqs_hz[1]:.2f} Hz",
@@ -240,7 +240,7 @@ def plot_sol146():
     zeta_full = np.concatenate(([0], zeta))
     DAF_full = np.concatenate(([2.0], DAF_anal))
 
-    # NastAero simulation points
+    # ASCENT-Load simulation points
     zeta_sim = np.array([0.0, 0.02, 0.05, 0.10])
     DAF_sim_exact = np.array([
         2.0,
@@ -256,9 +256,9 @@ def plot_sol146():
     fig, ax = plt.subplots(figsize=(9, 5.5))
     ax.plot(zeta_full, DAF_full, color=C_ANALYTICAL, linewidth=2.0,
             label="Analytical: $1 + e^{-\\zeta\\pi / \\sqrt{1-\\zeta^2}}$")
-    ax.plot(zeta_sim, DAF_sim, "s", color=C_NASTAERO, markersize=9,
+    ax.plot(zeta_sim, DAF_sim, "s", color=C_ASCENT_LOAD, markersize=9,
             markeredgecolor="black", markeredgewidth=0.8,
-            label="NastAero SOL 146", zorder=5)
+            label="ASCENT-Load SOL 146", zorder=5)
 
     # Error annotations
     for i in range(len(zeta_sim)):
@@ -266,7 +266,7 @@ def plot_sol146():
         offset_y = 0.03 if i % 2 == 0 else -0.06
         ax.annotate(f"{err:.3f}%", xy=(zeta_sim[i], DAF_sim[i]),
                     xytext=(zeta_sim[i] + 0.008, DAF_sim[i] + offset_y),
-                    fontsize=9, color=C_NASTAERO,
+                    fontsize=9, color=C_ASCENT_LOAD,
                     bbox=dict(boxstyle="round,pad=0.2", fc="white",
                               ec="gray", alpha=0.8))
 
@@ -295,7 +295,7 @@ def plot_sol144():
     M = np.linspace(0.01, 0.92, 300)
     Cz_PG = Cz0 / np.sqrt(1 - M**2)
 
-    # NastAero VLM results with PG correction
+    # ASCENT-Load VLM results with PG correction
     M_na = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
     Cz_na = np.zeros_like(M_na)
     for i, mm in enumerate(M_na):
@@ -307,7 +307,7 @@ def plot_sol144():
     rng = np.random.default_rng(55)
     Cz_na *= (1 + rng.normal(0, 0.003, len(M_na)))
     # At M=0.9, force to be near 5.071 to match Nastran reference
-    Cz_na[-1] = 5.071 * (1 + 0.04)  # NastAero slightly over-predicts due to PG
+    Cz_na[-1] = 5.071 * (1 + 0.04)  # ASCENT-Load slightly over-predicts due to PG
 
     # Nastran reference point at M=0.9
     Cz_nastran_09 = 5.071
@@ -317,8 +317,8 @@ def plot_sol144():
     ax.plot(M, np.abs(Cz_PG), color=C_ANALYTICAL, linewidth=1.5,
             linestyle="--", alpha=0.6,
             label="Prandtl-Glauert: $C_{z_\\alpha} / \\sqrt{1-M^2}$")
-    ax.plot(M_na, np.abs(Cz_na), "o-", color=C_NASTAERO, markersize=6,
-            linewidth=1.8, label="NastAero SOL 144 (VLM + PG)")
+    ax.plot(M_na, np.abs(Cz_na), "o-", color=C_ASCENT_LOAD, markersize=6,
+            linewidth=1.8, label="ASCENT-Load SOL 144 (VLM + PG)")
     ax.plot(0.9, Cz_nastran_09, "D", color=C_NASTRAN, markersize=10,
             markeredgecolor="black", markeredgewidth=1.0, zorder=5,
             label=f"Nastran ref. M=0.9: $C_{{z_\\alpha}}$ = {Cz_nastran_09}")
@@ -336,12 +336,12 @@ def plot_sol144():
 
     # Error annotation at M=0.9
     err_09 = abs(Cz_na[-1] - Cz_nastran_09) / Cz_nastran_09 * 100
-    ax.annotate(f"NastAero vs Nastran\n$\\Delta$ = {err_09:.1f}% at M=0.9",
+    ax.annotate(f"ASCENT-Load vs Nastran\n$\\Delta$ = {err_09:.1f}% at M=0.9",
                 xy=(0.9, Cz_na[-1]), xytext=(0.60, Cz_na[-1] + 3),
                 fontsize=10,
-                arrowprops=dict(arrowstyle="->", color=C_NASTAERO),
+                arrowprops=dict(arrowstyle="->", color=C_ASCENT_LOAD),
                 bbox=dict(boxstyle="round,pad=0.3", fc="white",
-                          ec=C_NASTAERO, alpha=0.9))
+                          ec=C_ASCENT_LOAD, alpha=0.9))
 
     ax.set_xlabel("Mach number, $M$", fontsize=LABEL_SIZE)
     ax.set_ylabel("$|C_{z_\\alpha}|$ (per radian)", fontsize=LABEL_SIZE)
@@ -440,7 +440,7 @@ def plot_summary():
 # Main
 # ═══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    print("NastAero Validation Plot Generation")
+    print("ASCENT-Load Validation Plot Generation")
     print("=" * 50)
     print(f"Output: {OUT_DIR}\n")
 

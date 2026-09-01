@@ -10,8 +10,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 import numpy as np
 import pytest
-from nastaero.aero.panel import generate_panel_mesh
-from nastaero.solvers.sol144 import (
+from ascent_load.aero.panel import generate_panel_mesh
+from ascent_load.solvers.sol144 import (
     _nodes_are_collinear, _project_plane, _spline_plane_frame)
 
 
@@ -86,10 +86,10 @@ class TestFinFlexibleCoupling:
     """
 
     def _fin_system(self):
-        from nastaero.aero.spline import (build_ips_spline,
+        from ascent_load.aero.spline import (build_ips_spline,
                                           build_ips_spline_slope)
-        from nastaero.fem.dof_manager import DOFManager
-        from nastaero.solvers.sol144 import (_fill_geff, _project_plane,
+        from ascent_load.fem.dof_manager import DOFManager
+        from ascent_load.solvers.sol144 import (_fill_geff, _project_plane,
                                              _spline_plane_frame)
         fin = _panel([0, 0, 0], [0, 0, 900], 400.0, 400.0, nspan=3, nchord=2)
         idx = list(range(len(fin)))

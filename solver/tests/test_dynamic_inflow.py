@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from nastaero.rotor.dynamic_inflow import (
+from ascent_load.rotor.dynamic_inflow import (
     PittPetersInflow,
     MultiRotorAggregate,
     make_one_cosine_gust,

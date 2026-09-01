@@ -1,7 +1,7 @@
 """Tests for the BDF parser (parsing complete BDF files)."""
 import os
 import pytest
-from nastaero.bdf.parser import BDFParser
+from ascent_load.bdf.parser import BDFParser
 
 VALIDATION_DIR = os.path.join(os.path.dirname(__file__), "validation")
 CANTILEVER_BDF = os.path.join(VALIDATION_DIR, "cantilever_beam", "cantilever.bdf")

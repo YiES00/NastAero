@@ -8,16 +8,16 @@ import math
 import os
 import pytest
 
-from nastaero.loads_analysis.certification.aircraft_config import (
+from ascent_load.loads_analysis.certification.aircraft_config import (
     AircraftConfig, SpeedSchedule, WeightCGCondition,
     ControlSurfaceLimits, LandingGearConfig,
     part23_nz_max, part23_nz_min,
     eas_to_mach, dynamic_pressure_from_eas,
 )
-from nastaero.loads_analysis.certification.vn_diagram import (
+from ascent_load.loads_analysis.certification.vn_diagram import (
     VnDiagram, VnPoint, compute_vn_diagram,
 )
-from nastaero.loads_analysis.certification.landing_loads import (
+from ascent_load.loads_analysis.certification.landing_loads import (
     LandingCondition, LandingConditionType,
     compute_gear_reactions, compute_landing_inertial_forces,
     combine_forces,
@@ -26,7 +26,7 @@ from nastaero.loads_analysis.certification.landing_loads import (
     generate_rebound, generate_ground_handling,
     generate_all_landing_conditions,
 )
-from nastaero.loads_analysis.certification.load_case_matrix import (
+from ascent_load.loads_analysis.certification.load_case_matrix import (
     CertLoadCase, LoadCaseMatrix,
 )
 
@@ -517,14 +517,14 @@ class TestCertLoadCase:
 
     def test_case_id_from_trim(self):
         """case_id property reads from TrimCondition."""
-        from nastaero.loads_analysis.case_generator import TrimCondition
+        from ascent_load.loads_analysis.case_generator import TrimCondition
         tc = TrimCondition(case_id=42, mach=0.3, q=5000.0, nz=1.0)
         clc = CertLoadCase(trim_condition=tc)
         assert clc.case_id == 42
 
     def test_label_from_trim(self):
         """label property reads from TrimCondition."""
-        from nastaero.loads_analysis.case_generator import TrimCondition
+        from ascent_load.loads_analysis.case_generator import TrimCondition
         tc = TrimCondition(case_id=1, mach=0.3, q=5000.0, nz=1.0,
                            label="test label")
         clc = CertLoadCase(trim_condition=tc)
@@ -650,7 +650,7 @@ class TestManualCh20CaseFactors:
 
     def test_landing_case_self_equilibrium_fz(self):
         """기어 + 관성 + 양력의 ΣFz = 0 (릴리프 이전에도 수직은 닫힘)."""
-        from nastaero.loads_analysis.certification.landing_loads import (
+        from ascent_load.loads_analysis.certification.landing_loads import (
             compute_landing_lift_forces,
         )
 
@@ -668,7 +668,7 @@ class TestManualCh20CaseFactors:
         assert fz == pytest.approx(0.0, abs=1e-6)
 
     def test_spinup_drag_factor_interpolation(self):
-        from nastaero.loads_analysis.certification.landing_loads import (
+        from ascent_load.loads_analysis.certification.landing_loads import (
             spinup_drag_factor,
         )
 

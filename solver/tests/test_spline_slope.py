@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from nastaero.aero.spline import (
+from ascent_load.aero.spline import (
     build_ips_spline,
     build_ips_spline_slope,
     _green_function_dx,

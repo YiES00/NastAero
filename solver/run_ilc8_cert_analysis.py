@@ -2,7 +2,7 @@
 # ILC-8 (1,900kg 리프트+크루즈) 인증 하중해석 드라이버 — 쉘 FE 전기체 모델
 """Run VTOL certification loads analysis on the ILC-8 Lift+Cruise model.
 
-Model: nastaero.models.ilc8 procedural shell FE (tests/validation/ILC8/ilc8.bdf)
+Model: ascent_load.models.ilc8 procedural shell FE (tests/validation/ILC8/ilc8.bdf)
   - 8 lift rotors (R=0.75 m, boom-mounted) + 1 pusher (R=0.65 m)
   - MTOW 1,900 kg, CG x=4450 mm
 
@@ -16,8 +16,8 @@ import time
 from datetime import datetime
 import numpy as np
 
-from nastaero.bdf.parser import parse_bdf
-from nastaero.config import setup_logging
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.config import setup_logging
 
 
 def _gear_nodes(model, x_target: float, n: int = 2):
@@ -65,15 +65,15 @@ def main():
           f"{len(model.elements)} elements  ({time.time()-t0:.1f}s)")
 
     # ---- 2. Aircraft Config ----
-    from nastaero.loads_analysis.certification.aircraft_config import (
+    from ascent_load.loads_analysis.certification.aircraft_config import (
         AircraftConfig, SpeedSchedule, WeightCGCondition,
         ControlSurfaceLimits, LandingGearConfig,
     )
-    from nastaero.aero.dlm import compute_rigid_clalpha
+    from ascent_load.aero.dlm import compute_rigid_clalpha
 
     # CONM2 + 구조(요소) 질량 전부 럼핑 — model.masses(CONM2)만 합치면
     # 쉘 구조 질량 ~0.43 t이 빠져 로터 추력 목표가 과소 산정된다
-    from nastaero.loads_analysis.trim_loads import compute_node_masses
+    from ascent_load.loads_analysis.trim_loads import compute_node_masses
 
     total_mass_kg = sum(compute_node_masses(model).values()) * 1000
     weight_N = total_mass_kg * 9.80665
@@ -113,7 +113,7 @@ def main():
     )
 
     # ---- 3. VTOL config (ILC-8: 8 lift + pusher) ----
-    from nastaero.models.ilc8 import make_ilc8_vtol_config
+    from ascent_load.models.ilc8 import make_ilc8_vtol_config
 
     vtol_config = make_ilc8_vtol_config()
     config.vtol_config = vtol_config
@@ -123,8 +123,8 @@ def main():
           f"rotor mass: {vtol_config.total_rotor_mass_kg:.0f} kg")
 
     # ---- 4. BEMT hover sanity ----
-    from nastaero.rotor.bemt_solver import BEMTSolver
-    from nastaero.loads_analysis.case_generator import isa_atmosphere
+    from ascent_load.rotor.bemt_solver import BEMTSolver
+    from ascent_load.loads_analysis.case_generator import isa_atmosphere
 
     rho_sl, _, _ = isa_atmosphere(0.0)
     test_rotor = vtol_config.hover_rotors[0]
@@ -135,10 +135,10 @@ def main():
           f"P={hv.power/745.7:.1f} hp, coll={np.degrees(hv.collective_rad):.1f} deg")
 
     # ---- 5. Load case matrices ----
-    from nastaero.loads_analysis.certification.load_case_matrix import (
+    from ascent_load.loads_analysis.certification.load_case_matrix import (
         LoadCaseMatrix,
     )
-    from nastaero.loads_analysis.certification.vtol_load_case_matrix import (
+    from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (
         VTOLLoadCaseMatrix,
     )
 
@@ -167,7 +167,7 @@ def main():
           f"-> {output_dir}/ilc8_case_matrix.csv")
 
     # ---- 6. Batch solve ----
-    from nastaero.loads_analysis.certification.vtol_batch_runner import (
+    from ascent_load.loads_analysis.certification.vtol_batch_runner import (
         VTOLBatchRunner,
     )
 
@@ -223,10 +223,10 @@ def main():
     # ILC-8의 원통 동체 상면을 VTP로 오분류하고, 붐/허브(로터 하중
     # 작용점)를 어느 컴포넌트에도 넣지 않아 날개 VMT에서 로터 하중이
     # 누락되기 때문. 붐+허브는 엔진 파일런 관례대로 날개에 귀속한다.
-    from nastaero.loads_analysis.certification.vmt_bridge import (
+    from ascent_load.loads_analysis.certification.vmt_bridge import (
         compute_vmt_for_batch,
     )
-    from nastaero.loads_analysis.component_id import (
+    from ascent_load.loads_analysis.component_id import (
         identify_components_manual,
     )
 
@@ -256,7 +256,7 @@ def main():
     ])
     # ---- 8b. (고장×재트림) 확장 사건 — 선형 패턴 전수 선별 후
     #      지배 패턴을 케이스로 채택 (P·C 판정) ----
-    from nastaero.loads_analysis.certification.retrim_events import (
+    from ascent_load.loads_analysis.certification.retrim_events import (
         RetrimScreen,
     )
 
@@ -291,7 +291,7 @@ def main():
     # (r3 MC2)까지 처리한다. 포화 지령 케이스는 실현가능 포락선
     # 산정에서 제외되고, 그 포락선을 초과하는 경우에만 플래그된
     # 추진계 한계 설계 케이스로 별도 편입된다.
-    from nastaero.loads_analysis.certification.envelope import (
+    from ascent_load.loads_analysis.certification.envelope import (
         select_critical_design_loads,
     )
 
@@ -323,10 +323,10 @@ def main():
               f"{cc.case_id:6d} {cc.category[:16]:16s}")
 
     # ---- 10. Plots (envelope + potato + critical frequency) ----
-    from nastaero.visualization.cert_plot import (
+    from ascent_load.visualization.cert_plot import (
         plot_vmt_envelope, plot_potato, plot_critical_frequency,
     )
-    from nastaero.loads_analysis.certification.monitoring_stations import (
+    from ascent_load.loads_analysis.certification.monitoring_stations import (
         identify_monitoring_stations,
     )
 

@@ -1,4 +1,4 @@
-$ NastAero VM3: Simply-Supported Plate Under Uniform Pressure
+$ ASCENT-Load VM3: Simply-Supported Plate Under Uniform Pressure
 $ Reference: Timoshenko - Theory of Plates and Shells
 $ 8x8 CQUAD4 mesh, a=b=1.0m, t=0.01m, E=200GPa, nu=0.3
 $ Uniform pressure p=1000 Pa (applied as nodal forces)

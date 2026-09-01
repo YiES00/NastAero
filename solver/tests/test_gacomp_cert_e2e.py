@@ -24,7 +24,7 @@ import os
 import pytest
 import numpy as np
 
-from nastaero.bdf.parser import parse_bdf
+from ascent_load.bdf.parser import parse_bdf
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -73,7 +73,7 @@ def _make_gacomp_config():
       VS1 ≈ 33 m/s (64 kt), VA ≈ 62 m/s, VC ≈ 80 m/s, VD ≈ 100 m/s
     Wing area ≈ 17.0 m² (from 제작사 GACOMP specs).
     """
-    from nastaero.loads_analysis.certification.aircraft_config import (
+    from ascent_load.loads_analysis.certification.aircraft_config import (
         AircraftConfig, SpeedSchedule, WeightCGCondition,
         ControlSurfaceLimits, LandingGearConfig,
     )
@@ -168,7 +168,7 @@ class TestGACOMPVnDiagram:
 
     def test_part23_nz(self):
         """nz_max = min(3.8, 2.1 + 24000/W_lb) for GACOMP."""
-        from nastaero.loads_analysis.certification.aircraft_config import (
+        from ascent_load.loads_analysis.certification.aircraft_config import (
             part23_nz_max, part23_nz_min,
         )
         nz_max = part23_nz_max(GACOMP_WEIGHT_N)
@@ -177,7 +177,7 @@ class TestGACOMPVnDiagram:
 
     def test_compute_vn_diagram(self):
         """V-n diagram produces corner points with GACOMP data."""
-        from nastaero.loads_analysis.certification.vn_diagram import (
+        from ascent_load.loads_analysis.certification.vn_diagram import (
             compute_vn_diagram,
         )
         config = _make_gacomp_config()
@@ -203,7 +203,7 @@ class TestGACOMPLoadCaseMatrix:
 
     def test_matrix_generation(self):
         """Generate full load case matrix."""
-        from nastaero.loads_analysis.certification.load_case_matrix import (
+        from ascent_load.loads_analysis.certification.load_case_matrix import (
             LoadCaseMatrix,
         )
         config = _make_gacomp_config()
@@ -216,7 +216,7 @@ class TestGACOMPLoadCaseMatrix:
 
     def test_far_coverage(self):
         """Matrix covers key FAR sections."""
-        from nastaero.loads_analysis.certification.load_case_matrix import (
+        from ascent_load.loads_analysis.certification.load_case_matrix import (
             LoadCaseMatrix,
         )
         config = _make_gacomp_config()
@@ -244,7 +244,7 @@ class TestGACOMPTrim:
 
     def test_trim_1g_level_flight(self, gacomp_model):
         """Subcase 1 (M=0.1): trim converges with physical results."""
-        from nastaero.solvers.sol144 import solve_trim
+        from ascent_load.solvers.sol144 import solve_trim
 
         # Keep only subcase 1 for speed
         model = gacomp_model
@@ -300,19 +300,19 @@ class TestGACOMPPipelinePlaceholder:
 
     def test_config_to_matrix(self):
         """Config → V-n → Matrix → Batch (placeholder) → Envelope → Report."""
-        from nastaero.loads_analysis.certification.vn_diagram import (
+        from ascent_load.loads_analysis.certification.vn_diagram import (
             compute_vn_diagram,
         )
-        from nastaero.loads_analysis.certification.load_case_matrix import (
+        from ascent_load.loads_analysis.certification.load_case_matrix import (
             LoadCaseMatrix,
         )
-        from nastaero.loads_analysis.certification.batch_runner import (
+        from ascent_load.loads_analysis.certification.batch_runner import (
             BatchRunner,
         )
-        from nastaero.loads_analysis.certification.envelope import (
+        from ascent_load.loads_analysis.certification.envelope import (
             EnvelopeProcessor,
         )
-        from nastaero.loads_analysis.certification.report import (
+        from ascent_load.loads_analysis.certification.report import (
             CertificationReport,
         )
 
@@ -351,16 +351,16 @@ class TestGACOMPPipelinePlaceholder:
 
     def test_csv_roundtrip(self, tmp_path):
         """Matrix CSV export/import and critical loads CSV."""
-        from nastaero.loads_analysis.certification.load_case_matrix import (
+        from ascent_load.loads_analysis.certification.load_case_matrix import (
             LoadCaseMatrix,
         )
-        from nastaero.loads_analysis.certification.batch_runner import (
+        from ascent_load.loads_analysis.certification.batch_runner import (
             BatchRunner,
         )
-        from nastaero.loads_analysis.certification.envelope import (
+        from ascent_load.loads_analysis.certification.envelope import (
             EnvelopeProcessor,
         )
-        from nastaero.loads_analysis.certification.report import (
+        from ascent_load.loads_analysis.certification.report import (
             CertificationReport,
         )
 
@@ -407,23 +407,23 @@ class TestGACOMPE2ERealSolver:
 
     def test_single_subcase_full_pipeline(self, gacomp_model, tmp_path):
         """Full pipeline with 1 real trim subcase on GACOMP."""
-        from nastaero.solvers.sol144 import solve_trim
-        from nastaero.loads_analysis.certification.aircraft_config import (
+        from ascent_load.solvers.sol144 import solve_trim
+        from ascent_load.loads_analysis.certification.aircraft_config import (
             WeightCGCondition,
         )
-        from nastaero.loads_analysis.certification.vn_diagram import (
+        from ascent_load.loads_analysis.certification.vn_diagram import (
             compute_vn_diagram,
         )
-        from nastaero.loads_analysis.certification.load_case_matrix import (
+        from ascent_load.loads_analysis.certification.load_case_matrix import (
             LoadCaseMatrix,
         )
-        from nastaero.loads_analysis.certification.batch_runner import (
+        from ascent_load.loads_analysis.certification.batch_runner import (
             BatchRunner, BatchResult, CaseResult,
         )
-        from nastaero.loads_analysis.certification.envelope import (
+        from ascent_load.loads_analysis.certification.envelope import (
             EnvelopeProcessor,
         )
-        from nastaero.loads_analysis.certification.report import (
+        from ascent_load.loads_analysis.certification.report import (
             CertificationReport,
         )
 
@@ -490,7 +490,7 @@ class TestGACOMPE2ERealSolver:
         )
 
         # ---- Step 4: VMT bridge ----
-        from nastaero.loads_analysis.certification.vmt_bridge import (
+        from ascent_load.loads_analysis.certification.vmt_bridge import (
             compute_vmt_for_batch,
         )
         vmt_data = compute_vmt_for_batch(model, batch_result)
@@ -572,11 +572,11 @@ class TestGACOMPE2ERealSolver:
         the batch to a compact design-load set and export FORCE-card BDFs
         applyable to the full-vehicle mesh.
         """
-        from nastaero.solvers.sol144 import solve_trim
-        from nastaero.loads_analysis.certification.batch_runner import (
+        from ascent_load.solvers.sol144 import solve_trim
+        from ascent_load.loads_analysis.certification.batch_runner import (
             BatchResult, CaseResult,
         )
-        from nastaero.loads_analysis.certification.envelope import (
+        from ascent_load.loads_analysis.certification.envelope import (
             select_critical_design_loads, DesignLoadCase,
         )
 

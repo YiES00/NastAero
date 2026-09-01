@@ -3,14 +3,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from nastaero.loads_analysis.certification.batch_runner import (
+from ascent_load.loads_analysis.certification.batch_runner import (
     BatchResult, CaseResult,
 )
-from nastaero.loads_analysis.certification import envelope as env_mod
-from nastaero.loads_analysis.certification.envelope import (
+from ascent_load.loads_analysis.certification import envelope as env_mod
+from ascent_load.loads_analysis.certification.envelope import (
     select_critical_design_loads, design_load_table,
 )
-from nastaero.loads_analysis.certification.force_export import _build_header
+from ascent_load.loads_analysis.certification.force_export import _build_header
 
 
 STATIONS = np.array([0.0, 2500.0, 5000.0])
@@ -52,7 +52,7 @@ def _batch(infeasible_exceeds: bool):
 
 
 def _run(monkeypatch, br, vmt, **kw):
-    import nastaero.loads_analysis.certification.vmt_bridge as vb
+    import ascent_load.loads_analysis.certification.vmt_bridge as vb
     monkeypatch.setattr(vb, "compute_vmt_for_batch",
                         lambda *a, **k: vmt)
     return select_critical_design_loads(

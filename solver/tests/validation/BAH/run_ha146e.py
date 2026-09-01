@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Simplified BAH Wing - SOL 146 Validation (HA146E).
 
-Validates NastAero SOL 146 transient aeroelastic response against
+Validates ASCENT-Load SOL 146 transient aeroelastic response against
 analytical predictions for a cantilever wing under step force at tip.
 
 Checks:
@@ -20,8 +20,8 @@ import numpy as np
 # Add solver to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from nastaero.bdf.parser import BDFParser
-from nastaero.solvers.sol146 import solve_aeroelastic_transient
+from ascent_load.bdf.parser import BDFParser
+from ascent_load.solvers.sol146 import solve_aeroelastic_transient
 
 
 BDF_PATH = os.path.join(os.path.dirname(__file__), 'ha146e_simple.bdf')
@@ -66,7 +66,7 @@ def compute_static_tip_displacement(bdf_model):
     For a cantilever beam with tip force F, the static displacement
     is computed from K @ u = F.
     """
-    from nastaero.fem.model import FEModel
+    from ascent_load.fem.model import FEModel
     import scipy.sparse.linalg as spla
 
     bdf_model_copy = BDFParser().parse(BDF_PATH)

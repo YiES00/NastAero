@@ -9,11 +9,11 @@ RBE3 30개 중 26개의 REFGRID에 요소가 붙어 있지 않고 25개에 CONM2
 from __future__ import annotations
 import numpy as np
 import pytest
-from nastaero.bdf.model import BDFModel
-from nastaero.bdf.cards.grid import GRID
-from nastaero.bdf.cards.rbe import RBE3
-from nastaero.fem.dof_manager import DOFManager
-from nastaero.fem.assembly import _build_rbe3_slave_deps
+from ascent_load.bdf.model import BDFModel
+from ascent_load.bdf.cards.grid import GRID
+from ascent_load.bdf.cards.rbe import RBE3
+from ascent_load.fem.dof_manager import DOFManager
+from ascent_load.fem.assembly import _build_rbe3_slave_deps
 
 
 def _model(ref_xyz, indep):
@@ -108,8 +108,8 @@ class TestRBE3Interpolation:
 class TestRBE3Assembly:
     def test_rbe3_is_assembled(self):
         """RBE3가 소거 대상 종속 자유도로 실제 조립되어야 한다."""
-        from nastaero.fem.assembly import assemble_global_matrices
-        from nastaero.bdf.cards.elements import CELAS2
+        from ascent_load.fem.assembly import assemble_global_matrices
+        from ascent_load.bdf.cards.elements import CELAS2
         indep = {1: [0, 0, 0], 2: [10, 0, 0], 3: [10, 10, 0], 4: [0, 10, 0]}
         model, _ = _model([5.0, 5.0, 0.0], indep)
         for i, nid in enumerate(sorted(indep)):

@@ -1,9 +1,9 @@
 """Tests for element stiffness and mass matrices."""
 import numpy as np
 import pytest
-from nastaero.elements.bar import CBarElement
-from nastaero.elements.quad4 import CQuad4Element
-from nastaero.elements.tria3 import CTria3Element
+from ascent_load.elements.bar import CBarElement
+from ascent_load.elements.quad4 import CQuad4Element
+from ascent_load.elements.tria3 import CTria3Element
 
 
 class TestCBarElement:

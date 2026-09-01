@@ -1,4 +1,4 @@
-$ NastAero VM4: Cantilever Beam Modal Analysis (20 elements)
+$ ASCENT-Load VM4: Cantilever Beam Modal Analysis (20 elements)
 $ Reference: Euler-Bernoulli beam exact frequencies
 $ L=1.0m, E=200GPa, A=0.01m^2, I=8.333e-6 m^4 (0.1m x 0.1m square)
 $ rho=7850 kg/m^3

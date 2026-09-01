@@ -10,10 +10,10 @@
 from __future__ import annotations
 import numpy as np
 import pytest
-from nastaero.bdf.model import BDFModel
-from nastaero.bdf.cards.grid import GRID
-from nastaero.bdf.cards.mass import CONM2
-from nastaero.loads_analysis.trim_loads import (
+from ascent_load.bdf.model import BDFModel
+from ascent_load.bdf.cards.grid import GRID
+from ascent_load.bdf.cards.mass import CONM2
+from ascent_load.loads_analysis.trim_loads import (
     apply_inertia_relief, compute_node_masses, compute_node_mass_centroids,
     compute_nodal_inertial_forces)
 

@@ -1,4 +1,4 @@
-$ NastAero VM12: MacNeal-Harder Straight Cantilever Beam (CTRIA3)
+$ ASCENT-Load VM12: MacNeal-Harder Straight Cantilever Beam (CTRIA3)
 $ Reference: MacNeal & Harder (1985), same geometry as VM11
 $
 $ Each CQUAD4 from VM11 split into 2 CTRIA3 = 12 triangles

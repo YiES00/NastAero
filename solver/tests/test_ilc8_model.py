@@ -6,9 +6,9 @@ import math
 import numpy as np
 import pytest
 
-from nastaero.bdf.parser import parse_bdf
-from nastaero.loads_analysis.trim_loads import compute_node_masses
-from nastaero.models.ilc8 import MTOW_T, CG_X_TARGET, build_ilc8, make_ilc8_vtol_config
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.loads_analysis.trim_loads import compute_node_masses
+from ascent_load.models.ilc8 import MTOW_T, CG_X_TARGET, build_ilc8, make_ilc8_vtol_config
 
 
 @pytest.fixture(scope="module")
@@ -58,7 +58,7 @@ def test_ilc8_vtol_config_hub_nodes(ilc8_model):
 
 def test_ilc8_rotor_meets_hover_thrust():
     """블레이드 사이징: 호버 목표 추력을 콜렉티브 포화 없이 내야 한다."""
-    from nastaero.rotor.bemt_solver import BEMTSolver
+    from ascent_load.rotor.bemt_solver import BEMTSolver
 
     cfg = make_ilc8_vtol_config()
     r = cfg.hover_rotors[0]

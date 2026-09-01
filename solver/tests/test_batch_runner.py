@@ -9,14 +9,14 @@ import os
 import pytest
 import numpy as np
 
-from nastaero.loads_analysis.certification.aircraft_config import (
+from ascent_load.loads_analysis.certification.aircraft_config import (
     AircraftConfig, SpeedSchedule, WeightCGCondition,
     ControlSurfaceLimits, LandingGearConfig,
 )
-from nastaero.loads_analysis.certification.load_case_matrix import (
+from ascent_load.loads_analysis.certification.load_case_matrix import (
     LoadCaseMatrix, CertLoadCase,
 )
-from nastaero.loads_analysis.certification.batch_runner import (
+from ascent_load.loads_analysis.certification.batch_runner import (
     BatchRunner, BatchResult, CaseResult,
 )
 

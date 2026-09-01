@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import numpy as np
 import pytest
-from nastaero.bdf.cards.properties import PBARL
+from ascent_load.bdf.cards.properties import PBARL
 
 
 def make(type_name, dims):

@@ -1,4 +1,4 @@
-$ NastAero VM9: Propped Cantilever with Uniform Load
+$ ASCENT-Load VM9: Propped Cantilever with Uniform Load
 $ Reference: Roark's Formulas for Stress and Strain
 $ Fixed at left (node 1), roller support at right (node 11)
 $ 10 CBAR elements, L=10m, same cross section as VM6

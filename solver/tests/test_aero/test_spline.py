@@ -1,7 +1,7 @@
 """Tests for structural-aerodynamic spline interpolation."""
 import numpy as np
 import pytest
-from nastaero.aero.spline import build_ips_spline, build_beam_spline, _green_function
+from ascent_load.aero.spline import build_ips_spline, build_beam_spline, _green_function
 
 
 class TestGreenFunction:

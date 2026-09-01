@@ -24,14 +24,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SOLVER = os.path.normpath(os.path.join(HERE, ".."))
 sys.path.insert(0, SOLVER)
 
-from nastaero.bdf.parser import parse_bdf                     # noqa: E402
-from nastaero.loads_analysis.certification.aircraft_config import (  # noqa: E402
+from ascent_load.bdf.parser import parse_bdf                     # noqa: E402
+from ascent_load.loads_analysis.certification.aircraft_config import (  # noqa: E402
     AircraftConfig,
 )
-from nastaero.loads_analysis.certification.vtol_transient_loads import (  # noqa: E402
+from ascent_load.loads_analysis.certification.vtol_transient_loads import (  # noqa: E402
     VTOLTransientLoadsRunner,
 )
-from nastaero.models.ilc8 import build_ilc8, make_ilc8_vtol_config  # noqa: E402
+from ascent_load.models.ilc8 import build_ilc8, make_ilc8_vtol_config  # noqa: E402
 
 
 def _make_runner(tmpdir, tau_coeff=None):

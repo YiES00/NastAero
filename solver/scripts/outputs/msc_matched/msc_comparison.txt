@@ -1,9 +1,9 @@
 ILC-8 정합 덱 MSC Nastran SOL 144 대조 (덱 SUPORT 기준)
-재현: python3 -m nastaero <deck> --save-results <naero>
+재현: python3 -m ascent_load <deck> --save-results <naero>
       python3 scripts/compare_msc_sol144.py <deck>_MSC.f06 --naero <naero>
 
 ########## v6_rigid ##########
-SC quantity                MSC     NastAero    diff%
+SC quantity                MSC     ASCENT-Load    diff%
 -------------------------------------------------------
  1 alpha [deg]       12.694688    12.833108     1.1%
  1 ELEVR [rad]        0.090745     0.096267     5.7%
@@ -36,7 +36,7 @@ SC quantity                MSC     NastAero    diff%
 
 
 ########## v8_shellbend ##########
-SC quantity                MSC     NastAero    diff%
+SC quantity                MSC     ASCENT-Load    diff%
 -------------------------------------------------------
  1 alpha [deg]       12.561389    12.760903     1.6%
  1 ELEVR [rad]        0.095880     0.095294     0.6%

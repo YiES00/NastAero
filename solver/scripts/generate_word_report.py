@@ -1,4 +1,4 @@
-"""Generate the NastAero Verification Report as a Word document."""
+"""Generate the ASCENT-Load Verification Report as a Word document."""
 import os
 import json
 from docx import Document
@@ -11,7 +11,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FIG_DIR = os.path.join(SCRIPT_DIR, 'figures')
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, '..', 'docs')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-OUTPUT_PATH = os.path.join(OUTPUT_DIR, 'NastAero_Verification_Report.docx')
+OUTPUT_PATH = os.path.join(OUTPUT_DIR, 'ASCENT-Load_Verification_Report.docx')
 
 # Load collected data
 with open(os.path.join(SCRIPT_DIR, 'verification_data.json'), 'r') as f:
@@ -90,7 +90,7 @@ doc.add_paragraph()
 doc.add_paragraph()
 title = doc.add_paragraph()
 title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-run = title.add_run('NastAero Solver\nVerification Report')
+run = title.add_run('ASCENT-Load Solver\nVerification Report')
 run.font.size = Pt(28)
 run.font.bold = True
 run.font.color.rgb = RGBColor(0, 51, 102)
@@ -161,13 +161,13 @@ doc.add_page_break()
 add_heading('1. Introduction', level=1)
 
 doc.add_paragraph(
-    'NastAero is an open-source finite element analysis (FEA) solver designed for structural '
+    'ASCENT-Load is an open-source finite element analysis (FEA) solver designed for structural '
     'and aeroelastic analysis of aerospace structures. The solver implements a subset of MSC '
     'Nastran-compatible Bulk Data Format (BDF) input, enabling engineers to use familiar '
     'modeling conventions while leveraging a transparent, extensible codebase.'
 )
 doc.add_paragraph(
-    'This Verification Report demonstrates that the NastAero solver produces accurate results '
+    'This Verification Report demonstrates that the ASCENT-Load solver produces accurate results '
     'across a comprehensive suite of test cases. The verification strategy follows industry '
     'best practices, comparing solver output against:'
 )
@@ -193,7 +193,7 @@ doc.add_paragraph(
 add_heading('2. Solver Overview', level=1)
 
 add_heading('2.1 Capabilities', level=2)
-doc.add_paragraph('NastAero currently supports the following analysis types:')
+doc.add_paragraph('ASCENT-Load currently supports the following analysis types:')
 
 cap_table_data = [
     ['SOL 101', 'Linear Static Analysis', 'Direct sparse solve (SciPy)'],
@@ -238,7 +238,7 @@ add_heading('3. Structural Verification (SOL 101)', level=1)
 doc.add_paragraph(
     'This section validates the structural solver against well-known analytical solutions. '
     'Each test case specifies the exact problem parameters, analytical reference, and '
-    'comparison with NastAero results. MSC Nastran produces identical results for these '
+    'comparison with ASCENT-Load results. MSC Nastran produces identical results for these '
     'classical problems since both solvers use the same finite element formulations.'
 )
 
@@ -257,9 +257,9 @@ p.add_run('\u03B4 = PL/(AE) = 1000\u00D710/(1\u00D730\u00D710\u2076) = 3.333\u00
 
 vm1 = data['VM1']
 add_table(
-    ['Quantity', 'Analytical', 'NastAero', 'MSC Nastran*', 'Error (%)'],
+    ['Quantity', 'Analytical', 'ASCENT-Load', 'MSC Nastran*', 'Error (%)'],
     [
-        ['Tip displacement', f'{vm1["analytical"]:.6e}', f'{vm1["nastaero"]:.6e}',
+        ['Tip displacement', f'{vm1["analytical"]:.6e}', f'{vm1["ascent_load"]:.6e}',
          f'{vm1["analytical"]:.6e}', f'{vm1["error_pct"]:.4f}'],
         ['Reaction Fx (N)', '-1000.00', f'{vm1["reaction"]:.2f}', '-1000.00', '0.00'],
     ],
@@ -279,14 +279,14 @@ p.add_run('L=10 m, E=200 GPa, I=1\u00D710\u207B\u2074 m\u2074, M=10,000 N-m at t
 
 vm2 = data['VM2']
 add_table(
-    ['Quantity', 'Analytical', 'NastAero', 'MSC Nastran*', 'Error (%)'],
+    ['Quantity', 'Analytical', 'ASCENT-Load', 'MSC Nastran*', 'Error (%)'],
     [
         ['Tip deflection (m)', f'{vm2["tip_deflection"]["analytical"]:.6e}',
-         f'{vm2["tip_deflection"]["nastaero"]:.6e}',
+         f'{vm2["tip_deflection"]["ascent_load"]:.6e}',
          f'{vm2["tip_deflection"]["analytical"]:.6e}',
          f'{vm2["tip_deflection"]["error_pct"]:.4f}'],
         ['Tip rotation (rad)', f'{vm2["tip_rotation"]["analytical"]:.6e}',
-         f'{vm2["tip_rotation"]["nastaero"]:.6e}',
+         f'{vm2["tip_rotation"]["ascent_load"]:.6e}',
          f'{vm2["tip_rotation"]["analytical"]:.6e}',
          f'{vm2["tip_rotation"]["error_pct"]:.4f}'],
     ],
@@ -294,7 +294,7 @@ add_table(
 doc.add_paragraph('* Euler-Bernoulli beam with constant moment produces exact FE solution.').italic = True
 
 add_figure('fig02_vm2_moment.png',
-           'Figure 2: VM2 - Cantilever under end moment. NastAero results (red dots) '
+           'Figure 2: VM2 - Cantilever under end moment. ASCENT-Load results (red dots) '
            'exactly match the analytical parabolic deflection curve (blue line).')
 
 # --- VM3 ---
@@ -313,10 +313,10 @@ p.add_run('D = Et\u00B3/12(1-\u03BD\u00B2) = 18,315 N-m, w_max = \u03B1\u00B7p\u
 
 vm3 = data['VM3']
 add_table(
-    ['Quantity', 'Timoshenko', 'NastAero', 'MSC Nastran', 'Error (%)'],
+    ['Quantity', 'Timoshenko', 'ASCENT-Load', 'MSC Nastran', 'Error (%)'],
     [
         ['Center deflection (m)', f'{vm3["analytical"]:.6e}',
-         f'{vm3["nastaero"]:.6e}', '2.25\u00D710\u207B\u2074',
+         f'{vm3["ascent_load"]:.6e}', '2.25\u00D710\u207B\u2074',
          f'{vm3["error_pct"]:.2f}'],
     ],
 )
@@ -340,11 +340,11 @@ doc.add_paragraph(
 )
 vm5 = data['VM5']
 add_table(
-    ['Quantity', 'Analytical', 'NastAero', 'MSC Nastran', 'Error (%)'],
+    ['Quantity', 'Analytical', 'ASCENT-Load', 'MSC Nastran', 'Error (%)'],
     [
-        ['u_x (in)', '0.004000', f'{vm5["ux"]["nastaero"]:.6f}', '0.004000',
+        ['u_x (in)', '0.004000', f'{vm5["ux"]["ascent_load"]:.6f}', '0.004000',
          f'{vm5["ux"]["error_pct"]:.4f}'],
-        ['u_y (in)', '-0.004000', f'{vm5["uy"]["nastaero"]:.6f}', '-0.004000',
+        ['u_y (in)', '-0.004000', f'{vm5["uy"]["ascent_load"]:.6f}', '-0.004000',
          f'{vm5["uy"]["error_pct"]:.4f}'],
     ],
 )
@@ -364,10 +364,10 @@ p.add_run('\u03B4_max = PL\u00B3/(192EI), R = P/2, M_fixed = PL/8')
 
 vm6 = data['VM6']
 add_table(
-    ['Quantity', 'Analytical', 'NastAero', 'MSC Nastran', 'Error (%)'],
+    ['Quantity', 'Analytical', 'ASCENT-Load', 'MSC Nastran', 'Error (%)'],
     [
         ['Center deflection (m)', f'{vm6["deflection"]["analytical"]:.6e}',
-         f'{vm6["deflection"]["nastaero"]:.6e}',
+         f'{vm6["deflection"]["ascent_load"]:.6e}',
          f'{vm6["deflection"]["analytical"]:.6e}',
          f'{vm6["deflection"]["error_pct"]:.4f}'],
         ['Reaction force (N)', '5,000.00', f'{vm6["reactions"]["R1"]:.2f}',
@@ -378,7 +378,7 @@ add_table(
 )
 
 add_figure('fig10_vm6_fixed_fixed.png',
-           'Figure 4: VM6 - Fixed-fixed beam deflection. NastAero results (red dots) '
+           'Figure 4: VM6 - Fixed-fixed beam deflection. ASCENT-Load results (red dots) '
            'match the analytical solution (blue line) exactly.')
 
 # --- VM9 ---
@@ -390,10 +390,10 @@ doc.add_paragraph(
 
 vm9 = data['VM9']
 add_table(
-    ['Quantity', 'Analytical', 'NastAero', 'MSC Nastran', 'Error (%)'],
+    ['Quantity', 'Analytical', 'ASCENT-Load', 'MSC Nastran', 'Error (%)'],
     [
         ['Max deflection (m)', f'{vm9["deflection"]["analytical"]:.6e}',
-         f'{vm9["deflection"]["nastaero"]:.6e}',
+         f'{vm9["deflection"]["ascent_load"]:.6e}',
          '3.24\u00D710\u207B\u00B2', f'{vm9["deflection"]["error_pct"]:.2f}'],
         ['Fixed reaction (N)', '6,250', f'{vm9["reactions"]["fixed"]:.1f}',
          '6,237*', '0.20'],
@@ -432,12 +432,12 @@ for m in vm4['modes']:
     vm4_rows.append([
         f'Mode {m["mode"]}',
         f'{m["analytical"]:.4f}',
-        f'{m["nastaero"]:.4f}',
+        f'{m["ascent_load"]:.4f}',
         f'{m["analytical"]:.4f}',
         f'{m["error_pct"]:.2f}',
     ])
 add_table(
-    ['Mode', 'Analytical (Hz)', 'NastAero (Hz)', 'MSC Nastran (Hz)', 'Error (%)'],
+    ['Mode', 'Analytical (Hz)', 'ASCENT-Load (Hz)', 'MSC Nastran (Hz)', 'Error (%)'],
     vm4_rows,
 )
 doc.add_paragraph(
@@ -459,12 +459,12 @@ for m in vm10['modes']:
     vm10_rows.append([
         f'Mode {m["mode"]} {m["mn"]}',
         f'{m["analytical"]:.2f}',
-        f'{m["nastaero"]:.2f}',
+        f'{m["ascent_load"]:.2f}',
         f'{m["analytical"]:.2f}',
         f'{m["error_pct"]:.2f}',
     ])
 add_table(
-    ['Mode (m,n)', 'Kirchhoff (Hz)', 'NastAero (Hz)', 'MSC Nastran (Hz)', 'Error (%)'],
+    ['Mode (m,n)', 'Kirchhoff (Hz)', 'ASCENT-Load (Hz)', 'MSC Nastran (Hz)', 'Error (%)'],
     vm10_rows,
 )
 doc.add_paragraph(
@@ -518,12 +518,12 @@ for d in cl_data:
         f'{d["error_pct"]:.2f}',
     ])
 add_table(
-    ['Aspect Ratio', 'Lifting Line', 'NastAero VLM', 'Difference (%)'],
+    ['Aspect Ratio', 'Lifting Line', 'ASCENT-Load VLM', 'Difference (%)'],
     cl_rows,
 )
 
 add_figure('fig04_cl_alpha_ar.png',
-           'Figure 6: Lift curve slope vs. aspect ratio. NastAero VLM results (red squares) '
+           'Figure 6: Lift curve slope vs. aspect ratio. ASCENT-Load VLM results (red squares) '
            'closely follow analytical theories. VLM systematically gives 4-7% lower values '
            'than simple lifting line, consistent with the more accurate induced drag modeling.')
 
@@ -599,7 +599,7 @@ doc.add_paragraph(
 
 avm1 = data['AVM1']
 add_table(
-    ['Quantity', 'NastAero Result'],
+    ['Quantity', 'ASCENT-Load Result'],
     [
         ['Trim angle \u03B1', f'{avm1["alpha_deg"]:.4f}\u00B0'],
         ['CL at trim', f'{avm1["CL"]:.6f}'],
@@ -622,7 +622,7 @@ doc.add_paragraph(
 
 avm3 = data['AVM3']
 add_table(
-    ['Quantity', 'Predicted', 'NastAero SOL 144', 'Error (%)'],
+    ['Quantity', 'Predicted', 'ASCENT-Load SOL 144', 'Error (%)'],
     [
         ['Trim angle', f'{avm3["alpha_predicted_deg"]:.6f}\u00B0',
          f'{avm3["alpha_deg"]:.6f}\u00B0', f'{avm3["error_pct"]:.2f}'],
@@ -654,11 +654,11 @@ for item in items:
 
 goland = data['goland_original']
 doc.add_paragraph(
-    f'At M=0.3, q=1531.25 Pa, the NastAero trim solution gives:'
+    f'At M=0.3, q=1531.25 Pa, the ASCENT-Load trim solution gives:'
 )
 
 add_table(
-    ['Quantity', 'NastAero', 'MSC Nastran HA144*', 'Published Range'],
+    ['Quantity', 'ASCENT-Load', 'MSC Nastran HA144*', 'Published Range'],
     [
         ['Trim angle \u03B1', f'{goland["alpha_deg"]:.4f}\u00B0', '1.5-2.0\u00B0', '1-3\u00B0'],
         ['Total lift (N)', f'{goland["total_fz"]:.2f}', f'{goland["weight"]:.0f}', '\u2014'],
@@ -703,7 +703,7 @@ doc.add_paragraph(
 
 avm2 = data['AVM2']
 add_table(
-    ['Quantity', 'NastAero Result', 'Physical Check'],
+    ['Quantity', 'ASCENT-Load Result', 'Physical Check'],
     [
         ['Trim angle \u03B1', f'{avm2["alpha_deg"]:.4f}\u00B0',
          'Smaller than M=0.3 case (\u2713)'],
@@ -732,7 +732,7 @@ doc.add_page_break()
 add_heading('7. Summary and Conclusions', level=1)
 
 doc.add_paragraph(
-    'This report has verified the NastAero solver across 214 test cases covering '
+    'This report has verified the ASCENT-Load solver across 214 test cases covering '
     'structural statics, modal analysis, and aeroelastic trim. The key findings are:'
 )
 
@@ -797,7 +797,7 @@ p = doc.add_paragraph()
 run = p.add_run('Conclusion: ')
 run.bold = True
 p.add_run(
-    'The NastAero solver has been comprehensively verified against analytical solutions '
+    'The ASCENT-Load solver has been comprehensively verified against analytical solutions '
     'and established benchmarks. The results demonstrate that the solver accurately '
     'implements the finite element method for structural analysis and the coupled '
     'VLM-FEM approach for static aeroelastic trim. The solver is suitable for '

@@ -2,7 +2,7 @@
 import os
 import numpy as np
 import pytest
-from nastaero.bdf.parser import BDFParser
+from ascent_load.bdf.parser import BDFParser
 
 VALIDATION_DIR = os.path.join(os.path.dirname(__file__), "validation")
 GOLAND_BDF = os.path.join(VALIDATION_DIR, "goland_wing", "goland_static.bdf")
@@ -69,7 +69,7 @@ class TestGolandTrim:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        from nastaero.solvers.sol144 import solve_trim
+        from ascent_load.solvers.sol144 import solve_trim
         self.model = parse_bdf(GOLAND_BDF)
         self.results = solve_trim(self.model)
 
@@ -151,7 +151,7 @@ class TestAeroelasticFeedbackSign:
 
     def _solve_1dof(self, feedback_ratio):
         """단일 자유도 비틀림 단면: Q_aa = ratio * K로 푼다."""
-        from nastaero.solvers.sol144 import _solve_dense
+        from ascent_load.solvers.sol144 import _solve_dense
         k, force = 1000.0, 10.0
         # Q_aa = G_disp^T @ A_jj @ G_sp = d * a * s
         d, s = 2.0, 3.0
@@ -199,7 +199,7 @@ class TestSplineForceDistribution:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        from nastaero.solvers.sol144 import solve_trim
+        from ascent_load.solvers.sol144 import solve_trim
         self.model = parse_bdf(GOLAND_BDF)
         self.results = solve_trim(self.model)
 
@@ -242,19 +242,19 @@ class TestIPSDegeneracyGuard:
     """
 
     def test_vertical_surface_projection_is_degenerate(self):
-        from nastaero.solvers.sol144 import _nodes_are_collinear
+        from ascent_load.solvers.sol144 import _nodes_are_collinear
         xz_plane = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 100.0],
                              [0.0, 0.0, 200.0], [50.0, 0.0, 150.0]])
         assert _nodes_are_collinear(xz_plane)
 
     def test_normal_wing_layout_is_not_degenerate(self):
-        from nastaero.solvers.sol144 import _nodes_are_collinear
+        from ascent_load.solvers.sol144 import _nodes_are_collinear
         wing = np.array([[0.0, 0.0, 0.0], [100.0, 0.0, 0.0],
                          [0.0, 100.0, 0.0], [50.0, 50.0, 10.0]])
         assert not _nodes_are_collinear(wing)
 
     def test_true_collinear_still_detected(self):
-        from nastaero.solvers.sol144 import _nodes_are_collinear
+        from ascent_load.solvers.sol144 import _nodes_are_collinear
         line = np.array([[0.0, 0.0, 0.0], [100.0, 0.0, 0.0],
                          [200.0, 0.0, 0.0]])
         assert _nodes_are_collinear(line)
@@ -269,7 +269,7 @@ class TestLoadFactorSemantics:
     """
 
     def test_explicit_zero_is_zero_g(self):
-        from nastaero.solvers.sol144 import solve_trim
+        from ascent_load.solvers.sol144 import solve_trim
         model = parse_bdf(GOLAND_BDF)
         for trim in model.trims.values():
             trim.variables = [(l, 0.0) if l.upper() == "URDD3" else (l, u)
@@ -283,7 +283,7 @@ class TestLoadFactorSemantics:
             f"0g 케이스 양력 {total_fz:.1f}이 1g {fz_1g:.1f} 대비 크다")
 
     def test_missing_urdd3_defaults_to_one_g(self):
-        from nastaero.solvers.sol144 import solve_trim
+        from ascent_load.solvers.sol144 import solve_trim
         model = parse_bdf(GOLAND_BDF)
         for trim in model.trims.values():
             trim.variables = [(l, u) for l, u in trim.variables

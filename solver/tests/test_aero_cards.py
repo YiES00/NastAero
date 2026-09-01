@@ -1,12 +1,12 @@
 """Tests for aerodynamic BDF card parsers."""
 import pytest
 import numpy as np
-from nastaero.bdf.cards.aero import (
+from ascent_load.bdf.cards.aero import (
     AERO, AEROS, CAERO1, PAERO1, SPLINE1, SPLINE2,
     AESTAT, AESURF, TRIM, FLFACT, MKAERO1
 )
-from nastaero.bdf.cards.sets import SET1
-from nastaero.bdf.cards.rbe import RBE3
+from ascent_load.bdf.cards.sets import SET1
+from ascent_load.bdf.cards.rbe import RBE3
 
 
 class TestAERO:
@@ -194,7 +194,7 @@ class TestPanelNormalFlip:
 
     def _caero(self, y1, y4):
         import numpy as np
-        from nastaero.bdf.cards.aero import CAERO1
+        from ascent_load.bdf.cards.aero import CAERO1
 
         c = CAERO1()
         c.eid = 1001
@@ -207,7 +207,7 @@ class TestPanelNormalFlip:
         return c
 
     def test_right_wing_not_flipped(self):
-        from nastaero.aero.panel import generate_panel_mesh
+        from ascent_load.aero.panel import generate_panel_mesh
 
         boxes = generate_panel_mesh(self._caero(0.0, 5.0))
         assert boxes[0].normal[2] > 0
@@ -215,7 +215,7 @@ class TestPanelNormalFlip:
 
     def test_mirrored_panel_flipped(self):
         # 좌익식 순서(P1 루트→P4 외측 -y)는 기하 법선이 -z → 플립 기록
-        from nastaero.aero.panel import generate_panel_mesh
+        from ascent_load.aero.panel import generate_panel_mesh
 
         boxes = generate_panel_mesh(self._caero(0.0, -5.0))
         assert boxes[0].normal[2] > 0          # 정규화 후엔 +z

@@ -1,4 +1,4 @@
-$ NastAero VM10: Simply-Supported Plate Modal Analysis (8x8 mesh)
+$ ASCENT-Load VM10: Simply-Supported Plate Modal Analysis (8x8 mesh)
 $ Reference: Leissa - Vibration of Plates
 $ a=b=1.0m, t=0.01m, E=210GPa (Steel), nu=0.3, rho=7850 kg/m^3
 $ 81 nodes (9x9 grid), 64 CQUAD4 elements

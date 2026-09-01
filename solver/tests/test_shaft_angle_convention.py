@@ -13,8 +13,8 @@
 from __future__ import annotations
 import numpy as np
 import pytest
-from nastaero.models.ilc8 import make_ilc8_vtol_config
-from nastaero.rotor.forward_flight import ForwardFlightBEMT
+from ascent_load.models.ilc8 import make_ilc8_vtol_config
+from ascent_load.rotor.forward_flight import ForwardFlightBEMT
 
 RHO = 1.225
 
@@ -87,7 +87,7 @@ class TestCallSiteAngles:
 
     def test_no_complement_angles_in_generators(self):
         import inspect
-        from nastaero.loads_analysis.certification import (
+        from ascent_load.loads_analysis.certification import (
             retrim_events, vtol_load_case_matrix)
         src = (inspect.getsource(vtol_load_case_matrix)
                + inspect.getsource(retrim_events))

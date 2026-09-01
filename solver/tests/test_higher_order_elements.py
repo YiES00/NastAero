@@ -2,15 +2,15 @@
 from __future__ import annotations
 import numpy as np
 import pytest
-from nastaero.bdf.cards.elements import CQUAD8, CTRIA6
-from nastaero.bdf.cards.properties import PSHELL
-from nastaero.bdf.cards.materials import MAT1
-from nastaero.bdf.cards.grid import GRID
-from nastaero.bdf.model import BDFModel
-from nastaero.fem.dof_manager import DOFManager
-from nastaero.fem.assembly import assemble_global_matrices
-from nastaero.elements.quad8 import CQuad8Element
-from nastaero.elements.tria6 import CTria6Element
+from ascent_load.bdf.cards.elements import CQUAD8, CTRIA6
+from ascent_load.bdf.cards.properties import PSHELL
+from ascent_load.bdf.cards.materials import MAT1
+from ascent_load.bdf.cards.grid import GRID
+from ascent_load.bdf.model import BDFModel
+from ascent_load.fem.dof_manager import DOFManager
+from ascent_load.fem.assembly import assemble_global_matrices
+from ascent_load.elements.quad8 import CQuad8Element
+from ascent_load.elements.tria6 import CTria6Element
 
 
 # ============================================================

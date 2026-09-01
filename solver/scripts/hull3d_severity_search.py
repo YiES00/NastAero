@@ -40,32 +40,32 @@ ILC8 = os.path.join(SOLVER, "tests/validation/ILC8")
 sys.path.insert(0, SOLVER)
 sys.path.insert(0, HERE)
 
-from nastaero.bdf.parser import parse_bdf                      # noqa: E402
-from nastaero.config import setup_logging                      # noqa: E402
-from nastaero.loads_analysis.certification.aircraft_config import (  # noqa: E402
+from ascent_load.bdf.parser import parse_bdf                      # noqa: E402
+from ascent_load.config import setup_logging                      # noqa: E402
+from ascent_load.loads_analysis.certification.aircraft_config import (  # noqa: E402
     AircraftConfig, SpeedSchedule, WeightCGCondition,
     ControlSurfaceLimits, LandingGearConfig,
 )
-from nastaero.loads_analysis.certification.load_case_matrix import (  # noqa: E402
+from ascent_load.loads_analysis.certification.load_case_matrix import (  # noqa: E402
     LoadCaseMatrix,
 )
-from nastaero.loads_analysis.certification.vtol_load_case_matrix import (  # noqa: E402
+from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (  # noqa: E402
     VTOLLoadCaseMatrix,
 )
-from nastaero.loads_analysis.certification.batch_runner import (  # noqa: E402
+from ascent_load.loads_analysis.certification.batch_runner import (  # noqa: E402
     BatchResult,
 )
-from nastaero.loads_analysis.certification.vtol_batch_runner import (  # noqa: E402
+from ascent_load.loads_analysis.certification.vtol_batch_runner import (  # noqa: E402
     VTOLBatchRunner,
 )
-from nastaero.loads_analysis.certification.vmt_bridge import (  # noqa: E402
+from ascent_load.loads_analysis.certification.vmt_bridge import (  # noqa: E402
     compute_vmt_for_batch,
 )
-from nastaero.loads_analysis.component_id import (             # noqa: E402
+from ascent_load.loads_analysis.component_id import (             # noqa: E402
     identify_components_manual,
 )
-from nastaero.loads_analysis.trim_loads import compute_node_masses  # noqa: E402
-from nastaero.models.ilc8 import make_ilc8_vtol_config         # noqa: E402
+from ascent_load.loads_analysis.trim_loads import compute_node_masses  # noqa: E402
+from ascent_load.models.ilc8 import make_ilc8_vtol_config         # noqa: E402
 
 from compare_hull_selection import exceedance, run_selection   # noqa: E402
 
@@ -91,7 +91,7 @@ def add_combo_cases(vtol_matrix, vtol_config, config):
     조우는 확률상 배제 불가(디버전 구간 노출)이므로 인증상 정당한
     조합. 로터별 모멘트 암이 달라 (V,M,T) 등급화된 조합을 만든다.
     """
-    from nastaero.loads_analysis.certification.vtol_conditions import (
+    from ascent_load.loads_analysis.certification.vtol_conditions import (
         VTOLCondition, VTOLFlightPhase,
     )
     wc = config.weight_cg_conditions[0]
@@ -123,7 +123,7 @@ def add_combo_cases(vtol_matrix, vtol_config, config):
     # 유일한 비행 상태. 기존 천이 조건을 재생성해 고장 로터만 지정.
     import dataclasses
 
-    from nastaero.loads_analysis.certification.vtol_conditions import (
+    from ascent_load.loads_analysis.certification.vtol_conditions import (
         generate_transition_conditions,
     )
     trans = generate_transition_conditions(
@@ -224,7 +224,7 @@ def run_variant(name, dm_kg, cg_shift, alts, combos=False):
     print(f"\n=== {name}: mass {mass_kg:.1f} kg, CG {cg_x:.0f} mm, "
           f"alts {alts} ===", flush=True)
 
-    from nastaero.aero.dlm import compute_rigid_clalpha
+    from ascent_load.aero.dlm import compute_rigid_clalpha
     clalpha = compute_rigid_clalpha(model, mach=80.0 / 340.3,
                                     ref_area=16.2e6)
     config = AircraftConfig(

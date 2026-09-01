@@ -60,7 +60,7 @@ def generate_plate_model(nx: int, ny: int, Lx: float = 10.0, Ly: float = 10.0,
 
     with open(output_path, 'w') as f:
         # Executive Control
-        f.write("$ NastAero Large-Scale Benchmark Model\n")
+        f.write("$ ASCENT-Load Large-Scale Benchmark Model\n")
         f.write(f"$ Plate: {Lx}m x {Ly}m x {thickness}m, {nx}x{ny} CQUAD4\n")
         f.write(f"$ Nodes: {n_nodes}, Elements: {n_elems}, DOFs: {n_dof}\n")
         f.write("$\n")

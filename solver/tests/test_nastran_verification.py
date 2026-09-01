@@ -1,14 +1,14 @@
 """Comprehensive Nastran Verification Manual Tests.
 
-Validates NastAero against well-known analytical solutions from
+Validates ASCENT-Load against well-known analytical solutions from
 structural mechanics textbooks and MSC Nastran Verification Manual.
 """
 import os
 import numpy as np
 import pytest
-from nastaero.bdf.parser import BDFParser
-from nastaero.solvers.sol101 import solve_static
-from nastaero.solvers.sol103 import solve_modes
+from ascent_load.bdf.parser import BDFParser
+from ascent_load.solvers.sol101 import solve_static
+from ascent_load.solvers.sol103 import solve_modes
 
 VALIDATION_DIR = os.path.join(os.path.dirname(__file__), "validation")
 VM_DIR = os.path.join(VALIDATION_DIR, "nastran_vm")
@@ -387,7 +387,7 @@ class TestGolandTrim_Enhanced:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        from nastaero.solvers.sol144 import solve_trim
+        from ascent_load.solvers.sol144 import solve_trim
         parser = BDFParser()
         model = parser.parse(os.path.join(VALIDATION_DIR,
                                            "goland_wing", "goland_static.bdf"))

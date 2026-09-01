@@ -1,7 +1,7 @@
 """Tests for aerodynamic panel mesh generation."""
 import numpy as np
 import pytest
-from nastaero.aero.panel import generate_panel_mesh, AeroBox
+from ascent_load.aero.panel import generate_panel_mesh, AeroBox
 
 
 class MockCAERO1:

@@ -1,4 +1,4 @@
-$ NastAero VM5: Three-Bar Truss (Plane Truss)
+$ ASCENT-Load VM5: Three-Bar Truss (Plane Truss)
 $ Reference: MSC Nastran Verification Manual - classic 3-bar truss
 $ Three rods meeting at node 4, loaded with Fx=1000, Fy=-1000
 $ All rods: A=1.0 in^2, E=10e6 psi

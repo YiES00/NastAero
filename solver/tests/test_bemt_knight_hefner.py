@@ -23,9 +23,9 @@ import os
 import numpy as np
 import pytest
 
-from nastaero.rotor.blade import BladeDef
-from nastaero.rotor.airfoil import RotorAirfoil
-from nastaero.rotor.bemt_solver import BEMTSolver
+from ascent_load.rotor.blade import BladeDef
+from ascent_load.rotor.airfoil import RotorAirfoil
+from ascent_load.rotor.bemt_solver import BEMTSolver
 
 KH_CSV = os.path.join(os.path.dirname(__file__),
                       "validation", "knight_hefner",

@@ -1,6 +1,6 @@
 $ HA144A - Forward Swept Wing (FSW) Static Aeroelastic Trim
 $ MSC Nastran Aeroelastic User Guide Example HA144A
-$ Adapted for NastAero SOL 144
+$ Adapted for ASCENT-Load SOL 144
 $
 $ Half-span model with SYMXZ=1 (image vortices for symmetry)
 $ Units: ft-lb-sec. Masses scaled so mass*9.81 = weight_lb

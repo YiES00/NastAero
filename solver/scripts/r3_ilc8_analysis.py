@@ -31,10 +31,10 @@ sys.path.insert(0, SOLVER)
 os.chdir(SOLVER)
 
 from run_ilc8_cert_analysis import main as pipeline_main  # noqa: E402
-from nastaero.fem.model import FEModel                    # noqa: E402
-from nastaero.fem.stress_recovery import recover_stresses_to_nodes  # noqa: E402
-from nastaero.loads_analysis.component_id import ComponentDef  # noqa: E402
-from nastaero.loads_analysis.vmt import compute_vmt       # noqa: E402
+from ascent_load.fem.model import FEModel                    # noqa: E402
+from ascent_load.fem.stress_recovery import recover_stresses_to_nodes  # noqa: E402
+from ascent_load.loads_analysis.component_id import ComponentDef  # noqa: E402
+from ascent_load.loads_analysis.vmt import compute_vmt       # noqa: E402
 
 
 def stress_preservation(ctx):

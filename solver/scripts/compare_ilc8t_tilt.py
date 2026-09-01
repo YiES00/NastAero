@@ -29,21 +29,21 @@ SOLVER = os.path.normpath(os.path.join(HERE, ".."))
 sys.path.insert(0, SOLVER)
 sys.path.insert(0, HERE)
 
-from nastaero.bdf.parser import parse_bdf                      # noqa: E402
-from nastaero.config import setup_logging                      # noqa: E402
-from nastaero.loads_analysis.certification.aircraft_config import (  # noqa: E402
+from ascent_load.bdf.parser import parse_bdf                      # noqa: E402
+from ascent_load.config import setup_logging                      # noqa: E402
+from ascent_load.loads_analysis.certification.aircraft_config import (  # noqa: E402
     AircraftConfig,
 )
-from nastaero.loads_analysis.certification.load_case_matrix import (  # noqa: E402
+from ascent_load.loads_analysis.certification.load_case_matrix import (  # noqa: E402
     LoadCaseMatrix,
 )
-from nastaero.loads_analysis.certification.vtol_batch_runner import (  # noqa: E402
+from ascent_load.loads_analysis.certification.vtol_batch_runner import (  # noqa: E402
     VTOLBatchRunner,
 )
-from nastaero.loads_analysis.certification.vtol_load_case_matrix import (  # noqa: E402
+from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (  # noqa: E402
     VTOLLoadCaseMatrix,
 )
-from nastaero.loads_analysis.certification.vmt_bridge import (  # noqa: E402
+from ascent_load.loads_analysis.certification.vmt_bridge import (  # noqa: E402
     compute_vmt_for_batch,
 )
 
@@ -52,10 +52,10 @@ from hull3d_severity_search import build_components            # noqa: E402
 AIRCRAFT = [
     ("ILC-8 (L+C)", "tests/validation/ILC8/ilc8.bdf",
      "tests/validation/ILC8/ilc8_cert_config.yaml",
-     "nastaero.models.ilc8", "make_ilc8_vtol_config"),
+     "ascent_load.models.ilc8", "make_ilc8_vtol_config"),
     ("ILC-8T (tilt)", "tests/validation/ILC8T/ilc8t.bdf",
      "tests/validation/ILC8T/ilc8t_cert_config.yaml",
-     "nastaero.models.ilc8t", "make_ilc8t_vtol_config"),
+     "ascent_load.models.ilc8t", "make_ilc8t_vtol_config"),
 ]
 
 

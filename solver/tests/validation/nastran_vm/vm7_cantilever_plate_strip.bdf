@@ -1,4 +1,4 @@
-$ NastAero VM7: Cantilever Plate Strip (CQUAD4)
+$ ASCENT-Load VM7: Cantilever Plate Strip (CQUAD4)
 $ Reference: Euler-Bernoulli cantilever beam theory
 $ 1-element wide, 8-element long plate strip along X
 $ Length=1.0m (X), Width=0.1m (Y), t=0.01m

@@ -1,4 +1,4 @@
-$ NastAero VM2: Cantilever Beam Under End Moment
+$ ASCENT-Load VM2: Cantilever Beam Under End Moment
 $ Reference: Timoshenko - Strength of Materials
 $ 10 CBAR elements, L=10m, E=200GPa, I=1.0e-4 m^4
 $ Applied moment M=10000 N-m at tip

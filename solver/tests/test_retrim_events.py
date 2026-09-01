@@ -13,17 +13,17 @@ ILC8 = os.path.join(os.path.dirname(__file__), "validation", "ILC8")
 
 @pytest.fixture(scope="module")
 def screen():
-    from nastaero.bdf.parser import parse_bdf
-    from nastaero.loads_analysis.certification.aircraft_config import (
+    from ascent_load.bdf.parser import parse_bdf
+    from ascent_load.loads_analysis.certification.aircraft_config import (
         AircraftConfig,
     )
-    from nastaero.loads_analysis.certification.retrim_events import (
+    from ascent_load.loads_analysis.certification.retrim_events import (
         RetrimScreen,
     )
-    from nastaero.loads_analysis.component_id import (
+    from ascent_load.loads_analysis.component_id import (
         identify_components_manual,
     )
-    from nastaero.models.ilc8 import make_ilc8_vtol_config
+    from ascent_load.models.ilc8 import make_ilc8_vtol_config
 
     model = parse_bdf(os.path.join(ILC8, "ilc8.bdf"))
     with open(os.path.join(ILC8, "ilc8_cert_config.yaml")) as f:
@@ -63,10 +63,10 @@ def events(screen):
 class TestBasis:
     def test_linearity_reconstructs_uniform_hover(self, screen):
         """전 로터 1.0 패턴의 기저 합성 == 직접 조립한 호버 VMT."""
-        from nastaero.loads_analysis.certification.batch_runner import (
+        from ascent_load.loads_analysis.certification.batch_runner import (
             BatchResult, CaseResult,
         )
-        from nastaero.loads_analysis.certification.vmt_bridge import (
+        from ascent_load.loads_analysis.certification.vmt_bridge import (
             compute_vmt_for_batch,
         )
 
@@ -209,10 +209,10 @@ class TestTransition:
 
     def test_tr_affine_prediction_matches_assembly(self, screen, events):
         """기저 아핀 예측 VMT == 실제 힘 조립 + 적분 VMT (선형 정합)."""
-        from nastaero.loads_analysis.certification.batch_runner import (
+        from ascent_load.loads_analysis.certification.batch_runner import (
             BatchResult, CaseResult,
         )
-        from nastaero.loads_analysis.certification.vmt_bridge import (
+        from ascent_load.loads_analysis.certification.vmt_bridge import (
             compute_vmt_for_batch,
         )
 
@@ -271,17 +271,17 @@ ILC8T = os.path.join(os.path.dirname(__file__), "validation", "ILC8T")
 @pytest.fixture(scope="module")
 def tilt_screen():
     """ILC-8T (틸트) 선별기 — 속도 2점으로 축소한 틸트 기저."""
-    from nastaero.bdf.parser import parse_bdf
-    from nastaero.loads_analysis.certification.aircraft_config import (
+    from ascent_load.bdf.parser import parse_bdf
+    from ascent_load.loads_analysis.certification.aircraft_config import (
         AircraftConfig,
     )
-    from nastaero.loads_analysis.certification.retrim_events import (
+    from ascent_load.loads_analysis.certification.retrim_events import (
         RetrimScreen,
     )
-    from nastaero.loads_analysis.component_id import (
+    from ascent_load.loads_analysis.component_id import (
         identify_components_manual,
     )
-    from nastaero.models.ilc8t import make_ilc8t_vtol_config
+    from ascent_load.models.ilc8t import make_ilc8t_vtol_config
 
     model = parse_bdf(os.path.join(ILC8T, "ilc8t.bdf"))
     with open(os.path.join(ILC8T, "ilc8t_cert_config.yaml")) as f:
@@ -349,7 +349,7 @@ class TestTiltFamily:
                                         tilt_events):
         """M6: 고착각 {0,90}, 스케줄각과 5° 미만 상태는 제외, 고착
         로터는 틸트열(can-tilt)만, P=(1/n)·P_tr·P_M6."""
-        from nastaero.rotor.rotor_config import RotorType
+        from ascent_load.rotor.rotor_config import RotorType
 
         tilt_ids = {r.rotor_id for r in tilt_screen.rotors
                     if r.rotor_type == RotorType.TILT}
@@ -404,10 +404,10 @@ class TestTiltFamily:
             assert -0.5 - 1e-9 <= nz_eff[0] <= hi + 1e-9
 
     def _assert_affine_matches(self, tilt_screen, e):
-        from nastaero.loads_analysis.certification.batch_runner import (
+        from ascent_load.loads_analysis.certification.batch_runner import (
             BatchResult, CaseResult,
         )
-        from nastaero.loads_analysis.certification.vmt_bridge import (
+        from ascent_load.loads_analysis.certification.vmt_bridge import (
             compute_vmt_for_batch,
         )
 

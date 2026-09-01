@@ -1,8 +1,8 @@
 """Tests for DLM kernel and AIC matrix."""
 import numpy as np
 import pytest
-from nastaero.aero.panel import generate_panel_mesh, AeroBox
-from nastaero.aero.dlm import build_aic_matrix, _biot_savart_segment, _horseshoe_normalwash
+from ascent_load.aero.panel import generate_panel_mesh, AeroBox
+from ascent_load.aero.dlm import build_aic_matrix, _biot_savart_segment, _horseshoe_normalwash
 
 
 class MockCAERO1:

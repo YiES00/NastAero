@@ -4,12 +4,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from nastaero.rotor.bemt_solver import RotorLoads
-from nastaero.loads_analysis.certification.vtol_load_case_matrix import (
+from ascent_load.rotor.bemt_solver import RotorLoads
+from ascent_load.loads_analysis.certification.vtol_load_case_matrix import (
     VTOLLoadCaseMatrix,
 )
-from nastaero.loads_analysis.certification.batch_runner import CaseResult
-from nastaero.loads_analysis.certification.load_case_matrix import CertLoadCase
+from ascent_load.loads_analysis.certification.batch_runner import CaseResult
+from ascent_load.loads_analysis.certification.load_case_matrix import CertLoadCase
 
 
 class TestRotorLoadsSaturationState:

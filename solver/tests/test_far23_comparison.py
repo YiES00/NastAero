@@ -1,7 +1,7 @@
-"""FAR 23 LOADS (DARCorp) vs NastAero comparison for GACOMP.
+"""FAR 23 LOADS (DARCorp) vs ASCENT-Load comparison for GACOMP.
 
 Compares the analytical FAR 23 LOADS methodology (Hal C. McMaster)
-against NastAero's V-n diagram and load case matrix for the GACOMP aircraft.
+against ASCENT-Load's V-n diagram and load case matrix for the GACOMP aircraft.
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import sys
 import numpy as np
 
 # ── GACOMP Parameters ──
-# Source: NastAero test_gacomp_cert_e2e.py + comparison-model public specifications
+# Source: ASCENT-Load test_gacomp_cert_e2e.py + comparison-model public specifications
 GACOMP_NAME = "comparison model (conventional GA aircraft)"
 GACOMP = {
     "W_kg": 1288.9,          # MTOW (kg), from CONM2 sum
@@ -42,7 +42,7 @@ GACOMP = {
 
 def run_far23_analysis():
     """Run FAR 23 LOADS analytical method for GACOMP."""
-    from nastaero.loads_analysis.far23_analytical import (
+    from ascent_load.loads_analysis.far23_analytical import (
         FAR23Config, compute_far23_loads
     )
 
@@ -51,14 +51,14 @@ def run_far23_analysis():
     return cfg, results
 
 
-def run_nastaero_analysis():
-    """Run NastAero V-n diagram and load case matrix for GACOMP."""
-    from nastaero.loads_analysis.certification.aircraft_config import (
+def run_ascent_load_analysis():
+    """Run ASCENT-Load V-n diagram and load case matrix for GACOMP."""
+    from ascent_load.loads_analysis.certification.aircraft_config import (
         AircraftConfig, SpeedSchedule, WeightCGCondition,
         ControlSurfaceLimits, LandingGearConfig,
         part23_nz_max,
     )
-    from nastaero.loads_analysis.certification.vn_diagram import (
+    from ascent_load.loads_analysis.certification.vn_diagram import (
         compute_vn_diagram,
     )
 
@@ -107,16 +107,16 @@ def run_nastaero_analysis():
 
 
 def print_comparison():
-    """Print detailed comparison between FAR 23 LOADS and NastAero."""
+    """Print detailed comparison between FAR 23 LOADS and ASCENT-Load."""
     cfg_f, far23 = run_far23_analysis()
-    config_n, vn_n, wt = run_nastaero_analysis()
+    config_n, vn_n, wt = run_ascent_load_analysis()
 
     W_lb = cfg_f.W_lb
     WS_psf = cfg_f.WS_psf
     WS_pa = cfg_f.WS_pa
 
     print("=" * 80)
-    print("FAR 23 LOADS (DARCorp) vs NastAero Comparison — GACOMP")
+    print("FAR 23 LOADS (DARCorp) vs ASCENT-Load Comparison — GACOMP")
     print("=" * 80)
 
     # ── Aircraft Data ──
@@ -133,7 +133,7 @@ def print_comparison():
     print(f"\n{'─'*60}")
     print(f"■ Design Speeds (§23.335)")
     print(f"{'─'*60}")
-    print(f"  {'Speed':<8} {'FAR23':>10} {'NastAero':>10} {'Diff':>8}  Unit")
+    print(f"  {'Speed':<8} {'FAR23':>10} {'ASCENT-Load':>10} {'Diff':>8}  Unit")
     print(f"  {'─'*50}")
     speed_pairs = [
         ("VS1", cfg_f.VS1, config_n.speeds.VS1),
@@ -150,7 +150,7 @@ def print_comparison():
     print(f"\n{'─'*60}")
     print(f"■ Maneuvering Load Factors (§23.337)")
     print(f"{'─'*60}")
-    print(f"  {'Parameter':<20} {'FAR23':>10} {'NastAero':>10} {'Diff':>8}")
+    print(f"  {'Parameter':<20} {'FAR23':>10} {'ASCENT-Load':>10} {'Diff':>8}")
     print(f"  {'─'*50}")
 
     nz_max_na = vn_n.nz_max
@@ -185,7 +185,7 @@ def print_comparison():
         ("VB (50fps)", far23.VB, far23.delta_n_gust_VB),
     ]
 
-    # Get NastAero gust points
+    # Get ASCENT-Load gust points
     na_gust = {}
     for pt in vn_n.corner_points:
         if "Gust" in pt.label:

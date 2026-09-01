@@ -1,9 +1,9 @@
-"""Compare NastAero FSW stability derivatives against MSC Nastran HA144A.
+"""Compare ASCENT-Load FSW stability derivatives against MSC Nastran HA144A.
 
 Half-span model with SYMXZ=1 (image vortices). Forces from the half-model
 are doubled for the full aircraft, consistent with Nastran convention.
 
-Known limitation: NastAero uses PG-corrected VLM (Prandtl-Glauert + horseshoe
+Known limitation: ASCENT-Load uses PG-corrected VLM (Prandtl-Glauert + horseshoe
 vortex), NOT the full DLM kernel. At high Mach (M=0.9), the PG correction
 overestimates compressibility effects compared to Nastran's DLM kernel.
 """
@@ -14,10 +14,10 @@ import numpy as np
 solver_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 sys.path.insert(0, solver_dir)
 
-from nastaero.bdf.parser import BDFParser
-from nastaero.aero.panel import generate_all_panels, get_box_index_map
-from nastaero.aero.dlm import build_aic_matrix
-from nastaero.solvers.sol144 import solve_trim
+from ascent_load.bdf.parser import BDFParser
+from ascent_load.aero.panel import generate_all_panels, get_box_index_map
+from ascent_load.aero.dlm import build_aic_matrix
+from ascent_load.solvers.sol144 import solve_trim
 
 
 def compute_rigid_derivatives(bdf_path):
@@ -122,7 +122,7 @@ def main():
 
     print("=" * 70)
     print("HA144A Forward Swept Wing (FSW) - SOL 144 Validation")
-    print("NastAero vs MSC Nastran Aeroelastic User Guide")
+    print("ASCENT-Load vs MSC Nastran Aeroelastic User Guide")
     print("=" * 70)
 
     # Compute rigid derivatives
@@ -155,7 +155,7 @@ def main():
     print("\n" + "=" * 70)
     print("RIGID STABILITY DERIVATIVES")
     print("=" * 70)
-    print(f"{'Derivative':<15} {'Nastran':>12} {'NastAero':>12} {'Error %':>10}")
+    print(f"{'Derivative':<15} {'Nastran':>12} {'ASCENT-Load':>12} {'Error %':>10}")
     print("-" * 70)
 
     for name, pub_val in published.items():
@@ -186,12 +186,12 @@ def main():
     print("\n" + "=" * 70)
     print("NOTES")
     print("-" * 70)
-    print("1. NastAero uses PG-corrected VLM, not the full DLM kernel.")
+    print("1. ASCENT-Load uses PG-corrected VLM, not the full DLM kernel.")
     print("   At M=0.9, PG overestimates compressibility vs DLM.")
     print("   Expected systematic overprediction of ~50% in Cz_alpha.")
-    print("2. SYMXZ=1 image vortex implementation added to NastAero AIC.")
+    print("2. SYMXZ=1 image vortex implementation added to ASCENT-Load AIC.")
     print("3. Force/moment balance constraints doubled for full aircraft.")
-    print("4. Masses scaled: mass*9.81 = weight_lb (NastAero gravity).")
+    print("4. Masses scaled: mass*9.81 = weight_lb (ASCENT-Load gravity).")
     print("=" * 70)
 
 

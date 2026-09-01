@@ -2,7 +2,7 @@
 # 로터 하중 케이스(호버·OEI·로터잼·천이·VTOL착륙)까지 포함한 전체 89케이스는
 # solver/run_ilc8_cert_analysis.py 실행 (make_ilc8_vtol_config 로터 8+1기 사용).
 name: ILC-8 Lift+Cruise (VTOL)
-bdf_model: ilc8.bdf   # nastaero/models/ilc8.py 생성 쉘 FE 전기체 덱
+bdf_model: ilc8.bdf   # ascent_load/models/ilc8.py 생성 쉘 FE 전기체 덱
 speeds:            # 순항 속도 스케줄 (EAS, m/s)
   VS1: 36.0
   VA: 71.0
@@ -36,4 +36,4 @@ landing_gear:
   tire_efficiency: 0.3
 elastic_axis_frac: 0.40
 # (고장×재트림) 재트림 선별(GUI Cert Cases 탭 버튼)용 로터 구성 팩토리
-vtol_factory: nastaero.models.ilc8.make_ilc8_vtol_config
+vtol_factory: ascent_load.models.ilc8.make_ilc8_vtol_config

@@ -4,13 +4,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from nastaero.loads_analysis.pload_export import (
+from ascent_load.loads_analysis.pload_export import (
     map_box_forces_to_skin, write_pload4_cards,
 )
 
 
 def _parse(tmp_path, bulk: str):
-    from nastaero.bdf.parser import parse_bdf
+    from ascent_load.bdf.parser import parse_bdf
 
     p = tmp_path / "m.bdf"
     p.write_text("SOL 101\nCEND\nBEGIN BULK\n" + bulk + "ENDDATA\n")
@@ -28,8 +28,8 @@ def _quad(eid, pid, n1, n2, n3, n4):
 class TestPloadMapping:
     def _boxes(self, tmp_path, extra_cards=""):
         """CAERO 1x2 (2박스, 시위 2.0 스팬 0..4) + 외피 2장 (z=0)."""
-        from nastaero.aero.panel import generate_all_panels
-        from nastaero.aero.panel_authoring import caero1_card_text
+        from ascent_load.aero.panel import generate_all_panels
+        from ascent_load.aero.panel_authoring import caero1_card_text
 
         cards = [caero1_card_text(1001, 1, nspan=2, nchord=1,
                                   p1=[0.0, 0.0, 0.0], chord1=2.0,
@@ -61,7 +61,7 @@ class TestPloadMapping:
         # 요소 절점 순서 반전(법선 -z) → 압력 부호 반전, 합력 방향 유지
         m, boxes = self._boxes(tmp_path)
         # 요소 10 절점 순서를 뒤집은 모델 재구성
-        from nastaero.aero.panel_authoring import caero1_card_text
+        from ascent_load.aero.panel_authoring import caero1_card_text
 
         cards = [caero1_card_text(1001, 1, nspan=2, nchord=1,
                                   p1=[0.0, 0.0, 0.0], chord1=2.0,
@@ -72,7 +72,7 @@ class TestPloadMapping:
                  _quad(10, 1, 4, 3, 2, 1),       # 법선 -z (반전)
                  _quad(11, 1, 4, 3, 5, 6)]
         m2 = _parse(tmp_path, "\n".join(cards) + "\n")
-        from nastaero.aero.panel import generate_all_panels
+        from ascent_load.aero.panel import generate_all_panels
 
         boxes2 = generate_all_panels(m2, use_nastran_eid=True)
         F = np.array([[0.0, 0.0, 100.0], [0.0, 0.0, 40.0]])
@@ -117,8 +117,8 @@ class TestPloadMapping:
         assert rep["force_mapped"][2] == pytest.approx(140.0)
 
     def test_uncovered_box_reported(self, tmp_path):
-        from nastaero.aero.panel import generate_all_panels
-        from nastaero.aero.panel_authoring import caero1_card_text
+        from ascent_load.aero.panel import generate_all_panels
+        from ascent_load.aero.panel_authoring import caero1_card_text
 
         # 외피 없는 두 번째 CAERO (VTP처럼)
         cards = [caero1_card_text(1001, 1, nspan=1, nchord=1,
@@ -164,8 +164,8 @@ class TestMappingRefinements:
     def test_per_caero_offset_band(self, tmp_path):
         # 큰 시위 CAERO(밴드 0.3)와 작은 시위 CAERO(밴드 0.06) 아래에
         # 같은 오프셋(0.1)의 외피 → 큰 쪽만 매핑
-        from nastaero.aero.panel import generate_all_panels
-        from nastaero.aero.panel_authoring import caero1_card_text
+        from ascent_load.aero.panel import generate_all_panels
+        from ascent_load.aero.panel_authoring import caero1_card_text
 
         cards = [caero1_card_text(1001, 1, nspan=1, nchord=1,
                                   p1=[0.0, 0.0, 0.0], chord1=2.0,
@@ -189,8 +189,8 @@ class TestMappingRefinements:
 
     def test_curved_tube_excluded(self, tmp_path):
         # 밴드 안의 코스한 사각 튜브(연속 꺾임) → 압력 미도장
-        from nastaero.aero.panel import generate_all_panels
-        from nastaero.aero.panel_authoring import caero1_card_text
+        from ascent_load.aero.panel import generate_all_panels
+        from ascent_load.aero.panel_authoring import caero1_card_text
 
         cards = [caero1_card_text(1001, 1, nspan=1, nchord=1,
                                   p1=[0.0, 0.0, 0.0], chord1=2.0,
@@ -225,8 +225,8 @@ class TestMappingRefinements:
         assert any(e in p2 for e in range(30, 34))
 
     def test_pid_filter_overrides(self, tmp_path):
-        from nastaero.aero.panel import generate_all_panels
-        from nastaero.aero.panel_authoring import caero1_card_text
+        from ascent_load.aero.panel import generate_all_panels
+        from ascent_load.aero.panel_authoring import caero1_card_text
 
         cards = [caero1_card_text(1001, 1, nspan=1, nchord=1,
                                   p1=[0.0, 0.0, 0.0], chord1=2.0,

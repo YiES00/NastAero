@@ -10,12 +10,12 @@ from matplotlib.collections import PatchCollection
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from nastaero.bdf.parser import BDFParser
-from nastaero.solvers.sol101 import solve_static
-from nastaero.solvers.sol103 import solve_modes
-from nastaero.solvers.sol144 import solve_trim
-from nastaero.aero.panel import generate_panel_mesh, generate_all_panels
-from nastaero.aero.dlm import build_aic_matrix, circulation_to_delta_cp
+from ascent_load.bdf.parser import BDFParser
+from ascent_load.solvers.sol101 import solve_static
+from ascent_load.solvers.sol103 import solve_modes
+from ascent_load.solvers.sol144 import solve_trim
+from ascent_load.aero.panel import generate_panel_mesh, generate_all_panels
+from ascent_load.aero.dlm import build_aic_matrix, circulation_to_delta_cp
 from types import SimpleNamespace
 
 VALIDATION_DIR = os.path.join(os.path.dirname(__file__), '..', 'tests', 'validation')
@@ -46,7 +46,7 @@ sc = results.subcases[0]
 
 P, L, E, I = 100.0, 1.0, 7.0e10, 8.333e-10
 x_nodes = [(nid-1)*0.1 for nid in range(1, 12)]
-w_nastaero = [sc.displacements[nid][2] for nid in range(1, 12)]
+w_ascent_load = [sc.displacements[nid][2] for nid in range(1, 12)]
 x_fine = np.linspace(0, L, 100)
 w_exact = P * x_fine**2 * (3*L - x_fine) / (6*E*I)
 
@@ -77,7 +77,7 @@ ax1.axis('off')
 
 # Deflection plot
 ax2.plot(x_fine, w_exact*1000, 'b-', lw=2, label='Analytical (Euler-Bernoulli)')
-ax2.plot(x_nodes, [w*1000 for w in w_nastaero], 'ro', ms=7, label='NastAero', zorder=5)
+ax2.plot(x_nodes, [w*1000 for w in w_ascent_load], 'ro', ms=7, label='ASCENT-Load', zorder=5)
 ax2.set_xlabel('x (m)')
 ax2.set_ylabel('Deflection w (mm)')
 ax2.set_title('(b) Deflection Curve')
@@ -104,7 +104,7 @@ w_exact = M_val * x_fine**2 / (2*E*I)
 
 fig, ax = plt.subplots(figsize=(8, 4.5))
 ax.plot(x_fine, w_exact*1e3, 'b-', lw=2, label='Analytical: $w = Mx^2/(2EI)$')
-ax.plot(x_nodes, [w*1e3 for w in w_na], 'ro', ms=7, label='NastAero (10 CBAR)')
+ax.plot(x_nodes, [w*1e3 for w in w_na], 'ro', ms=7, label='ASCENT-Load (10 CBAR)')
 ax.set_xlabel('x (m)')
 ax.set_ylabel('|Deflection| (mm)')
 ax.set_title('VM2: Cantilever Under End Moment (M=10,000 N-m)')
@@ -205,7 +205,7 @@ cl_helm = 2*np.pi*AR_fine / (2 + np.sqrt(AR_fine**2 + 4))
 fig, ax = plt.subplots(figsize=(8, 5.5))
 ax.plot(AR_fine, cl_ll_fine, 'b-', lw=2, label='Lifting Line: $C_{L_\\alpha}=2\\pi AR/(AR+2)$')
 ax.plot(AR_fine, cl_helm, 'g--', lw=1.5, label='Helmbold Formula')
-ax.plot(AR_values, cl_vlm, 'rs', ms=9, label='NastAero VLM', zorder=5)
+ax.plot(AR_values, cl_vlm, 'rs', ms=9, label='ASCENT-Load VLM', zorder=5)
 ax.axhline(y=cl_2d, color='gray', linestyle=':', lw=1, label='$2\\pi$ (2D limit)')
 ax.set_xlabel('Aspect Ratio (AR)')
 ax.set_ylabel('$C_{L_\\alpha}$ (per radian)')
@@ -508,7 +508,7 @@ for i, x in enumerate(x_fine):
 
 fig, ax = plt.subplots(figsize=(8, 4.5))
 ax.plot(x_fine, w_exact*1e3, 'b-', lw=2, label='Analytical')
-ax.plot(x_nodes, w_na, 'ro', ms=7, label='NastAero', zorder=5)
+ax.plot(x_nodes, w_na, 'ro', ms=7, label='ASCENT-Load', zorder=5)
 ax.set_xlabel('x (m)')
 ax.set_ylabel('|Deflection| (mm)')
 ax.set_title('VM6: Fixed-Fixed Beam with Center Load (P=10,000 N)')

@@ -42,14 +42,14 @@ SOLVER = os.path.normpath(os.path.join(HERE, ".."))
 sys.path.insert(0, SOLVER)
 sys.path.insert(0, HERE)
 
-from nastaero.config import setup_logging                      # noqa: E402
-from nastaero.loads_analysis.certification.batch_runner import (  # noqa: E402
+from ascent_load.config import setup_logging                      # noqa: E402
+from ascent_load.loads_analysis.certification.batch_runner import (  # noqa: E402
     CaseResult,
 )
-from nastaero.loads_analysis.certification.vmt_bridge import (  # noqa: E402
+from ascent_load.loads_analysis.certification.vmt_bridge import (  # noqa: E402
     compute_vmt_for_batch,
 )
-from nastaero.loads_analysis.trim_loads import (               # noqa: E402
+from ascent_load.loads_analysis.trim_loads import (               # noqa: E402
     apply_inertia_relief, compute_nodal_inertial_forces,
     compute_node_masses,
 )
@@ -111,7 +111,7 @@ def main() -> None:
     t0 = time.time()
     batch, vmt, meta = run_variant(ctx, dm, cgs, [0.0], combos=True)
     model = None            # run_variant 내부 모델 재사용 위해 재파싱
-    from nastaero.bdf.parser import parse_bdf
+    from ascent_load.bdf.parser import parse_bdf
     from hull3d_severity_search import adjust_fuselage_masses, ILC8
     model = parse_bdf(os.path.join(ILC8, "ilc8.bdf"))
     mass_kg, cg_x = adjust_fuselage_masses(model, dm, cgs)
@@ -124,7 +124,7 @@ def main() -> None:
           f"({time.time()-t0:.0f}s)", flush=True)
 
     # ── 2. 로터 기저 (호버 1.0g 케이스의 허브 6분력) ──
-    from nastaero.models.ilc8 import make_ilc8_vtol_config
+    from ascent_load.models.ilc8 import make_ilc8_vtol_config
     vtol_config = make_ilc8_vtol_config()
     hover_case = next(c for c in meta.values()
                       if getattr(c, "rotor_forces", None)

@@ -1,4 +1,4 @@
-$ NastAero VM6: Fixed-Fixed Beam with Center Point Load
+$ ASCENT-Load VM6: Fixed-Fixed Beam with Center Point Load
 $ Reference: Roark's Formulas for Stress and Strain
 $ 10 CBAR elements, L=10m, E=200GPa, 0.1x0.1m square cross section
 $ A=0.01 m^2, I=8.333e-6 m^4, J=1.406e-5 m^4

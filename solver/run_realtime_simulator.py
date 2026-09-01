@@ -20,13 +20,13 @@ import time
 import argparse
 import numpy as np
 
-from nastaero.bdf.parser import parse_bdf
-from nastaero.config import setup_logging
+from ascent_load.bdf.parser import parse_bdf
+from ascent_load.config import setup_logging
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="NastAero Real-Time Flight Simulator")
+        description="ASCENT-Load Real-Time Flight Simulator")
     parser.add_argument('--bdf', type=str,
                         default='tests/validation/GACOMP/p400r3-free-trim.bdf',
                         help='Path to BDF model file')
@@ -45,7 +45,7 @@ def main():
     setup_logging(args.log)
 
     print("=" * 70)
-    print("  NastAero Real-Time Flight Simulator")
+    print("  ASCENT-Load Real-Time Flight Simulator")
     print("  Live Structural Loads Visualization")
     print("=" * 70)
     print()
@@ -68,15 +68,15 @@ def main():
     print(f"\n[2/6] Computing aerodynamic derivatives...")
     t0 = time.time()
 
-    from nastaero.loads_analysis.certification.aircraft_config import (
+    from ascent_load.loads_analysis.certification.aircraft_config import (
         AircraftConfig, SpeedSchedule, WeightCGCondition,
         ControlSurfaceLimits, LandingGearConfig, eas_to_tas, eas_to_mach,
     )
-    from nastaero.loads_analysis.certification.aero_derivatives import (
+    from ascent_load.loads_analysis.certification.aero_derivatives import (
         build_derivative_set, compute_inertia_from_conm2,
     )
-    from nastaero.loads_analysis.case_generator import isa_atmosphere
-    from nastaero.aero.dlm import compute_rigid_clalpha
+    from ascent_load.loads_analysis.case_generator import isa_atmosphere
+    from ascent_load.aero.dlm import compute_rigid_clalpha
 
     # Mass and weight
     total_mass_kg = sum(m.mass for m in model.masses.values()) * 1000  # Mg → kg
@@ -127,7 +127,7 @@ def main():
     # ------------------------------------------------------------------
     # 3. Build AircraftParams for 6-DOF
     # ------------------------------------------------------------------
-    from nastaero.loads_analysis.certification.flight_sim import (
+    from ascent_load.loads_analysis.certification.flight_sim import (
         AircraftParams, trim_initial_state,
     )
 
@@ -157,7 +157,7 @@ def main():
     print(f"\n[4/6] Building Modal Reduced-Order Model ({args.modes} modes)...")
     t0 = time.time()
 
-    from nastaero.loads_analysis.certification.modal_rom import ModalROM
+    from ascent_load.loads_analysis.certification.modal_rom import ModalROM
     rom = ModalROM.build(model, n_modes=args.modes, mach=mach_vc)
 
     rom_time = time.time() - t0
@@ -189,7 +189,7 @@ def main():
     print(f"\n[5/6] Computing V-n diagram...")
     t0 = time.time()
 
-    from nastaero.loads_analysis.certification.vn_diagram import compute_vn_diagram
+    from ascent_load.loads_analysis.certification.vn_diagram import compute_vn_diagram
     vn = compute_vn_diagram(config, wc, altitude_m=args.altitude)
     print(f"       nz_max={vn.nz_max:.2f}, nz_min={vn.nz_min:.2f}, "
           f"{len(vn.corner_points)} corner points ({time.time()-t0:.2f}s)")
@@ -209,7 +209,7 @@ def main():
     print()
 
     from PyQt5.QtWidgets import QApplication
-    from nastaero.visualization.realtime_gui import RealtimeSimulatorWindow
+    from ascent_load.visualization.realtime_gui import RealtimeSimulatorWindow
 
     app = QApplication(sys.argv)
     app.setStyle('Fusion')  # Modern look

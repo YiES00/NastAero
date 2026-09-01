@@ -17,7 +17,7 @@ BEAM_MODES_BDF = os.path.join(VALIDATION_DIR, "cantilever_beam", "beam_modes.bdf
 
 def _make_cantilever_model():
     """Parse the cantilever beam BDF for dynamic tests."""
-    from nastaero.bdf.parser import BDFParser
+    from ascent_load.bdf.parser import BDFParser
     parser = BDFParser()
     model = parser.parse(BEAM_MODES_BDF)
     return model
@@ -61,7 +61,7 @@ class TestSol146MatchesSol112NoAero:
         force_func = _impulse_force()
         n_modes = 10
 
-        from nastaero.solvers.sol112 import solve_modal_transient
+        from ascent_load.solvers.sol112 import solve_modal_transient
         self.sol112 = solve_modal_transient(
             model, force_func, t_array,
             n_modes=n_modes, zeta=0.02,
@@ -70,7 +70,7 @@ class TestSol146MatchesSol112NoAero:
         # Re-parse because cross_reference mutates
         model2 = _make_cantilever_model()
 
-        from nastaero.solvers.sol146 import solve_aeroelastic_transient
+        from ascent_load.solvers.sol146 import solve_aeroelastic_transient
         self.sol146 = solve_aeroelastic_transient(
             model2, force_func=force_func, t_array=t_array,
             n_modes=n_modes, zeta=0.02,
@@ -121,9 +121,9 @@ class TestSol146ZeroVelocity:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        from nastaero.bdf.parser import BDFParser
-        from nastaero.bdf.model import BDFModel
-        from nastaero.bdf.cards.aero import AERO
+        from ascent_load.bdf.parser import BDFParser
+        from ascent_load.bdf.model import BDFModel
+        from ascent_load.bdf.cards.aero import AERO
 
         model = _make_cantilever_model()
         # Add a zero-velocity AERO card (no actual panels)
@@ -134,7 +134,7 @@ class TestSol146ZeroVelocity:
         force_func = _impulse_force()
         n_modes = 10
 
-        from nastaero.solvers.sol146 import solve_aeroelastic_transient
+        from ascent_load.solvers.sol146 import solve_aeroelastic_transient
         self.result = solve_aeroelastic_transient(
             model, force_func=force_func, t_array=t_array,
             n_modes=n_modes, zeta=0.02,
@@ -160,7 +160,7 @@ class TestSol146ImpulseResponse:
         t_array = np.linspace(0, 0.5, 2001)
         force_func = _impulse_force(amplitude=100.0, pulse_duration=0.001)
 
-        from nastaero.solvers.sol146 import solve_aeroelastic_transient
+        from ascent_load.solvers.sol146 import solve_aeroelastic_transient
         self.result = solve_aeroelastic_transient(
             model, force_func=force_func, t_array=t_array,
             n_modes=10, zeta=0.005,
@@ -215,9 +215,9 @@ class TestSol146WithAeroStiffness:
 
     def test_aero_stiffness_modifies_response(self):
         """With aero stiffness, response should differ from no-aero case."""
-        from nastaero.solvers.sol146 import solve_aeroelastic_transient
-        from nastaero.bdf.cards.aero import AERO, CAERO1, PAERO1, SPLINE1
-        from nastaero.bdf.cards.sets import SET1
+        from ascent_load.solvers.sol146 import solve_aeroelastic_transient
+        from ascent_load.bdf.cards.aero import AERO, CAERO1, PAERO1, SPLINE1
+        from ascent_load.bdf.cards.sets import SET1
 
         t_array = np.linspace(0, 0.1, 501)
         force_func = _impulse_force()
@@ -287,7 +287,7 @@ class TestDynamicCardParsing:
     """Test BDF card parsers for dynamic analysis cards."""
 
     def test_tload1_parse(self):
-        from nastaero.bdf.cards.dynamic import TLOAD1
+        from ascent_load.bdf.cards.dynamic import TLOAD1
         fields = ["TLOAD1", "10", "20", "0.0", "0", "30"]
         t = TLOAD1.from_fields(fields)
         assert t.sid == 10
@@ -296,7 +296,7 @@ class TestDynamicCardParsing:
         assert t.load_type == 0
 
     def test_dload_parse(self):
-        from nastaero.bdf.cards.dynamic import DLOAD
+        from ascent_load.bdf.cards.dynamic import DLOAD
         fields = ["DLOAD", "5", "2.0", "1.5", "10", "0.5", "20"]
         d = DLOAD.from_fields(fields)
         assert d.sid == 5
@@ -306,7 +306,7 @@ class TestDynamicCardParsing:
         assert d.load_ids == [10, 20]
 
     def test_tabled1_parse(self):
-        from nastaero.bdf.cards.dynamic import TABLED1
+        from ascent_load.bdf.cards.dynamic import TABLED1
         fields = ["TABLED1", "1", "", "",
                   "", "0.0", "0.0", "0.5", "1.0",
                   "1.0", "1.0", "1.5", "0.0", "ENDT"]
@@ -317,7 +317,7 @@ class TestDynamicCardParsing:
         np.testing.assert_array_almost_equal(t.y, [0.0, 1.0, 1.0, 0.0])
 
     def test_tabled1_interpolation(self):
-        from nastaero.bdf.cards.dynamic import TABLED1
+        from ascent_load.bdf.cards.dynamic import TABLED1
         t = TABLED1(tid=1,
                     x=np.array([0.0, 1.0, 2.0]),
                     y=np.array([0.0, 1.0, 0.0]))
@@ -328,7 +328,7 @@ class TestDynamicCardParsing:
         assert t.evaluate(2.0) == pytest.approx(0.0)
 
     def test_gust_parse(self):
-        from nastaero.bdf.cards.dynamic import GUST
+        from ascent_load.bdf.cards.dynamic import GUST
         fields = ["GUST", "1", "10", "5.0", "100.0", "200.0"]
         g = GUST.from_fields(fields)
         assert g.sid == 1
@@ -338,7 +338,7 @@ class TestDynamicCardParsing:
         assert g.v == pytest.approx(200.0)
 
     def test_darea_parse(self):
-        from nastaero.bdf.cards.dynamic import DAREA
+        from ascent_load.bdf.cards.dynamic import DAREA
         fields = ["DAREA", "1", "100", "3", "1.5", "200", "3", "2.0"]
         d = DAREA.from_fields(fields)
         assert d.sid == 1
@@ -347,7 +347,7 @@ class TestDynamicCardParsing:
         assert d.entries[1] == (200, 3, pytest.approx(2.0))
 
     def test_tstep_parse(self):
-        from nastaero.bdf.cards.dynamic import TSTEP
+        from ascent_load.bdf.cards.dynamic import TSTEP
         fields = ["TSTEP", "1", "1000", "0.001", "5"]
         t = TSTEP.from_fields(fields)
         assert t.sid == 1
@@ -356,7 +356,7 @@ class TestDynamicCardParsing:
         assert t.skip == 5
 
     def test_freq1_parse(self):
-        from nastaero.bdf.cards.dynamic import FREQ1
+        from ascent_load.bdf.cards.dynamic import FREQ1
         fields = ["FREQ1", "1", "0.5", "0.1", "100"]
         f = FREQ1.from_fields(fields)
         assert f.sid == 1
@@ -365,7 +365,7 @@ class TestDynamicCardParsing:
         assert f.ndf == 100
 
     def test_tabdmp1_parse(self):
-        from nastaero.bdf.cards.dynamic import TABDMP1
+        from ascent_load.bdf.cards.dynamic import TABDMP1
         fields = ["TABDMP1", "1", "CRIT",
                   "1.0", "0.02", "10.0", "0.05", "ENDT"]
         t = TABDMP1.from_fields(fields)
@@ -376,7 +376,7 @@ class TestDynamicCardParsing:
         np.testing.assert_array_almost_equal(t.values, [0.02, 0.05])
 
     def test_tabdmp1_interpolation(self):
-        from nastaero.bdf.cards.dynamic import TABDMP1
+        from ascent_load.bdf.cards.dynamic import TABDMP1
         t = TABDMP1(tid=1, damp_type="CRIT",
                     freqs=np.array([1.0, 10.0]),
                     values=np.array([0.02, 0.05]))
