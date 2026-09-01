@@ -10,7 +10,7 @@
 |---|---|---|
 | 전체(사유 데이터 보유) | 997 passed | `python -m pytest tests/ -q` |
 | 공개 클론 `[dev,plot,gui]` | 971 passed, 26 skipped | 동일 |
-| 공개 클론 `[dev,plot]` | 921 passed, 25 skipped | 동일 |
+| 공개 클론 `[dev,plot]` | 921 passed, 26 skipped | 동일 |
 
 ## ILC-8 인증 파이프라인 (`python run_ilc8_cert_analysis.py`)
 
