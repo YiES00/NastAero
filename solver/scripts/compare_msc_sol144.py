@@ -2,7 +2,7 @@
 """ILC-8 MSC 비교 덱의 트림 변수를 두 솔버 간 자동 대조한다.
 
 사용법:
-    python scripts/compare_msc_sol144.py <msc.f06> [--naero <result.aload>]
+    python scripts/compare_msc_sol144.py <msc.f06> [--aload <result.aload>]
 
 .aload 결과가 없으면 tests/validation/ILC8/ilc8_msc_sol144.bdf를 직접
 풀어서 비교한다.
@@ -83,7 +83,7 @@ def solve_ascent_load(naero_path: Path | None) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("f06", type=Path)
-    ap.add_argument("--naero", type=Path, default=None)
+    ap.add_argument("--aload", type=Path, default=None)
     args = ap.parse_args()
 
     msc = parse_msc_f06(args.f06)
