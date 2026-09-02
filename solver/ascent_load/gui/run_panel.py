@@ -71,7 +71,7 @@ def build_solver_command(bdf_path: str, parallel: int = 0,
     return cmd
 
 
-def naero_path_for(bdf_path: str) -> str:
+def aload_path_for(bdf_path: str) -> str:
     """--save가 만드는 .aload 경로 (<입력>.aload)."""
     return str(Path(bdf_path).with_suffix(".aload"))
 
@@ -191,7 +191,7 @@ class RunPanel(QWidget):
         self._stop_btn.setEnabled(False)
         if exit_code == 0 and bdf_path:
             self._status.setText("완료 — 결과 로드됨")
-            self.run_finished.emit(naero_path_for(bdf_path))
+            self.run_finished.emit(aload_path_for(bdf_path))
         else:
             self._status.setText(f"종료 코드 {exit_code}")
             self.run_finished.emit("")

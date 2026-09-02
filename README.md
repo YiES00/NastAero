@@ -124,7 +124,7 @@ python -m ascent_load.gui                     # desktop workbench
 cd solver && python -m pytest tests/ -q
 ```
 
-The suite has 997 tests and takes about 11 minutes on the reference
+The suite has 1,031 tests and takes about 11 minutes on the reference
 workstation. What your clone reports depends on two things: whether
 the proprietary comparison-model data is present, and whether the
 optional `gui` extra is installed — the 51 GUI tests are not collected
@@ -132,8 +132,8 @@ without it.
 
 | Install | Collected | Public clone reports |
 |---|---|---|
-| `pip install -e ".[dev,plot]"` | 947 | **921 passed, 26 skipped** |
-| `pip install -e ".[dev,plot,gui]"` | 997 | **971 passed, 26 skipped** |
+| `pip install -e ".[dev,plot]"` | 981 | **955 passed, 26 skipped** |
+| `pip install -e ".[dev,plot,gui]"` | 1031 | **1005 passed, 26 skipped** |
 
 Both rows are asserted by the CI workflow above on every push, on
 Python 3.10 and 3.12. The two `26`s are not the same 26: in the first
@@ -145,7 +145,7 @@ That data is **not redistributable and therefore not part of this
 repository**. If you hold it under your own agreement, place it at
 `solver/tests/validation/GACOMP/` (the path is git-ignored) and those
 tests run automatically — no configuration needed. With the data and
-the `gui` extra both present the suite reports 997 passed.
+the `gui` extra both present the suite reports 1006 passed.
 
 ## Reproducing the published results
 

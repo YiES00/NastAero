@@ -11,11 +11,11 @@ VM_DIR = Path(__file__).parent / "validation" / "nastran_vm"
 
 
 # ---------------------------------------------------------------------------
-# run_panel.build_solver_command / naero_path_for — qtpy 필요 (임포트 시)
+# run_panel.build_solver_command / aload_path_for — qtpy 필요 (임포트 시)
 # ---------------------------------------------------------------------------
 qtpy = pytest.importorskip("qtpy", reason="GUI deps not installed")
 
-from ascent_load.gui.run_panel import build_solver_command, naero_path_for  # noqa: E402
+from ascent_load.gui.run_panel import build_solver_command, aload_path_for  # noqa: E402
 from ascent_load.gui.model_tree import summarize_model  # noqa: E402
 from ascent_load.gui.editor import HIGHLIGHT_RULES  # noqa: E402
 
@@ -38,8 +38,8 @@ class TestBuildSolverCommand:
         assert cmd[cmd.index("--spline-slope") + 1] == "rotation"
         assert cmd[cmd.index("--log-level") + 1] == "DEBUG"
 
-    def test_naero_path(self):
-        assert naero_path_for("/a/b/model.bdf") == "/a/b/model.aload"
+    def test_aload_path(self):
+        assert aload_path_for("/a/b/model.bdf") == "/a/b/model.aload"
 
 
 class TestKillProcessTree:
@@ -538,13 +538,13 @@ class TestDescribeItem:
         self._exercise(model)
 
     def test_viz_model_all_items(self):
-        naero = (Path(__file__).parent / "validation" / "ILC8"
-                 / "ilc8.aload")
-        if not naero.exists():
+        archive = (Path(__file__).parent / "validation" / "ILC8"
+                   / "ilc8.aload")
+        if not archive.exists():
             pytest.skip("ilc8.aload not generated")
         from ascent_load.output.result_io import load_results
 
-        results, viz = load_results(str(naero))
+        results, viz = load_results(str(archive))
         self._exercise(viz, results)
 
     def test_elem_type_uses_dict_keys(self):

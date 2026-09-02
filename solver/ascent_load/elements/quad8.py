@@ -6,7 +6,7 @@ integration for transverse shear (prevents shear locking).
 """
 from __future__ import annotations
 import numpy as np
-from .base import BaseElement
+from .base import BaseElement, drill_scale
 
 # 3x3 Gauss quadrature
 _GP3 = np.array([-np.sqrt(3.0 / 5.0), 0.0, np.sqrt(3.0 / 5.0)])
@@ -216,7 +216,7 @@ class CQuad8Element(BaseElement):
 
         # Drilling DOF stabilization (rz DOFs)
         area = self._compute_area()
-        alpha_drill = E * t * area * 1e-6
+        alpha_drill = E * t * area * 1e-6 * drill_scale()
         for nd in range(8):
             rz_dof = 6 * nd + 5
             k[rz_dof, rz_dof] += alpha_drill

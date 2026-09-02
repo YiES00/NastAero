@@ -219,6 +219,11 @@ def main():
               f"({fz_max['rotor_label']}, {fz_max['condition']})")
 
     # ---- 8. VMT ----
+    # 로터 블레이드(991 r b s)와 착륙장치(992xxx)는 하중을 실은 채
+    # 어느 구성품에도 없어 단면 적분에서 빠지고 있었다 (r4 8.1의
+    # fail-closed 게이트가 적발: 미분류 111절점, |F| 잔차 3.7 kN).
+    # 블레이드는 로터 위치를 실측해 귀속한다 — r_i 0~3은 y<0(좌익),
+    # 4~7은 y>0(우익), 9는 푸셔(동체). 착륙장치는 동체에 귀속한다.
     # 컴포넌트는 생성기 노드 대역으로 수동 정의 — 기하 휴리스틱이
     # ILC-8의 원통 동체 상면을 VTP로 오분류하고, 붐/허브(로터 하중
     # 작용점)를 어느 컴포넌트에도 넣지 않아 날개 VMT에서 로터 하중이
@@ -240,10 +245,12 @@ def main():
     components = identify_components_manual(model, [
         dict(name="Right Wing", integration_sign=1.0, color="blue",
              node_ids=_nids(400000, 499999)
-             + _nids(730000, 749999, hubs_r), **WING),
+             + _nids(730000, 749999, hubs_r)
+             + _nids(991400, 991799), **WING),
         dict(name="Left Wing", integration_sign=-1.0, color="dodgerblue",
              node_ids=_nids(300000, 399999)
-             + _nids(710000, 729999, hubs_l), **WING),
+             + _nids(710000, 729999, hubs_l)
+             + _nids(991000, 991399), **WING),
         # V-tail (40° 상반각): y-스팬 투영으로 적분 — z-전단/굽힘이
         # 패널 수직하중의 cos(40°) 성분을 담는 공학적 근사
         dict(name="Right V-Tail", integration_sign=1.0, color="red",
@@ -251,7 +258,8 @@ def main():
         dict(name="Left V-Tail", integration_sign=-1.0, color="salmon",
              node_ids=_nids(500000, 599999), **WING),
         dict(name="Fuselage", integration_sign=-1.0, color="gray",
-             node_ids=_nids(100000, 299999, (990201,)),
+             node_ids=_nids(100000, 299999, (990201,))
+             + _nids(991900, 991999) + _nids(992000, 992999),
              span_axis=0, shear_axis=2, bending_axis=1, torsion_axis=0),
     ])
     # ---- 8b. (고장×재트림) 확장 사건 — 선형 패턴 전수 선별 후
@@ -279,9 +287,26 @@ def main():
     print(f"\n[9] VMT internal loads... (manual components: "
           f"{', '.join(c.name for c in components.components)})")
     t_vmt = time.time()
+    # 인증 지향 실행은 fail-closed로 돈다 (r4 8.1): 하중을 가진
+    # 미분류·중복분류 절점이 하나라도 있으면 단면 적분을 거부한다.
+    from ascent_load.loads_analysis.component_id import (
+        audit_classification, plot_classification,
+    )
+    _first = next((c for c in batch_result.case_results
+                   if c.converged and c.nodal_forces), None)
+    if _first is not None:
+        _audit = audit_classification(model, components, _first.nodal_forces)
+        print(f"    분류 감사: {_audit.summary()}")
+        _fig = plot_classification(
+            model, components,
+            os.path.join(output_dir, "02_component_classification.png"),
+            _first.nodal_forces)
+        print(f"    분류 산점도: {_fig}")
+
     vmt_data = compute_vmt_for_batch(model, batch_result,
                                      components=components,
-                                     fuselage_cg_x=4450.0)
+                                     fuselage_cg_x=4450.0,
+                                     strict_classification=True)
     print(f"    VMT for {len(vmt_data)} cases in {time.time()-t_vmt:.1f}s")
     comp_names = list(next(iter(vmt_data.values())).keys()) if vmt_data else []
     print(f"    Components: {', '.join(comp_names)}")

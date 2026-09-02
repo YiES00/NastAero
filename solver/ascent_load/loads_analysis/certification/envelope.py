@@ -32,6 +32,10 @@ from .batch_runner import BatchResult, CaseResult
 
 logger = logging.getLogger(__name__)
 
+# 구성품 국부 6분력의 물리량 이름 (r4 MC3). 전역 3성분 "V"/"M"/"T"와
+# 구분되는 별도 이름이라 임계 케이스 기록에서 서로 섞이지 않는다.
+LOCAL_QUANTITIES = ("N", "Vy", "Vz", "Mx", "My", "Mz")
+
 
 # ---------------------------------------------------------------------------
 # Critical case record
@@ -48,7 +52,10 @@ class CriticalCase:
     component : str
         Structural component name (e.g., "Wing", "HTP").
     quantity : str
-        Load quantity: "V" (shear), "M" (bending), "T" (torsion).
+        Load quantity. Global-axis: "V" (shear), "M" (bending),
+        "T" (torsion). Component-local 6-component (r4 MC3):
+        "N" (axial), "Vy"/"Vz" (chord/normal shear), "Mx" (torsion
+        about the member axis), "My"/"Mz" (bending).
     extreme : str
         "max" or "min".
     value : float
@@ -269,6 +276,24 @@ class StationEnvelope:
     M_min_case_id: int = 0
     T_max_case_id: int = 0
     T_min_case_id: int = 0
+    # 구성품 국부 6분력 극값 (r4 MC3). local[qty] = [min, max],
+    # local_case[qty] = [min_case_id, max_case_id]. 국부 배열이 없는
+    # 구성품에서는 비어 있으므로 전역 3성분 경로와 독립이다.
+    local: Dict[str, List[float]] = field(default_factory=dict)
+    local_case: Dict[str, List[int]] = field(default_factory=dict)
+
+    def update_local(self, qty: str, value: float, case_id: int) -> None:
+        cur = self.local.get(qty)
+        if cur is None:
+            self.local[qty] = [value, value]
+            self.local_case[qty] = [case_id, case_id]
+            return
+        if value < cur[0]:
+            cur[0] = value
+            self.local_case[qty][0] = case_id
+        if value > cur[1]:
+            cur[1] = value
+            self.local_case[qty][1] = case_id
 
 
 # ---------------------------------------------------------------------------
@@ -496,6 +521,18 @@ class EnvelopeProcessor:
                         se.T_min = torsion[i]
                         se.T_min_case_id = case_id
 
+                # 국부 6분력 극값 (r4 MC3). 국부 스테이션은 부재축
+                # 투영이라 전역 스테이션과 개수는 같지만 좌표가 다르므로
+                # 인덱스로 대응시킨다(두 축 모두 같은 n_stations 등간격).
+                if vmt.get("local_stations") is not None:
+                    for qty in LOCAL_QUANTITIES:
+                        arr = vmt.get(qty)
+                        if arr is None:
+                            continue
+                        for i in range(min(len(arr), len(env.envelopes))):
+                            env.envelopes[i].update_local(
+                                qty, float(arr[i]), case_id)
+
         return self._component_envelopes
 
     def get_envelope(self, component: str) -> Optional[ComponentEnvelope]:
@@ -552,6 +589,41 @@ class EnvelopeProcessor:
                     ))
 
         return self._critical_cases
+
+    def identify_local_critical_cases(self) -> List[CriticalCase]:
+        """구성품 국부 6분력의 축별 극값을 임계 케이스로 추가한다 (r4 MC3).
+
+        전역 3성분 선정은 경사·후퇴 구성품에서 축력·시위 전단·면내
+        굽힘을 볼 수 없다. 국부 물리량은 "N"/"Vy"/"Vz"/"Mx"/"My"/"Mz"
+        라는 별도 이름으로 기록되므로 기존 V/M/T 기록과 섞이지 않고,
+        설계 세트 선정에서 함께 순위에 반영된다.
+        """
+        added: List[CriticalCase] = []
+        for comp_name, env in self._component_envelopes.items():
+            for se in env.envelopes:
+                for qty, pair in se.local.items():
+                    ids = se.local_case.get(qty, [0, 0])
+                    for k, extreme in ((0, "min"), (1, "max")):
+                        value, cid = pair[k], ids[k]
+                        if abs(value) == math.inf:
+                            continue
+                        cr = self.batch_result.get_result(cid)
+                        cc = CriticalCase(
+                            station=se.station,
+                            component=comp_name,
+                            quantity=qty,
+                            extreme=extreme,
+                            value=value,
+                            case_id=cid,
+                            category=cr.category if cr else "",
+                            far_section=cr.far_section if cr else "",
+                            nz=cr.nz if cr else 0.0,
+                            label=cr.label if cr else "",
+                        )
+                        self._critical_cases.append(cc)
+                        added.append(cc)
+        logger.info("Local 6-component critical records: %d", len(added))
+        return added
 
     def get_critical_cases(self, component: str = None,
                              quantity: str = None,
@@ -1053,6 +1125,7 @@ def select_critical_design_loads(
     infeasible_policy: str = "separate",
     components: Any = None,
     vmt_data: Optional[Dict[int, Dict[str, Any]]] = None,
+    include_local6: bool = True,
 ) -> Dict[str, Any]:
     """Run the full critical-design-load selection, the last loads step.
 
@@ -1100,6 +1173,12 @@ def select_critical_design_loads(
         default and should only be turned off to reproduce planar-selection
         results. Cost is negligible (hulls over all stations take seconds);
         the price is a slightly larger design set.
+    include_local6 : bool
+        Also mark the axis extremes of the component-local six-component
+        section loads (N, Vy, Vz, Mx, My, Mz) as critical (default,
+        r4 MC3). The global-axis V/M/T records are unchanged; setting
+        this False reproduces the global-only selection of earlier
+        releases, which is how the two design sets are compared.
     infeasible_policy : str
         How cases whose rotor thrust command was NOT achieved (BEMT
         collective saturation, ``CaseResult.rotor_command_feasible``
@@ -1158,6 +1237,8 @@ def select_critical_design_loads(
         proc.add_interaction_critical_cases(planes=planes)
     if include_3d:
         proc.add_interaction_critical_cases_3d()
+    if include_local6:
+        proc.identify_local_critical_cases()
     design_cases = proc.select_design_cases()
 
     # Stamp physical realizability on every selected case

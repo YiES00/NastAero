@@ -18,7 +18,7 @@ authors:
       University, Incheon, Republic of Korea
 repository-code: https://github.com/YiES00/ASCENT-Load
 license: AGPL-3.0-or-later
-version: 1.4.0
+version: 1.5.0
 keywords:
   - aeroelasticity
   - static aeroelastic trim

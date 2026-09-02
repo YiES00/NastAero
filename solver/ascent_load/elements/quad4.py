@@ -5,7 +5,7 @@ Uses 2x2 Gauss integration for membrane and bending, 1-point for shear (selectiv
 """
 from __future__ import annotations
 import numpy as np
-from .base import BaseElement
+from .base import BaseElement, drill_scale
 
 # 2x2 Gauss points
 _GP2 = np.array([-1/np.sqrt(3), 1/np.sqrt(3)])
@@ -175,7 +175,7 @@ class CQuad4Element(BaseElement):
 
         # Drilling DOF stabilization (rz DOFs: 5, 11, 17, 23)
         area = self._compute_area()
-        alpha_drill = E * t * area * 1e-6
+        alpha_drill = E * t * area * 1e-6 * drill_scale()
         for n_idx in range(4):
             rz_dof = 6 * n_idx + 5
             k[rz_dof, rz_dof] += alpha_drill

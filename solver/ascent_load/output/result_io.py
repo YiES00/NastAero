@@ -24,11 +24,11 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Any
 from pathlib import Path
 
+from .. import __version__
 from .result_data import ResultData, SubcaseResult
 from ..config import logger
 
-FORMAT_VERSION = 1
-__version__ = "0.3.0"
+FORMAT_VERSION = 1  # .aload 아카이브 스키마 버전 (패키지 버전과 무관)
 
 
 # ---------------------------------------------------------------------------

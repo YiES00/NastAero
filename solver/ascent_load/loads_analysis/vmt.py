@@ -369,6 +369,12 @@ def compute_vmt_fuselage_cg(
             M[i] = -M[i]
             T[i] = -T[i]
 
+    # 동체(CG 양방향 적분)에도 국부 6분력을 복원한다 (r4 MC3). 절단
+    # 방식은 전역 경로와 달리 CG 기준 전방/후방으로 나뉘지만, 국부
+    # 복원은 부재축 절단을 그대로 쓰므로 스테이션 매개변수화가 다르다.
+    # 두 배열은 각자의 station 축(stations / local_stations)에 붙는다.
+    loc = _local6_recovery(all_xyz, all_f6, component, n_stations,
+                           elastic_axis_frac)
     return VMTCurve(
         component_name=component.name,
         stations=stations,
@@ -379,6 +385,15 @@ def compute_vmt_fuselage_cg(
         station_label=_AXIS_LABELS.get(span_ax, 'Station'),
         load_type=load_type,
         subcase_id=subcase_id,
+        local_stations=None if loc is None else loc['stations'],
+        local_N=None if loc is None else loc['N'],
+        local_Vy=None if loc is None else loc['Vy'],
+        local_Vz=None if loc is None else loc['Vz'],
+        local_Mx=None if loc is None else loc['Mx'],
+        local_My=None if loc is None else loc['My'],
+        local_Mz=None if loc is None else loc['Mz'],
+        local_frame=None if loc is None else loc['frame'],
+        local_cut_points=None if loc is None else loc['cut_points'],
     )
 
 

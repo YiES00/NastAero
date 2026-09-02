@@ -415,6 +415,213 @@ def solve_trim(bdf_model: BDFModel, n_workers: int = 0,
 # Phase 1: Shared data construction
 # ---------------------------------------------------------------------------
 
+def _fundamental_divergence_margin(solve_k_fn, G_sp, G_disp,
+                                   A_jj: np.ndarray, q: float,
+                                   k: int = 4, tol: float = 1e-8,
+                                   maxiter: int = 300,
+                                   imag_ratio_max: float = 0.05):
+    """구조 분해를 재사용하는 기본(최소) 발산 여유 추정 (T4 1차 지표).
+
+    비시프트 루프 연산자
+        C_f v = G_sp · K^{-1} · G_disp^T · A_jj · v
+    의 최대 양의 근사-실수 고유치 mu_f 는 (A_jj 가 동압 q 를 포함하므로)
+    mu_f = q / q_div,min 을 준다 — 오프라인 정확 축소
+    (r4_divergence_final.py)와 동일한 수학을 ARPACK 부분 고유해로
+    수행하는 것이다. margin = q_div,min / q = 1 / mu_f.
+
+    K(구조만, 마운트+백스톱)의 분해는 배치당 1회만 필요하며
+    (M,q) 그룹 전체가 재사용한다 — 시프트-재사용 최근접 교차 추정
+    (_estimate_divergence_proximity)이 깊은 후발산 영역에서 기본
+    교차를 분해하지 못하는 한계(E9 실측)를 보완하는 1차 안전 지표.
+
+    Returns
+    -------
+    dict | None
+        {'q_div': float, 'margin': float, 'mu': float,
+         'n_solves': int, 'complex_dominant': bool}
+    """
+    n_boxes = A_jj.shape[0]
+    counter = {'n': 0}
+
+    def _matvec(v):
+        counter['n'] += 1
+        return G_sp @ solve_k_fn(G_disp.T @ (A_jj @ v))
+
+    try:
+        if n_boxes <= 10:
+            C = np.column_stack([_matvec(col) for col in np.eye(n_boxes)])
+            mu_all = np.linalg.eigvals(C)
+        else:
+            op = spla.LinearOperator((n_boxes, n_boxes), matvec=_matvec)
+            mu_all = spla.eigs(op, k=min(k, n_boxes - 2), which='LR',
+                               return_eigenvectors=False,
+                               tol=tol, maxiter=maxiter)
+    except Exception as exc:
+        logger.debug("  fundamental divergence estimate failed: %s", exc)
+        return None
+
+    cands = [m.real for m in np.atleast_1d(mu_all)
+             if m.real > 0 and abs(m.imag) <= imag_ratio_max * abs(m.real)]
+    if not cands:
+        return {'q_div': np.nan, 'margin': np.nan, 'mu': np.nan,
+                'n_solves': counter['n'], 'complex_dominant': True}
+    mu_f = max(cands)
+    return {'q_div': q / mu_f, 'margin': 1.0 / mu_f, 'mu': mu_f,
+            'n_solves': counter['n'], 'complex_dominant': False}
+
+
+def _estimate_divergence_proximity(solve_fn, G_sp, G_disp,
+                                   A_jj: np.ndarray, q: float,
+                                   k: int = 2, tol: float = 1e-8,
+                                   maxiter: int = 80,
+                                   imag_ratio_max: float = 0.05):
+    """트림 분해를 재사용하는 최근접 교차 근접도 추정 (T4 2차 지표).
+
+    작동점에서 이미 분해된 K_eff = K - Q_q 를 시프트-역반복의
+    전처리로 재활용한다. 패널공간 축소 연산자
+        C v = G_sp · K_eff^{-1} · G_disp^T · A_jj · v
+    의 고유치 mu 는 두-공간 동치(AB-BA 항등)로 K_eff^{-1} Q_q 의
+    비영 스펙트럼과 같고, 시프트 관계
+        (K - (q_div/q) Q_q) 특이  ⇔  mu = q / (q_div - q)
+    로부터  q_div = q (1 + 1/mu),  margin = q_div/q = 1 + 1/mu.
+
+    의미론에 주의: 이것은 (q_div - q) 거리 기준 **최근접** 교차이지
+    최소 발산 동압(기본 교차)이 아니다. 작동점이 여러 교차를 지난
+    깊은 후발산 영역에서는 기본 교차가 mu ~ -1 군집에 들어가 이
+    추정으로는 분해되지 않는다(E9 실측 — GACOMP 표면 M0.5에서
+    최근접 여유 1.44 대 기본 여유 0.027). 따라서 이 지표는 트림
+    해의 조건화/증폭 진단(작동점이 특이점에 얼마나 가까운가)이며,
+    안전 판정은 _fundamental_divergence_margin 이 담당한다.
+
+    비용: 반복당 삼각해 1회(캐시된 분해 재사용) + 스플라인 행렬곱.
+    (M, q) 그룹당 1회만 계산해 캐시하면 서브케이스 한계비용은 0이다.
+
+    Returns
+    -------
+    dict | None
+        {'q_div': float, 'margin': float, 'mu': float,
+         'n_solves': int, 'complex_dominant': bool}
+        근사-실수 고유치가 없거나 반복이 실패하면 None.
+    """
+    n_boxes = A_jj.shape[0]
+    counter = {'n': 0}
+
+    def _matvec(v):
+        counter['n'] += 1
+        return G_sp @ solve_fn(G_disp.T @ (A_jj @ v))
+
+    try:
+        if n_boxes <= 10:
+            C = np.column_stack([_matvec(col) for col in np.eye(n_boxes)])
+            mu_all = np.linalg.eigvals(C)
+        else:
+            op = spla.LinearOperator((n_boxes, n_boxes), matvec=_matvec)
+            mu_all = spla.eigs(op, k=min(k, n_boxes - 2), which='LM',
+                               return_eigenvectors=False,
+                               tol=tol, maxiter=maxiter)
+    except Exception as exc:                     # 진단은 해석을 막지 않는다
+        logger.debug("  divergence-proximity estimate failed: %s", exc)
+        return None
+
+    near_real = [complex(m) for m in np.atleast_1d(mu_all)
+                 if abs(m.real) > 0 and
+                 abs(m.imag) <= imag_ratio_max * abs(m.real)]
+    complex_dominant = len(near_real) == 0
+    if complex_dominant:
+        return {'q_div': np.nan, 'margin': np.nan, 'mu': np.nan,
+                'n_solves': counter['n'], 'complex_dominant': True}
+    mu = max(near_real, key=lambda m: abs(m.real)).real
+    margin = 1.0 + 1.0 / mu
+    return {'q_div': q * margin, 'margin': margin, 'mu': mu,
+            'n_solves': counter['n'], 'complex_dominant': False}
+
+
+def _rotation_compliance_qdiv(G_w, G_d, k_diag,
+                              A_unit: np.ndarray,
+                              imag_ratio_max: float = 0.05) -> float:
+    """회전 구성 사전 진단: 대각 컴플라이언스 대용 발산 동압 추정 (T2 Π).
+
+    회전 구성의 공탄성 루프는 워시 참여 회전 자유도(= G_w의 비영 열)를
+    지난다. 대각 컴플라이언스 1/k_jj 만으로 조립한 대용 연산자
+        C_hat = G_w[:,rot] diag(1/k_jj) G_d[:,rot]^T A_unit
+    의 스펙트럼에서 q_hat_div 를 추정한다. **경험적 사전 경고 지표다** —
+    SPD K의 (K^-1)_jj >= 1/K_jj 는 대각 성분에 대한 부등식일 뿐이며,
+    오프대각 강성 결합 때문에 참 루프 이득이 대용보다 작을 수도 크게
+    나올 수도 있어 어느 방향의 일반 경계도 성립하지 않는다(2x2 SPD
+    반례: K=[[1,.9],[.9,1]], g=[1,1] 에서 q_hat=0.5 < q_div=0.95 —
+    거짓 양성 가능; 회귀 시험으로 고정). 비교 모델 실측에서는
+    q_hat/q_div ~ 33(마하 무관)으로 전 비행점에서 유효한 경고로
+    작동했다. 거짓 양성·거짓 음성 모두 가능하므로 안전 판정은 전체
+    결합 연산자의 발산 고유치(_fundamental_divergence_margin 또는
+    오프라인 정확 축소)가 담당한다. K 분해가 필요 없어 조립 직후
+    O(n_boxes^2 · n_rot + n_boxes^3) 비용으로 계산된다.
+
+    Returns
+    -------
+    float
+        q_hat_div = 1 / rho_+(C_hat). 양의 근사-실수 고유치가 없으면 inf.
+    """
+    gw = G_w.toarray() if sp.issparse(G_w) else np.asarray(G_w)
+    gd = G_d.toarray() if sp.issparse(G_d) else np.asarray(G_d)
+    rot_cols = np.where(np.abs(gw).sum(axis=0) > 0.0)[0]
+    if rot_cols.size == 0:
+        return np.inf
+    k = np.asarray(k_diag, dtype=float)[rot_cols].copy()
+    k[k <= 0] = np.inf
+    C_hat = (gw[:, rot_cols] / k) @ (gd[:, rot_cols].T @ A_unit)
+    mu = np.linalg.eigvals(C_hat)
+    cand = [m.real for m in mu
+            if m.real > 0 and abs(m.imag) <= imag_ratio_max * abs(m.real)]
+    return 1.0 / max(cand) if cand else np.inf
+
+
+_PI_WARN_BOX_LIMIT = 1500   # eig 비용 상한 (n_boxes^3)
+
+
+def _warn_rotation_compliance(bdf_model: BDFModel, boxes: List[AeroBox],
+                              G_w_dense, G_d_dense, k_diag) -> None:
+    """rotation slope 모드 선택 시 Π = q_max/q_hat_div 를 계산해 경고한다.
+
+    실패해도 트림 해석을 막지 않는 순수 진단 경로다. A_unit은 M=0
+    (비압축) 기준 — 스크리닝 목적에는 PG 보정(<~15%)이 불필요하다.
+    """
+    try:
+        if len(boxes) > _PI_WARN_BOX_LIMIT:
+            logger.debug("  rotation-compliance screen skipped "
+                         "(%d boxes > %d)", len(boxes), _PI_WARN_BOX_LIMIT)
+            return
+        sym = bdf_model.aeros.symxz if (bdf_model.aeros is not None and
+                                        hasattr(bdf_model.aeros, 'symxz')) else 0
+        D = build_aic_matrix(boxes, 0.0, reduced_freq=0.0, sym_xz=sym)
+        fdg = np.array([2.0 * b.area / b.chord if b.chord > 1e-12 else 0.0
+                        for b in boxes])
+        A_unit = np.diag(fdg) @ np.linalg.inv(D)
+        q_hat = _rotation_compliance_qdiv(G_w_dense, G_d_dense, k_diag, A_unit)
+        q_list = [t.q for t in getattr(bdf_model, 'trims', {}).values()
+                  if getattr(t, 'q', 0.0) > 0.0]
+        if not q_list or not np.isfinite(q_hat):
+            logger.info("  rotation-compliance screen: q_hat_div = %.3e "
+                        "(no flight q to compare)", q_hat)
+            return
+        Pi = max(q_list) / q_hat
+        if Pi >= 1.0:
+            logger.warning(
+                "  rotation slope mode: rotation-compliance number "
+                "Pi = %.3g >= 1 (q_hat_div = %.3e, q_max = %.3e) — "
+                "empirical screening indicator: the aeroelastic loop "
+                "closes through nodal rotations and the divergence "
+                "margin may be lost; verify with the in-line "
+                "fundamental-margin indicator or an exact divergence "
+                "eigensolution, and prefer the default surface slope "
+                "mode for built-up shell models.",
+                Pi, q_hat, max(q_list))
+        else:
+            logger.info("  rotation-compliance screen: Pi = %.3g "
+                        "(q_hat_div = %.3e)", Pi, q_hat)
+    except Exception as exc:                       # 진단은 절대 해석을 막지 않음
+        logger.debug("  rotation-compliance screen failed: %s", exc)
+
+
 def _build_shared_data(bdf_model: BDFModel,
                        airfoil_config=None,
                                spline_slope_method: str = 'surface',
@@ -489,6 +696,9 @@ def _build_shared_data(bdf_model: BDFModel,
     logger.info("  G_d (displacement): max = %.4f, nonzeros = %d / %d",
                 np.max(np.abs(G_d_dense)) if G_d_dense.size > 0 else 0,
                 np.count_nonzero(G_d_dense), G_d_dense.size)
+    if spline_slope_method == 'rotation':
+        _warn_rotation_compliance(bdf_model, boxes, G_w_dense, G_d_dense,
+                                  K_ff.diagonal())
     G_sp = sp.csr_matrix(G_w_dense)
     G_disp = sp.csr_matrix(G_d_dense)
     del G_w_dense, G_d_dense
@@ -1014,6 +1224,84 @@ def _solve_trim_subcase_from_shared(shared: TrimSharedData,
         sc_result.trim_balance = balance
     except Exception as e:
         logger.warning("  [SC%d] Trim loads computation failed: %s", subcase_id, e)
+
+    # 9. In-line 발산 지표 (T4) — (M,q) 그룹당 1회, 캐시 재사용.
+    # 1차(안전): 최초 발산점 기준 여유 — 구조 분해를 캐시가 사는 범위
+    #            (직렬 배치 전체 / 병렬은 워커당)에서 재사용해
+    #            비시프트 루프 연산자의 최대 양의 실수 고유치에서 직접.
+    # 2차(조건화): 최근접 교차 근접도 — 트림 K_eff 분해 재사용.
+    # 반복 경로에서만 분해가 살아 있고, 결과는 trim_balance에만
+    # 기록된다(설계 케이스·덱 헤더 전파와 fail-closed 정책은 후속).
+    # 소형(dense) 모델은 오프라인 정확 축소 스크립트로 진단한다.
+    try:
+        cached_now = cache.get(cache_key) if cache_key else None
+        if cached_now is not None and 'solve_fn' in cached_now:
+            # ---- 구조 분해 (배치당 1회, 캐시 공유) ----
+            struct = cache.get('__structural_lu__')
+            if struct is None:
+                t_s = time.perf_counter()
+                K_s = (shared.K_ff if sp.issparse(shared.K_ff)
+                       else sp.csc_matrix(shared.K_ff)).tocsc(copy=True)
+                if shared.mount_idx is not None:
+                    K_s = _apply_virtual_mount(K_s, shared.mount_idx)
+                dg = np.abs(K_s.diagonal())
+                avg_dg = np.mean(dg[dg > 0]) if np.any(dg > 0) else 1.0
+                K_s = K_s + sp.eye(n_free, format='csc') * (avg_dg * 1e-12)
+                lu_s = spla.splu(K_s.tocsc(), permc_spec='COLAMD')
+                _mount_s = shared.mount_idx
+
+                def _solve_struct(rhs_vec, _lu=lu_s, _m=_mount_s):
+                    if _m is not None:
+                        rhs_vec = rhs_vec.copy()
+                        rhs_vec[_m] = 0.0
+                    return _lu.solve(rhs_vec)
+
+                struct = {'solve_fn': _solve_struct,
+                          'factor_time': time.perf_counter() - t_s}
+                cache['__structural_lu__'] = struct
+                logger.info("  [SC%d] Structural factorization for "
+                            "divergence margin cached (%.1f s, once per "
+                            "batch)", subcase_id, struct['factor_time'])
+
+            fund = cached_now.get('div_fund')
+            if fund is None:
+                fund = _fundamental_divergence_margin(
+                    struct['solve_fn'], G_sp, G_disp, A_jj, q)
+                cached_now['div_fund'] = fund
+                if fund is not None and not fund['complex_dominant']:
+                    logger.info(
+                        "  [SC%d] Fundamental divergence margin (group "
+                        "M=%.3f q=%.4e): q_div,min/q = %.4g "
+                        "(q_div,min = %.4e, %d solves)",
+                        subcase_id, mach, q, fund['margin'],
+                        fund['q_div'], fund['n_solves'])
+
+            prox = cached_now.get('div_est')
+            if prox is None:
+                prox = _estimate_divergence_proximity(
+                    cached_now['solve_fn'], G_sp, G_disp, A_jj, q)
+                cached_now['div_est'] = prox
+
+            if sc_result.trim_balance is not None:
+                if fund is not None and not fund['complex_dominant']:
+                    sc_result.trim_balance['q_div_fund'] = float(fund['q_div'])
+                    sc_result.trim_balance['div_margin'] = float(fund['margin'])
+                    if fund['margin'] < 1.0:
+                        logger.warning(
+                            "  [SC%d] AT/POST-DIVERGENCE: flight q exceeds "
+                            "the smallest static-divergence crossing of "
+                            "this aeroelastic operator (fundamental margin "
+                            "%.4g) — the trim solution is an algebraic, "
+                            "not a stable, equilibrium",
+                            subcase_id, fund['margin'])
+                if prox is not None and not prox['complex_dominant']:
+                    sc_result.trim_balance['q_cross_nearest'] = \
+                        float(prox['q_div'])
+                    sc_result.trim_balance['proximity_margin'] = \
+                        float(prox['margin'])
+    except Exception as e:
+        logger.debug("  [SC%d] divergence indicators skipped: %s",
+                     subcase_id, e)
 
     t_elapsed = time.perf_counter() - t_start
     logger.info("  [SC%d] Subcase done in %.2f s", subcase_id, t_elapsed)

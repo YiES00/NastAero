@@ -1,7 +1,7 @@
 {
   "propulsion_limit": {
     "n_infeasible": 17,
-    "n_exceedances": 92,
+    "n_exceedances": 98,
     "n_appended": 11,
     "exceedances": [
       {
@@ -9,8 +9,8 @@
         "component": "Fuselage",
         "station": 9150.0,
         "quantity": "M",
-        "value": 20384.908319370108,
-        "feasible_bound": 19983.415853226856,
+        "value": 76468.97074606604,
+        "feasible_bound": 61550.81725169582,
         "extreme": "max"
       },
       {
@@ -18,8 +18,8 @@
         "component": "Fuselage",
         "station": 9150.0,
         "quantity": "M",
-        "value": 20379.26679981783,
-        "feasible_bound": 19983.415853226856,
+        "value": 76445.34086327827,
+        "feasible_bound": 61550.81725169582,
         "extreme": "max"
       },
       {
@@ -27,8 +27,8 @@
         "component": "Fuselage",
         "station": 9150.0,
         "quantity": "M",
-        "value": 20030.05077957106,
-        "feasible_bound": 19983.415853226856,
+        "value": 75139.16223992246,
+        "feasible_bound": 61550.81725169582,
         "extreme": "max"
       },
       {
@@ -36,8 +36,8 @@
         "component": "Fuselage",
         "station": 9150.0,
         "quantity": "M",
-        "value": 20025.95759848158,
-        "feasible_bound": 19983.415853226856,
+        "value": 75122.01767656887,
+        "feasible_bound": 61550.81725169582,
         "extreme": "max"
       },
       {
@@ -45,8 +45,8 @@
         "component": "Right Wing",
         "station": 808.1632653061224,
         "quantity": "V",
-        "value": 8770.382080842282,
-        "feasible_bound": 8645.83001735267,
+        "value": 8678.025806177964,
+        "feasible_bound": 8474.07509867604,
         "extreme": "max"
       },
       {
@@ -54,8 +54,8 @@
         "component": "Right Wing",
         "station": 916.3265306122449,
         "quantity": "V",
-        "value": 8770.382080842282,
-        "feasible_bound": 8645.83001735267,
+        "value": 8678.025806177964,
+        "feasible_bound": 8474.07509867604,
         "extreme": "max"
       },
       {
@@ -63,8 +63,8 @@
         "component": "Right Wing",
         "station": 1781.6326530612246,
         "quantity": "V",
-        "value": 10147.458793424452,
-        "feasible_bound": 9917.424194332605,
+        "value": 10067.216017717737,
+        "feasible_bound": 9768.034590704145,
         "extreme": "max"
       },
       {
@@ -72,8 +72,8 @@
         "component": "Right Wing",
         "station": 1889.795918367347,
         "quantity": "V",
-        "value": 10178.983445883521,
-        "feasible_bound": 9975.748999654796,
+        "value": 10104.139280495921,
+        "feasible_bound": 9836.20005898412,
         "extreme": "max"
       },
       {
@@ -81,8 +81,44 @@
         "component": "Right Wing",
         "station": 1997.9591836734694,
         "quantity": "V",
-        "value": 10305.053635142365,
-        "feasible_bound": 10209.054438236384,
+        "value": 10230.209469754765,
+        "feasible_bound": 10069.505497565708,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20034,
+        "component": "Right Wing",
+        "station": 3620.4081632653065,
+        "quantity": "V",
+        "value": 5937.250622809001,
+        "feasible_bound": 5931.396877019482,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20034,
+        "component": "Right Wing",
+        "station": 3728.571428571429,
+        "quantity": "V",
+        "value": 5939.848851691231,
+        "feasible_bound": 5936.316785381567,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20034,
+        "component": "Left Wing",
+        "station": -808.1632653061224,
+        "quantity": "V",
+        "value": 8489.415798965274,
+        "feasible_bound": 8442.289161122124,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20034,
+        "component": "Left Wing",
+        "station": -916.3265306122449,
+        "quantity": "V",
+        "value": 8489.415798965274,
+        "feasible_bound": 8442.289161122124,
         "extreme": "max"
       },
       {
@@ -90,8 +126,8 @@
         "component": "Left Wing",
         "station": -1781.6326530612246,
         "quantity": "V",
-        "value": 9984.279394454486,
-        "feasible_bound": 9918.941314367994,
+        "value": 9901.638612142724,
+        "feasible_bound": 9769.51012290723,
         "extreme": "max"
       },
       {
@@ -99,8 +135,8 @@
         "component": "Left Wing",
         "station": -1889.795918367347,
         "quantity": "V",
-        "value": 10016.349681938635,
-        "feasible_bound": 9977.275582457245,
+        "value": 9939.19529211912,
+        "feasible_bound": 9837.686576331347,
         "extreme": "max"
       },
       {
@@ -108,8 +144,8 @@
         "component": "Right Wing",
         "station": 808.1632653061224,
         "quantity": "V",
-        "value": 9117.968162422549,
-        "feasible_bound": 8645.83001735267,
+        "value": 9019.357344751808,
+        "feasible_bound": 8474.07509867604,
         "extreme": "max"
       },
       {
@@ -117,8 +153,8 @@
         "component": "Right Wing",
         "station": 916.3265306122449,
         "quantity": "V",
-        "value": 9117.968162422549,
-        "feasible_bound": 8645.83001735267,
+        "value": 9019.357344751808,
+        "feasible_bound": 8474.07509867604,
         "extreme": "max"
       },
       {
@@ -126,8 +162,8 @@
         "component": "Right Wing",
         "station": 1781.6326530612246,
         "quantity": "V",
-        "value": 10549.304280574053,
-        "feasible_bound": 9917.424194332605,
+        "value": 10463.63322032594,
+        "feasible_bound": 9768.034590704145,
         "extreme": "max"
       },
       {
@@ -135,8 +171,8 @@
         "component": "Right Wing",
         "station": 1889.795918367347,
         "quantity": "V",
-        "value": 10582.976509045786,
-        "feasible_bound": 9975.748999654796,
+        "value": 10503.06811224204,
+        "feasible_bound": 9836.20005898412,
         "extreme": "max"
       },
       {
@@ -144,8 +180,8 @@
         "component": "Right Wing",
         "station": 1997.9591836734694,
         "quantity": "V",
-        "value": 10717.632596634832,
-        "feasible_bound": 10209.054438236384,
+        "value": 10637.724199831086,
+        "feasible_bound": 10069.505497565708,
         "extreme": "max"
       },
       {
@@ -153,8 +189,8 @@
         "component": "Right Wing",
         "station": 3620.4081632653065,
         "quantity": "V",
-        "value": 6212.9132869696805,
-        "feasible_bound": 5999.8271492588965,
+        "value": 6173.8897448507605,
+        "feasible_bound": 5931.396877019482,
         "extreme": "max"
       },
       {
@@ -162,8 +198,8 @@
         "component": "Right Wing",
         "station": 3728.571428571429,
         "quantity": "V",
-        "value": 6212.9132869696805,
-        "feasible_bound": 5999.8271492588965,
+        "value": 6176.66519270671,
+        "feasible_bound": 5936.316785381567,
         "extreme": "max"
       },
       {
@@ -171,8 +207,8 @@
         "component": "Right Wing",
         "station": 3836.7346938775513,
         "quantity": "V",
-        "value": 6212.9132869696805,
-        "feasible_bound": 5999.8271492588965,
+        "value": 6182.371633070584,
+        "feasible_bound": 5946.156596836121,
         "extreme": "max"
       },
       {
@@ -180,8 +216,8 @@
         "component": "Right Wing",
         "station": 3944.8979591836737,
         "quantity": "V",
-        "value": 6312.921560129991,
-        "feasible_bound": 6174.787128356281,
+        "value": 6282.379906230894,
+        "feasible_bound": 6121.116575933505,
         "extreme": "max"
       },
       {
@@ -189,8 +225,8 @@
         "component": "Left Wing",
         "station": -808.1632653061224,
         "quantity": "V",
-        "value": 8904.806295533297,
-        "feasible_bound": 8614.088667507584,
+        "value": 8803.25143930581,
+        "feasible_bound": 8442.289161122124,
         "extreme": "max"
       },
       {
@@ -198,8 +234,8 @@
         "component": "Left Wing",
         "station": -916.3265306122449,
         "quantity": "V",
-        "value": 8904.806295533297,
-        "feasible_bound": 8614.088667507584,
+        "value": 8803.25143930581,
+        "feasible_bound": 8442.289161122124,
         "extreme": "max"
       },
       {
@@ -207,8 +243,8 @@
         "component": "Left Wing",
         "station": -1781.6326530612246,
         "quantity": "V",
-        "value": 10362.460605963674,
-        "feasible_bound": 9918.941314367994,
+        "value": 10274.043583094528,
+        "feasible_bound": 9769.51012290723,
         "extreme": "max"
       },
       {
@@ -216,8 +252,8 @@
         "component": "Left Wing",
         "station": -1889.795918367347,
         "quantity": "V",
-        "value": 10396.757642298919,
-        "feasible_bound": 9977.275582457245,
+        "value": 10314.203802433056,
+        "feasible_bound": 9837.686576331347,
         "extreme": "max"
       },
       {
@@ -225,8 +261,8 @@
         "component": "Left Wing",
         "station": -1997.9591836734694,
         "quantity": "V",
-        "value": 10533.986507693839,
-        "feasible_bound": 10210.619985972702,
+        "value": 10451.432667827976,
+        "feasible_bound": 10071.030979846804,
         "extreme": "max"
       },
       {
@@ -234,8 +270,8 @@
         "component": "Left Wing",
         "station": -3620.4081632653065,
         "quantity": "V",
-        "value": 6133.116659296742,
-        "feasible_bound": 6002.505977238069,
+        "value": 6092.480047176456,
+        "feasible_bound": 5934.051274919313,
         "extreme": "max"
       },
       {
@@ -243,8 +279,8 @@
         "component": "Left Wing",
         "station": -3728.571428571429,
         "quantity": "V",
-        "value": 6133.116659296742,
-        "feasible_bound": 6002.505977238069,
+        "value": 6095.359507391563,
+        "feasible_bound": 5938.972758557228,
         "extreme": "max"
       },
       {
@@ -252,8 +288,8 @@
         "component": "Left Wing",
         "station": -3836.7346938775513,
         "quantity": "V",
-        "value": 6133.116659296742,
-        "feasible_bound": 6002.505977238069,
+        "value": 6101.2789134753375,
+        "feasible_bound": 5948.815795395324,
         "extreme": "max"
       },
       {
@@ -261,8 +297,8 @@
         "component": "Left Wing",
         "station": -3944.8979591836737,
         "quantity": "V",
-        "value": 6237.014668009438,
-        "feasible_bound": 6177.524866703933,
+        "value": 6205.176922188033,
+        "feasible_bound": 6123.834684861188,
         "extreme": "max"
       },
       {
@@ -270,8 +306,8 @@
         "component": "Right Wing",
         "station": 808.1632653061224,
         "quantity": "V",
-        "value": 9458.681244840354,
-        "feasible_bound": 8645.83001735267,
+        "value": 9354.018646731685,
+        "feasible_bound": 8474.07509867604,
         "extreme": "max"
       },
       {
@@ -279,8 +315,8 @@
         "component": "Right Wing",
         "station": 916.3265306122449,
         "quantity": "V",
-        "value": 9458.681244840354,
-        "feasible_bound": 8645.83001735267,
+        "value": 9354.018646731685,
+        "feasible_bound": 8474.07509867604,
         "extreme": "max"
       },
       {
@@ -288,8 +324,8 @@
         "component": "Right Wing",
         "station": 1565.3061224489797,
         "quantity": "V",
-        "value": 10912.817659895838,
-        "feasible_bound": 10725.743764437822,
+        "value": 10813.90765630065,
+        "feasible_bound": 10563.382290603126,
         "extreme": "max"
       },
       {
@@ -297,8 +333,8 @@
         "component": "Right Wing",
         "station": 1673.4693877551022,
         "quantity": "V",
-        "value": 10912.817659895838,
-        "feasible_bound": 10725.743764437822,
+        "value": 10818.915264688192,
+        "feasible_bound": 10571.433826697054,
         "extreme": "max"
       },
       {
@@ -306,8 +342,8 @@
         "component": "Right Wing",
         "station": 1781.6326530612246,
         "quantity": "V",
-        "value": 10942.977046263813,
-        "feasible_bound": 9917.424194332605,
+        "value": 10852.05282175287,
+        "feasible_bound": 9768.034590704145,
         "extreme": "max"
       },
       {
@@ -315,8 +351,8 @@
         "component": "Right Wing",
         "station": 1889.795918367347,
         "quantity": "V",
-        "value": 10978.72544717745,
-        "feasible_bound": 9975.748999654796,
+        "value": 10893.916083826716,
+        "feasible_bound": 9836.20005898412,
         "extreme": "max"
       },
       {
@@ -324,8 +360,8 @@
         "component": "Right Wing",
         "station": 1997.9591836734694,
         "quantity": "V",
-        "value": 11121.68231078426,
-        "feasible_bound": 10209.054438236384,
+        "value": 11036.872947433525,
+        "feasible_bound": 10069.505497565708,
         "extreme": "max"
       },
       {
@@ -333,8 +369,8 @@
         "component": "Right Wing",
         "station": 3620.4081632653065,
         "quantity": "V",
-        "value": 6447.271714023031,
-        "feasible_bound": 5999.8271492588965,
+        "value": 6405.862761300305,
+        "feasible_bound": 5931.396877019482,
         "extreme": "max"
       },
       {
@@ -342,8 +378,8 @@
         "component": "Right Wing",
         "station": 3728.571428571429,
         "quantity": "V",
-        "value": 6447.271714023031,
-        "feasible_bound": 5999.8271492588965,
+        "value": 6408.809641198975,
+        "feasible_bound": 5936.316785381567,
         "extreme": "max"
       },
       {
@@ -351,8 +387,8 @@
         "component": "Right Wing",
         "station": 3836.7346938775513,
         "quantity": "V",
-        "value": 6447.271714023031,
-        "feasible_bound": 5999.8271492588965,
+        "value": 6414.861920558701,
+        "feasible_bound": 5946.156596836121,
         "extreme": "max"
       },
       {
@@ -360,8 +396,8 @@
         "component": "Right Wing",
         "station": 3944.8979591836737,
         "quantity": "V",
-        "value": 6553.394544972132,
-        "feasible_bound": 6174.787128356281,
+        "value": 6520.984751507803,
+        "feasible_bound": 6121.116575933505,
         "extreme": "max"
       },
       {
@@ -369,8 +405,8 @@
         "component": "Left Wing",
         "station": -808.1632653061224,
         "quantity": "V",
-        "value": 9221.236680779404,
-        "feasible_bound": 8614.088667507584,
+        "value": 9113.297079134787,
+        "feasible_bound": 8442.289161122124,
         "extreme": "max"
       },
       {
@@ -378,8 +414,26 @@
         "component": "Left Wing",
         "station": -916.3265306122449,
         "quantity": "V",
-        "value": 9221.236680779404,
-        "feasible_bound": 8614.088667507584,
+        "value": 9113.297079134787,
+        "feasible_bound": 8442.289161122124,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Left Wing",
+        "station": -1565.3061224489797,
+        "quantity": "V",
+        "value": 10593.444494053394,
+        "feasible_bound": 10563.19957144434,
+        "extreme": "max"
+      },
+      {
+        "case_id": 20038,
+        "component": "Left Wing",
+        "station": -1673.4693877551022,
+        "quantity": "V",
+        "value": 10598.534595787205,
+        "feasible_bound": 10571.252229962844,
         "extreme": "max"
       },
       {
@@ -387,8 +441,8 @@
         "component": "Left Wing",
         "station": -1781.6326530612246,
         "quantity": "V",
-        "value": 10735.02025711374,
-        "feasible_bound": 9918.941314367994,
+        "value": 10641.039507001904,
+        "feasible_bound": 9769.51012290723,
         "extreme": "max"
       },
       {
@@ -396,62 +450,8 @@
         "component": "Left Wing",
         "station": -1889.795918367347,
         "quantity": "V",
-        "value": 10771.464130433242,
-        "feasible_bound": 9977.275582457245,
-        "extreme": "max"
-      },
-      {
-        "case_id": 20038,
-        "component": "Left Wing",
-        "station": -1997.9591836734694,
-        "quantity": "V",
-        "value": 10917.284747963295,
-        "feasible_bound": 10210.619985972702,
-        "extreme": "max"
-      },
-      {
-        "case_id": 20038,
-        "component": "Left Wing",
-        "station": -3620.4081632653065,
-        "quantity": "V",
-        "value": 6358.470218064167,
-        "feasible_bound": 6002.505977238069,
-        "extreme": "max"
-      },
-      {
-        "case_id": 20038,
-        "component": "Left Wing",
-        "station": -3728.571428571429,
-        "quantity": "V",
-        "value": 6358.470218064167,
-        "feasible_bound": 6002.505977238069,
-        "extreme": "max"
-      },
-      {
-        "case_id": 20038,
-        "component": "Left Wing",
-        "station": -3836.7346938775513,
-        "quantity": "V",
-        "value": 6358.470218064167,
-        "feasible_bound": 6002.505977238069,
-        "extreme": "max"
-      },
-      {
-        "case_id": 20038,
-        "component": "Left Wing",
-        "station": -3944.8979591836737,
-        "quantity": "V",
-        "value": 6468.922706017884,
-        "feasible_bound": 6177.524866703933,
-        "extreme": "max"
-      },
-      {
-        "case_id": 20040,
-        "component": "Right Wing",
-        "station": 808.1632653061224,
-        "quantity": "V",
-        "value": 9766.45841059467,
-        "feasible_bound": 8645.83001735267,
+        "value": 10683.710129605244,
+        "feasible_bound": 9837.686576331347,
         "extreme": "max"
       }
     ],
@@ -560,30 +560,30 @@
       ]
     ]
   },
-  "n_design_cases": 65,
-  "n_design_feasible": 54,
-  "n_critical": 8450,
+  "n_design_cases": 66,
+  "n_design_feasible": 55,
+  "n_critical": 11283,
   "critical_category_distribution": {
-    "symmetric": 1915,
-    "landing": 1673,
-    "vtol_retrim": 497,
-    "gust": 1118,
-    "vtol_rotor_jam": 459,
-    "yaw": 2441,
-    "checked": 105,
-    "vtol_transition": 157,
+    "symmetric": 2383,
+    "landing": 2655,
+    "vtol_retrim": 519,
+    "gust": 1395,
+    "vtol_rotor_jam": 505,
+    "yaw": 3433,
+    "vtol_transition": 180,
+    "checked": 131,
     "vtol_hover": 52,
-    "flap": 33
+    "flap": 30
   },
   "wing_tmin_station_split": {
     "vtol_retrim": 13,
     "vtol_rotor_jam": 18,
-    "symmetric": 2,
-    "gust": 17
+    "symmetric": 4,
+    "gust": 15
   },
   "stress_preservation": {
     "n_cases_full": 101,
-    "n_cases_design": 54,
+    "n_cases_design": 55,
     "n_nodes_significant": 592,
     "min_preservation_ratio": 1.0,
     "worst_node": 100001,
@@ -595,132 +595,132 @@
     {
       "component": "Right Wing",
       "case_id": 10,
-      "legacy_V": -7998.224813581204,
-      "legacy_M": -15968901.745762618,
-      "legacy_T": -3516128.6211862434,
-      "local_N": -124.05290717076727,
-      "local_Vy": -0.018340881121072697,
-      "local_Vz": -7997.262722611558,
-      "local_Mx": -2045684.3752125297,
-      "local_My": 16931758.4577578,
-      "local_Mz": 31732.903121426003
+      "legacy_V": -7925.477048180425,
+      "legacy_M": -15801581.351385247,
+      "legacy_T": -3521307.9000689737,
+      "local_N": -96.7544323443429,
+      "local_Vy": -0.022008928801943734,
+      "local_Vz": -7924.886436469163,
+      "local_Mx": -1549926.9894241183,
+      "local_My": 17076972.594380733,
+      "local_Mz": 18915.94350685068
     },
     {
       "component": "Right Wing",
       "case_id": 5,
-      "legacy_V": 18900.28016371145,
-      "legacy_M": 38176068.78508357,
-      "legacy_T": 8255422.39155389,
-      "local_N": 292.9411706780788,
-      "local_Vy": 0.0812592692437063,
-      "local_Vz": 18898.00984037741,
-      "local_Mx": 4740585.127840382,
-      "local_My": -40444580.10812483,
-      "local_Mz": -73484.24906798941
-    },
-    {
-      "component": "Right Wing",
-      "case_id": 1,
-      "legacy_V": 18878.977403865007,
-      "legacy_M": 37530515.94889688,
-      "legacy_T": 8318906.4557140935,
-      "local_N": 292.87614363842494,
-      "local_Vy": 0.0316921787840972,
-      "local_Vz": 18876.70552318353,
-      "local_Mx": 4862855.269012356,
-      "local_My": -39805713.16844477,
-      "local_Mz": -75449.25920488109
+      "legacy_V": 18728.525245034813,
+      "legacy_M": 37781030.10643711,
+      "legacy_T": 8267650.995545123,
+      "local_N": 228.4328831120896,
+      "local_Vy": 0.09751055359861215,
+      "local_Vz": 18727.132093988334,
+      "local_Mx": 3554388.3355861204,
+      "local_My": -40784685.37412844,
+      "local_Mz": -43322.67165407721
     },
     {
       "component": "Right Wing",
       "case_id": 28,
-      "legacy_V": 3849.6512051177524,
-      "legacy_M": 6715520.419392278,
-      "legacy_T": 1895030.3843390045,
-      "local_N": 1153.5298831390921,
-      "local_Vy": 1144.5086707315395,
-      "local_Vz": 3832.207416902353,
-      "local_Mx": 1543478.101073021,
-      "local_My": -7406871.017354239,
-      "local_Mz": 3422361.612353466
+      "legacy_V": 3788.992333955722,
+      "legacy_M": 6596117.282150539,
+      "legacy_T": 1932228.511898695,
+      "local_N": 1194.2654629463868,
+      "local_Vy": 1122.0629875284687,
+      "local_Vz": 3774.679605556614,
+      "local_Mx": 1323506.4113929935,
+      "local_My": -7421097.642040815,
+      "local_Mz": 3520633.1784357834
     },
     {
       "component": "Right Wing",
       "case_id": 30,
-      "legacy_V": 6096.824245245747,
-      "legacy_M": 13374076.835809195,
-      "legacy_T": 2449671.431845562,
-      "local_N": -998.4018790435362,
-      "local_Vy": -1143.4008431872971,
-      "local_Vz": 6113.0582772836315,
-      "local_Mx": 951840.0986634188,
-      "local_My": -13876757.829316378,
-      "local_Mz": -3457848.335925903
+      "legacy_V": 6067.071518309292,
+      "legacy_M": 13285549.358458987,
+      "legacy_T": 2418940.895717111,
+      "local_N": -1073.0361288400884,
+      "local_Vy": -1120.9656761952874,
+      "local_Vz": 6080.638690730801,
+      "local_Mx": 547582.8460227762,
+      "local_My": -14041464.602387568,
+      "local_Mz": -3540161.185967759
+    },
+    {
+      "component": "Right Wing",
+      "case_id": 1,
+      "legacy_V": 18707.208886229022,
+      "legacy_M": 37135447.43568388,
+      "legacy_T": 8331135.363823691,
+      "local_N": 228.44094540224575,
+      "local_Vy": 0.038030392419898036,
+      "local_Vz": 18705.814044755156,
+      "local_Mx": 3698087.965417262,
+      "local_My": -40149593.56302648,
+      "local_Mz": -45150.38690383249
     },
     {
       "component": "Right Wing",
       "case_id": 47,
-      "legacy_V": -7465.185705711644,
-      "legacy_M": -14882953.033721197,
-      "legacy_T": 693628.4190678752,
-      "local_N": -2624.580307372171,
-      "local_Vy": -577.8662679499678,
-      "local_Vz": -7425.340662702349,
-      "local_Mx": 1907577.9051143567,
-      "local_My": 15888664.265997898,
-      "local_Mz": -2021722.6730697858
+      "legacy_V": -7559.669341606779,
+      "legacy_M": -15182390.335732944,
+      "legacy_T": 693235.6277056191,
+      "local_N": -2646.209770063393,
+      "local_Vy": -501.80558083830635,
+      "local_Vz": -7527.8933008683025,
+      "local_Mx": 2453258.549281434,
+      "local_My": 16283498.82115786,
+      "local_Mz": -2060463.9295404558
     },
     {
       "component": "Right Wing",
       "case_id": 48,
-      "legacy_V": -2530.130515251417,
-      "legacy_M": -4200026.171519508,
-      "legacy_T": 395921.1170217181,
-      "local_N": 2407.7560943077574,
-      "local_Vy": -93.10950983171026,
-      "local_Vz": -2567.813901874185,
-      "local_Mx": 768546.5249043375,
-      "local_My": 3910875.6608792935,
-      "local_Mz": 593251.9600651229
+      "legacy_V": -2556.419528492693,
+      "legacy_M": -4178365.962520586,
+      "legacy_T": 415506.9118278186,
+      "local_N": 2436.716087799134,
+      "local_Vy": -178.6858757126734,
+      "local_Vz": -2586.3907110498935,
+      "local_Mx": 903844.2152867153,
+      "local_My": 4023196.1779272803,
+      "local_Mz": 582174.2147096191
     },
     {
       "component": "Right Wing",
       "case_id": 29,
-      "legacy_V": 5077.20094857348,
-      "legacy_M": 10336494.486564742,
-      "legacy_T": 2198729.8008686327,
-      "local_N": 41.48836371551718,
-      "local_Vy": -112.94735757522334,
-      "local_Vz": 5077.16864332004,
-      "local_Mx": 1220988.297420564,
-      "local_My": -10936830.268257454,
-      "local_Mz": -340965.15401809284
+      "legacy_V": 5033.376146160537,
+      "legacy_M": 10235581.94482959,
+      "legacy_T": 2198776.4373143367,
+      "local_N": 19.67229198858807,
+      "local_Vy": -113.14302712668294,
+      "local_Vz": 5033.511611531954,
+      "local_Mx": 900565.504010039,
+      "local_My": -11032864.51464114,
+      "local_Mz": -342125.5098450779
     },
     {
       "component": "Right Wing",
       "case_id": 27,
-      "legacy_V": 4870.148191736871,
-      "legacy_M": 9755705.59771136,
-      "legacy_T": 2146187.0409846306,
-      "local_N": 112.74858418877464,
-      "local_Vy": 113.17221505167345,
-      "local_Vz": 4868.984679034309,
-      "local_Mx": 1274099.2758919813,
-      "local_My": -10349317.729518665,
-      "local_Mz": 302807.6504513223
+      "legacy_V": 4823.573454064246,
+      "legacy_M": 9648698.137309419,
+      "legacy_T": 2152581.6237733234,
+      "local_N": 100.62072733794997,
+      "local_Vy": 113.37676019534926,
+      "local_Vz": 4822.703942012302,
+      "local_Mx": 970221.2913102795,
+      "local_My": -10432275.724679941,
+      "local_Mz": 319857.184756608
     },
     {
       "component": "Right Wing",
       "case_id": 42,
-      "legacy_V": -9074.293643367155,
-      "legacy_M": -17324570.135704875,
-      "legacy_T": 989152.5401403366,
-      "local_N": -196.84485561468662,
-      "local_Vy": -609.1484351848782,
-      "local_Vz": -9072.331173708988,
-      "local_Mx": 2429531.829443058,
-      "local_My": 17975103.071100697,
-      "local_Mz": -1296843.684001578
+      "legacy_V": -9183.937646430573,
+      "legacy_M": -17576751.342749868,
+      "legacy_T": 1006576.9962853384,
+      "local_N": -190.18979962928074,
+      "local_Vy": -617.7872877694011,
+      "local_Vz": -9182.299097658382,
+      "local_Mx": 3047761.131634908,
+      "local_My": 18435526.127880637,
+      "local_Mz": -1342072.0931480569
     },
     {
       "component": "Right V-Tail",
@@ -750,19 +750,6 @@
     },
     {
       "component": "Right V-Tail",
-      "case_id": 1,
-      "legacy_V": 1804.6080785581669,
-      "legacy_M": 1584473.0464835193,
-      "legacy_T": -437442.94320781424,
-      "local_N": -263.27579493894154,
-      "local_Vy": -743.3732945063377,
-      "local_Vz": 2480.9051890013175,
-      "local_Mx": -280620.58934923063,
-      "local_My": -2902233.6266901395,
-      "local_Mz": -918046.1454848088
-    },
-    {
-      "component": "Right V-Tail",
       "case_id": 28,
       "legacy_V": 2475.3625590948222,
       "legacy_M": 2445772.34770239,
@@ -786,6 +773,19 @@
       "local_Mx": 931556.6885347877,
       "local_My": 2702794.696123878,
       "local_Mz": 619329.7124854284
+    },
+    {
+      "component": "Right V-Tail",
+      "case_id": 1,
+      "legacy_V": 1804.6080785581669,
+      "legacy_M": 1584473.0464835193,
+      "legacy_T": -437442.94320781424,
+      "local_N": -263.27579493894154,
+      "local_Vy": -743.3732945063377,
+      "local_Vz": 2480.9051890013175,
+      "local_Mx": -280620.58934923063,
+      "local_My": -2902233.6266901395,
+      "local_Mz": -918046.1454848088
     },
     {
       "component": "Right V-Tail",
@@ -880,19 +880,6 @@
     },
     {
       "component": "Right Boom",
-      "case_id": 1,
-      "legacy_V": -1313.6292189715475,
-      "legacy_M": 3278768.832683046,
-      "legacy_T": -556.2489430904352,
-      "local_N": -0.001680272274193442,
-      "local_Vy": 1313.6292189715475,
-      "local_Vz": -0.008049410454241348,
-      "local_Mx": -5131.513713806218,
-      "local_My": 18.350819256528602,
-      "local_Mz": 3280935.399713273
-    },
-    {
-      "component": "Right Boom",
       "case_id": 28,
       "legacy_V": -463.9164934156484,
       "legacy_M": 1154758.4848563243,
@@ -916,6 +903,19 @@
       "local_Mx": 40920.75478933963,
       "local_My": 332834.15782610537,
       "local_Mz": 571478.889625326
+    },
+    {
+      "component": "Right Boom",
+      "case_id": 1,
+      "legacy_V": -1313.6292189715475,
+      "legacy_M": 3278768.832683046,
+      "legacy_T": -556.2489430904352,
+      "local_N": -0.001680272274193442,
+      "local_Vy": 1313.6292189715475,
+      "local_Vz": -0.008049410454241348,
+      "local_Mx": -5131.513713806218,
+      "local_My": 18.350819256528602,
+      "local_Mz": 3280935.399713273
     },
     {
       "component": "Right Boom",

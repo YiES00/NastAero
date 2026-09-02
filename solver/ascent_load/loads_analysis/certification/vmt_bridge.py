@@ -95,12 +95,25 @@ def compute_vmt_for_batch(
 
         case_vmt: Dict[str, dict] = {}
         for curve in vmt_result.curves:
-            case_vmt[curve.component_name] = {
+            entry = {
                 "stations": curve.stations,
                 "shear": curve.shear,
                 "bending": curve.bending_moment,
                 "torsion": curve.torsion,
             }
+            # 구성품 국부 6분력을 파이프라인으로 전달한다 (r4 MC3). 전역
+            # 3성분 키는 그대로 두므로 기존 소비자는 영향이 없고, 국부
+            # 배열이 없는 곡선(아핀 조립 등)은 키가 생기지 않는다.
+            if curve.local_stations is not None:
+                entry.update({
+                    "local_stations": curve.local_stations,
+                    "N": curve.local_N, "Vy": curve.local_Vy,
+                    "Vz": curve.local_Vz, "Mx": curve.local_Mx,
+                    "My": curve.local_My, "Mz": curve.local_Mz,
+                    "local_frame": curve.local_frame,
+                    "local_cut_points": curve.local_cut_points,
+                })
+            case_vmt[curve.component_name] = entry
 
         vmt_data[cr.case_id] = case_vmt
         n_computed += 1

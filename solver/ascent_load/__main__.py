@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import argparse
 from pathlib import Path
+from . import __version__
 from .config import setup_logging, logger
 from .bdf.parser import parse_bdf
 from .solvers.sol101 import solve_static
@@ -212,7 +213,7 @@ def main() -> None:
         print(f"Error: file not found: {bdf_path}")
         sys.exit(1)
 
-    logger.info("ASCENT-Load v0.3.0 - Reading %s", bdf_path.name)
+    logger.info("ASCENT-Load v%s - Reading %s", __version__, bdf_path.name)
     bdf_model = parse_bdf(str(bdf_path))
 
     f06_path = str(bdf_path.with_suffix(".f06"))

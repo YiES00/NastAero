@@ -39,7 +39,8 @@ def write_f06(results: ResultData, bdf_model: BDFModel, filepath: str) -> None:
 
 def _write_header(f: TextIO, title: str) -> None:
     ts = datetime.datetime.now().strftime("%m/%d/%Y %H:%M:%S")
-    f.write("1" + " " * 50 + "N A S T A E R O" + " " * 50 + "\n")
+    # 총폭 116칸을 유지하도록 중앙 정렬 (개명 전 "N A S T A E R O"와 같은 폭)
+    f.write("1" + " " * 47 + "A S C E N T - L O A D" + " " * 47 + "\n")
     f.write("0" + " " * 50 + title + "\n")
     f.write(" " * 51 + ts + "\n")
     f.write("\n")

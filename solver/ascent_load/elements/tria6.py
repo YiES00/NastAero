@@ -6,7 +6,7 @@ and 1-point reduced integration for transverse shear (prevents shear locking).
 """
 from __future__ import annotations
 import numpy as np
-from .base import BaseElement
+from .base import BaseElement, drill_scale
 
 # 3-point Gauss quadrature for triangle (in area coordinates L1, L2, L3)
 # Points: (1/6, 1/6, 2/3), (1/6, 2/3, 1/6), (2/3, 1/6, 1/6)
@@ -215,7 +215,7 @@ class CTria6Element(BaseElement):
 
         # Drilling DOF stabilization
         area = self._compute_area()
-        alpha_drill = E * t * area * 1e-6
+        alpha_drill = E * t * area * 1e-6 * drill_scale()
         for nd in range(6):
             rz_dof = 6 * nd + 5
             k[rz_dof, rz_dof] += alpha_drill

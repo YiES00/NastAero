@@ -237,8 +237,10 @@ class MainWindow(QMainWindow):
             return
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            if p.suffix.lower() == ".aload":
-                self._load_naero(str(p))
+            # .naero 는 개명 전 결과 아카이브 — 파일 필터가 받아 주므로
+            # 여는 쪽도 결과로 처리해야 한다 (BDF 파서로 넘기면 빈 모델이 된다)
+            if p.suffix.lower() in (".aload", ".naero"):
+                self._load_aload(str(p))
             else:
                 self._load_bdf(str(p))
         except Exception as exc:  # 파싱/로드 실패를 사용자에게 표시
@@ -258,15 +260,18 @@ class MainWindow(QMainWindow):
         self.bdf_path = path
         self._populate_editor_files(path)
         self._refresh_all()
-        # 옆에 같은 이름의 .aload가 있으면 결과도 함께 로드
-        naero = Path(path).with_suffix(".aload")
-        if naero.exists():
-            self._attach_results(str(naero))
+        # 옆에 같은 이름의 결과 아카이브가 있으면 함께 로드
+        # (.naero 는 개명 전 확장자 — 그대로 열린다)
+        for ext in (".aload", ".naero"):
+            sibling = Path(path).with_suffix(ext)
+            if sibling.exists():
+                self._attach_results(str(sibling))
+                break
         self.statusBar().showMessage(
             f"{Path(path).name} — SOL {self.model.sol}, "
             f"{len(self.model.nodes)} nodes, {len(self.model.elements)} elements")
 
-    def _load_naero(self, path: str) -> None:
+    def _load_aload(self, path: str) -> None:
         from ..output.result_io import load_results
 
         self.results, self.model = load_results(path)
@@ -280,14 +285,14 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             f"{Path(path).name} — {len(self.results.subcases)} subcases (보기 전용)")
 
-    def _attach_results(self, naero_path: str) -> None:
+    def _attach_results(self, aload_path: str) -> None:
         """현재 BDF 모델을 유지한 채 .aload 결과만 붙인다."""
         from ..output.result_io import load_results
 
         try:
-            self.results, _viz = load_results(naero_path)
+            self.results, _viz = load_results(aload_path)
         except Exception:
-            logger.exception("Failed to load results %s", naero_path)
+            logger.exception("Failed to load results %s", aload_path)
             return
         self.scene.results = self.results
         self.results_panel.set_results(self.results)
@@ -295,7 +300,7 @@ class MainWindow(QMainWindow):
         self.load_cases_panel.set_data(self.model, self.results)
         self.vmt_panel.set_data(self.model, self.results)
         self.design_loads_panel.set_data(self.model, self.results)
-        self._append_log(f"결과 로드: {naero_path}")
+        self._append_log(f"결과 로드: {aload_path}")
 
     def save_bdf(self) -> None:
         """에디터의 현재 파일(마스터 또는 INCLUDE)을 저장하고 마스터를 재파싱한다."""
@@ -442,12 +447,12 @@ class MainWindow(QMainWindow):
             self.scene.display_forces(idx, view["load_type"])
         self.tabs.setCurrentWidget(self.viewport_tab)
 
-    def _on_run_finished(self, naero_path: str) -> None:
-        if naero_path and Path(naero_path).exists():
-            self._attach_results(naero_path)
+    def _on_run_finished(self, aload_path: str) -> None:
+        if aload_path and Path(aload_path).exists():
+            self._attach_results(aload_path)
             self.statusBar().showMessage("해석 완료 — 결과 로드됨")
-        elif naero_path:
-            self._append_log(f"결과 파일을 찾지 못함: {naero_path}")
+        elif aload_path:
+            self._append_log(f"결과 파일을 찾지 못함: {aload_path}")
 
     def _toggle_scene(self, attr: str, checked: bool) -> None:
         setattr(self.scene, attr, checked)
